@@ -167,24 +167,26 @@ class FirebaseRepository private constructor(private val context: Context) {
         _isPowerSavingMode.value = enabled
         settingsPrefs.edit().putBoolean("power_saving_mode", enabled).apply()
 
+        // Prima il gate, poi i produttori. Passando ad alta precisione il primo
+        // fix preciso puo' distare parecchio da quello approssimato scritto per
+        // ultimo; passando a bassa precisione il raggio di errore si allarga di
+        // colpo. In entrambi i casi il gate confronterebbe grandezze non
+        // omogenee, quindi va azzerato prima che riprendano ad arrivare fix.
+        resetLocationGate()
+
         // Entrambi i produttori vanno riagganciati con la nuova precisione,
         // altrimenti il cambio avrebbe effetto solo al riavvio dell'app.
         // Nessuna interruzione: startSilentLocationTracking stacca e riattacca,
         // e il servizio riemette la richiesta senza perdere il foreground.
         if (silentLocationCallback != null) {
+            // Ripubblica gia' lui la posizione nota in coda all'aggancio.
             startSilentLocationTracking()
+        } else {
+            pushLastKnownLocationNow()
         }
         if (_isBackgroundTrackingEnabled.value) {
             com.example.service.LocationTrackingService.updatePowerMode(context)
         }
-
-        // Passando ad alta precisione il primo fix preciso puo' distare parecchio
-        // da quello approssimato scritto per ultimo; passando a bassa precisione
-        // il raggio di errore si allarga di colpo. In entrambi i casi il gate
-        // confronterebbe grandezze non omogenee, quindi lo si azzera e si
-        // ripubblica subito: l'utente non deve accorgersi del cambio.
-        resetLocationGate()
-        pushLastKnownLocationNow()
     }
 
     fun setTrackingFrequencySeconds(seconds: Int) {
@@ -1305,6 +1307,12 @@ class FirebaseRepository private constructor(private val context: Context) {
         subscribeToGroupTopic(groupId)
         listenToGroupData(groupId)
 
+        // Il gate riconosce da solo il cambio di gruppo e lascia passare il fix
+        // successivo, ma quel fix puo' arrivare anche dopo minuti se l'intervallo
+        // di tracciamento e' lungo. Ripubblicando subito l'ultima posizione nota
+        // si compare nel nuovo gruppo all'istante, senza doverlo forzare a mano.
+        pushLastKnownLocationNow()
+
         // Persistenza, così la scelta regge al riavvio e ai re-emit del documento.
         val uid = _currentUserState.value?.uid
         if (firestore != null && !uid.isNullOrBlank()) {
@@ -1830,6 +1838,14 @@ class FirebaseRepository private constructor(private val context: Context) {
                 silentLocationCallback!!,
                 Looper.getMainLooper()
             )
+
+            // Il primo fix reale puo' tardare parecchio: a GPS freddo sono
+            // decine di secondi, e con un intervallo lungo si aspetta comunque
+            // il primo tick. Play Services ha pero' una posizione in cache:
+            // pubblicandola subito si compare sulla mappa all'apertura invece
+            // di restare invisibili finche' non arriva il primo fix.
+            pushLastKnownLocationNow()
+
             Log.d(TAG, "Silent in-app location tracking active (no notification)")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to start silent location updates: ${e.message}")
@@ -1853,6 +1869,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         lastSentLongitude = null
         lastSentAtMillis = 0L
         lastSentBatteryLevel = null
+        lastSentGroupId = null
     }
 
     /**
@@ -1936,6 +1953,15 @@ class FirebaseRepository private constructor(private val context: Context) {
     private var lastSentAtMillis: Long = 0L
     private var lastSentBatteryLevel: Int? = null
 
+    /**
+     * Gruppo in cui e' finita l'ultima scrittura. Senza questo il gate ragiona
+     * solo su "quanto mi sono spostato da quando ho trasmesso", ignorando che la
+     * destinazione e' cambiata: entrando in un altro gruppo, da fermi, ogni fix
+     * verrebbe scartato e nel nuovo gruppo non esisterebbe alcun documento di
+     * posizione. E' il motivo per cui al primo accesso serviva forzare a mano.
+     */
+    private var lastSentGroupId: String? = null
+
     /** Esito della valutazione, tenuto esplicito per poterlo loggare in chiaro. */
     private data class LocationGate(
         val shouldSend: Boolean,
@@ -1943,11 +1969,17 @@ class FirebaseRepository private constructor(private val context: Context) {
         val isHeartbeat: Boolean = false
     )
 
-    private fun evaluateLocationGate(location: UserLocation): LocationGate {
+    private fun evaluateLocationGate(location: UserLocation, targetGroupId: String): LocationGate {
         val prevLat = lastSentLatitude
         val prevLon = lastSentLongitude
         if (prevLat == null || prevLon == null) {
             return LocationGate(true, "primo fix", isHeartbeat = true)
+        }
+
+        // Destinazione cambiata: nel nuovo gruppo il documento non esiste ancora,
+        // quindi va scritto a prescindere da quanto ci si e' spostati.
+        if (lastSentGroupId != targetGroupId) {
+            return LocationGate(true, "primo fix nel gruppo", isHeartbeat = true)
         }
 
         val elapsed = System.currentTimeMillis() - lastSentAtMillis
@@ -1996,7 +2028,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         // La valutazione geofence gira su OGNI fix, anche su quelli che non
         // trasmettiamo: un ingresso o un'uscita da un luogo non va perso solo
         // perché lo spostamento era piccolo.
-        val gate = evaluateLocationGate(location)
+        val gate = evaluateLocationGate(location, currentGroup)
         val placeForGeofence = GeofenceHelper.findCurrentPlace(location, _currentGroupPlaces.value)
         checkGeofenceAlert(user.displayName, placeForGeofence)
 
@@ -2014,6 +2046,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         lastSentLatitude = location.latitude
         lastSentLongitude = location.longitude
         lastSentAtMillis = System.currentTimeMillis()
+        lastSentGroupId = currentGroup
 
         // Compute current place
         val matchedPlace = placeForGeofence

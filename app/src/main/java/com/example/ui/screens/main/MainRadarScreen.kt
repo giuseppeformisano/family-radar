@@ -2149,7 +2149,6 @@ private fun SettingsPanel(
                     onCheckedChange = onToggleGlobalGhostMode,
                     testTag = "global_ghost_mode_switch"
                 )
-                HairlineDivider()
                 SettingsToggleRow(
                     title = "Condividi in questo gruppo",
                     description = "Se disattivato resti invisibile solo ai membri di ${currentGroup?.name ?: "questo gruppo"}",
@@ -2180,7 +2179,6 @@ private fun SettingsPanel(
                     onCheckedChange = onToggleTracking,
                     testTag = "tracking_switch"
                 )
-                HairlineDivider()
                 SettingsToggleRow(
                     title = "Risparmio energia",
                     description = "Ricava la posizione da WiFi e rete dati invece che dal GPS: " +
@@ -2192,7 +2190,6 @@ private fun SettingsPanel(
                     onCheckedChange = onTogglePowerSaving,
                     testTag = "power_saving_switch"
                 )
-                HairlineDivider()
                 Spacer(Modifier.height(Spacing.md))
                 Text(
                     text = "Frequenza aggiornamento",

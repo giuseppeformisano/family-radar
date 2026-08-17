@@ -99,6 +99,24 @@ groups/{groupId}
 Group membership uses a join code (`generateJoinCode()`) plus optional owner approval
 (`GroupData.requiresApproval`, member `status = PENDING` → `approveJoinRequest` / `rejectJoinRequest`).
 
+**Group switching is fragile — three rules.** The "switch group" button used to bounce the user
+straight back in, for two compounding reasons, both now fixed and easy to reintroduce:
+
+1. `users/{uid}.lastApprovedGroupId` is a **one-shot** signal. The user-doc listener must prefer
+   `currentGroupId` and fall back to `lastApprovedGroupId` only when nothing is selected; `selectGroup`
+   nulls it once consumed. The old order (`lastApproved ?: currentGroupId`) meant the last approved
+   group won forever and no other group could ever be selected.
+2. `selectGroup` / `clearCurrentGroupSelection` must **persist to Firestore**, not just mutate the
+   StateFlow. The `users/{uid}` doc re-emits constantly (FCM token, `lastUpdated`), and each emit
+   re-derives the active group from the stored fields.
+3. `repository.isChoosingGroup` is true while the user sits on `GroupSelectScreen`;
+   `MainActivity` must honour it before its "auto-select the first active group" branch, which would
+   otherwise re-enter the group that was just left. `groupIdDismissedByUser` does the same job at the
+   listener level — but only for the group just left, so a *newly approved* group still auto-enters.
+
+`selectGroup` also calls `cleanupGroupListeners()` before `listenToGroupData()`; skipping it leaves two
+groups' listeners attached at once (duplicate notifications, mixed member lists).
+
 ### Notifications: two parallel paths that must stay in sync
 
 1. **Client-side.** `listenToGroupData()` attaches snapshot listeners on `messages` and `events`;
@@ -110,9 +128,22 @@ Group membership uses a join code (`generateJoinCode()`) plus optional owner app
 
 Both paths share one contract: a `type` (`chat_message`, `sos_alert`, `geofence_entry`,
 `geofence_exit`, `join_request`, `low_battery`) that maps to a `destination`
-(`CHAT` / `ALERT` / `MAP` / `MEMBERS`). That mapping is duplicated in
-`FamilyRadarMessagingService.sendPushNotification()` and `MainActivity.handleIntent()`, which feeds
-`repository.setDeepLinkTarget(...)`. Adding a notification type means touching all of these.
+(`CHAT` / `ALERT` / `MAP` / `MEMBERS`). The mapping lives in
+`FamilyRadarMessagingService.destinationFor()` and `MainActivity.handleIntent()`, which feeds
+`repository.setDeepLinkTarget(...)`. Adding a notification type means touching both.
+
+**Both paths build their notifications through `notification/RadarNotifier.kt`** — that is the point
+of the file. They used to construct notifications independently with different channels and ID
+schemes, so chat messages from FCM and from the Firestore listener could not be grouped together or
+cancelled as a set. Three channels, all `IMPORTANCE_HIGH`: `CHANNEL_CHAT` (per-group `InboxStyle`
+summary + children via `setGroup`/`setGroupSummary`), `CHANNEL_PLACES` (geofence, `setFullScreenIntent`
+for a guaranteed heads-up banner) and `CHANNEL_SOS`.
+
+`RadarNotifier` keeps an in-memory map of outstanding chat notification IDs per group so
+`clearChatNotifications(groupId)` can dismiss them — called from `repository.markChatRead()` when the
+Chat panel opens. Unread counting is timestamp-based (`chat_last_read_<groupId>` in
+`family_radar_settings_prefs`), exposed as `unreadChatCount`; the badge previously showed
+`messages.size`, i.e. the whole history rather than unread.
 
 ### Listener lifecycle
 
@@ -133,6 +164,17 @@ Two independent producers, one sink:
 Both call `repository.updateLocation()`, which is the single enforcement point for global ghost mode,
 per-group `isTrackingActive`, place matching, and the Firestore write. Put any new gating logic there
 rather than in the producers.
+
+`updateLocation` also holds the **jitter / anti-drift filter** (`evaluateLocationGate`). A fix is
+written to Firestore only if: it's the first one, the heartbeat is due
+(`HEARTBEAT_INTERVAL_MS`, 5 min — keeps online status and battery fresh while stationary), speed
+exceeds `MOVING_SPEED_THRESHOLD_MS` (1.5 m/s), or displacement exceeds `MIN_DISPLACEMENT_METERS`
+(18 m) *and* is larger than the fix's own `accuracy` radius. Two invariants:
+
+- The geofence evaluation runs on **every** fix, before the gate — a place entry must not be lost
+  just because the movement was small.
+- Don't add a second distance filter in `LocationTrackingService`; it deliberately requests fixes
+  with `setMinUpdateDistanceMeters(0f)` so the heartbeat still fires when the device is still.
 
 ### Geofencing is hand-rolled
 

@@ -103,32 +103,47 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
     val currentUser by repository.currentUserState.collectAsState()
     val userGroups by repository.userGroupsState.collectAsState()
     val deepLinkTarget by repository.deepLinkTarget.collectAsState()
+    val isChoosingGroup by repository.isChoosingGroup.collectAsState()
 
     var currentScreen by remember { mutableStateOf(AppScreen.MAIN_RADAR) }
 
     // Synchronize screen state with auth, group & deep link state
-    LaunchedEffect(currentUser, userGroups, deepLinkTarget) {
+    LaunchedEffect(currentUser, userGroups, deepLinkTarget, isChoosingGroup) {
         if (currentUser == null) {
             currentScreen = AppScreen.AUTH
-        } else {
-            val target = deepLinkTarget
-            val activeGroups = userGroups.filter { it.userMembershipStatus == "ACTIVE" }
-            if (target?.groupId != null && activeGroups.any { it.id == target.groupId }) {
-                repository.selectGroup(target.groupId)
-                currentScreen = AppScreen.MAIN_RADAR
-            } else {
-                val currentGid = currentUser?.currentGroupId
-                val currentGroupActive = activeGroups.find { it.id == currentGid }
-                if (currentGroupActive != null) {
-                    currentScreen = AppScreen.MAIN_RADAR
-                } else if (activeGroups.isNotEmpty() && currentGid.isNullOrBlank()) {
-                    // Auto-select first active group if no group selected
-                    repository.selectGroup(activeGroups.first().id)
-                    currentScreen = AppScreen.MAIN_RADAR
-                } else {
-                    currentScreen = AppScreen.GROUP_SELECT
-                }
+            return@LaunchedEffect
+        }
+
+        // L'utente ha premuto "cambia gruppo": deve restare sulla schermata di
+        // scelta finche' non ne seleziona uno. Senza questo controllo il ramo di
+        // auto-selezione qui sotto lo rispediva dentro al primo gruppo attivo,
+        // ed era meta' del motivo per cui il pulsante sembrava non funzionare.
+        if (isChoosingGroup) {
+            currentScreen = AppScreen.GROUP_SELECT
+            return@LaunchedEffect
+        }
+
+        val target = deepLinkTarget
+        val activeGroups = userGroups.filter { it.userMembershipStatus == "ACTIVE" }
+
+        if (target?.groupId != null && activeGroups.any { it.id == target.groupId }) {
+            repository.selectGroup(target.groupId)
+            currentScreen = AppScreen.MAIN_RADAR
+            return@LaunchedEffect
+        }
+
+        val currentGid = currentUser?.currentGroupId
+        val currentGroupActive = activeGroups.find { it.id == currentGid }
+        currentScreen = when {
+            currentGroupActive != null -> AppScreen.MAIN_RADAR
+
+            // Primo ingresso con un solo gruppo disponibile: entra da solo.
+            activeGroups.isNotEmpty() && currentGid.isNullOrBlank() -> {
+                repository.selectGroup(activeGroups.first().id)
+                AppScreen.MAIN_RADAR
             }
+
+            else -> AppScreen.GROUP_SELECT
         }
     }
 

@@ -72,8 +72,12 @@ object Sizes {
     val touchTarget: Dp = 48.dp
     val fab: Dp = 48.dp
 
-    /** Altezza a riposo del bottom sheet sulla mappa */
-    val sheetPeek: Dp = 196.dp
+    /**
+     * Altezza a riposo del bottom sheet: quanto basta per maniglia + barra dei tab,
+     * niente contenuto. Serve a lasciare la mappa il più libera possibile.
+     * Se cambi il padding di PanelSelector o SheetHandle, ricalibra questo valore.
+     */
+    val sheetPeek: Dp = 92.dp
 
     /** Altezza della barra di navigazione flottante */
     val navBar: Dp = 64.dp

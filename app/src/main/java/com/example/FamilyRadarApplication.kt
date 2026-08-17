@@ -21,6 +21,15 @@ class FamilyRadarApplication : Application() {
         }
 
         try {
+            // I canali vanno creati prima che arrivi la prima notifica: una push
+            // FCM puo' raggiungere l'app da spenta, e su un canale inesistente
+            // Android scarta la notifica senza dire nulla.
+            com.example.notification.RadarNotifier.ensureChannels(this)
+        } catch (t: Throwable) {
+            Log.w("FamilyRadarApp", "Notification channels warning: ${t.message}")
+        }
+
+        try {
             // Safe osmdroid configuration
             val osmConfig = Configuration.getInstance()
             val sharedPrefs = getSharedPreferences("osmdroid", Context.MODE_PRIVATE)

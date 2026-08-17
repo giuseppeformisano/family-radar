@@ -73,11 +73,25 @@ fun OsmMapView(
      * volte "centra su di me" non farebbe nulla la seconda.
      */
     focusToken: Int = 0,
+    /**
+     * Bersaglio del Follow Mode. Finché non è null la mappa si riposiziona a ogni
+     * cambio di coordinate, cioè a ogni nuovo fix GPS del membro inseguito.
+     */
+    followPoint: Pair<Double, Double>? = null,
+    /** Tocco singolo sulla mappa, senza trascinamento. */
+    onMapTap: () -> Unit = {},
+    /** Trascinamento manuale: chi chiama lo usa per interrompere il Follow Mode. */
+    onUserPan: () -> Unit = {},
     onMemberSelected: (UserLocation) -> Unit,
     onPlaceSelected: (SavedPlace) -> Unit,
     onSnapshotClusterSelected: (PlaceSnapshotCluster) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    // I lambda vengono catturati dentro il blocco `factory`, che gira una sola
+    // volta: senza rememberUpdatedState resterebbero congelati alla prima
+    // composizione e il Follow Mode non si spegnerebbe più.
+    val currentOnMapTap by rememberUpdatedState(onMapTap)
+    val currentOnUserPan by rememberUpdatedState(onUserPan)
     // La mappa segue il tema dell'app: il filtro di inversione sui tile viene
     // applicato o rimosso nel blocco update, non solo alla creazione.
     val isDark = com.example.ui.theme.RadarTheme.palette.isDark
@@ -122,6 +136,21 @@ fun OsmMapView(
     }
 
     // Handle focus navigation
+    // Follow Mode: la chiave e' la coordinata stessa, quindi l'effetto riparte a
+    // ogni nuovo fix del bersaglio. Non si tocca lo zoom, per non combattere con
+    // l'utente che sta pizzicando la mappa mentre segue qualcuno.
+    LaunchedEffect(followPoint) {
+        followPoint?.let { (lat, lon) ->
+            try {
+                if (lat != 0.0 && lon != 0.0 && !lat.isNaN() && !lon.isNaN()) {
+                    mapViewInstance?.controller?.animateTo(GeoPoint(lat, lon))
+                }
+            } catch (t: Throwable) {
+                Log.w("OsmMapView", "Follow mode animateTo fallito: ${t.message}")
+            }
+        }
+    }
+
     LaunchedEffect(targetFocusPoint, focusToken) {
         targetFocusPoint?.let { (lat, lon) ->
             try {
@@ -168,6 +197,47 @@ fun OsmMapView(
                         GeoPoint(41.9028, 12.4964)
                     }
                     controller.setCenter(initialCenter)
+
+                    // Distingue il tocco secco dal trascinamento confrontando lo
+                    // spostamento del dito con il touch slop di sistema. Serve
+                    // perche' i due gesti hanno effetti diversi: il tap richiude il
+                    // pannello, il trascinamento spegne il Follow Mode.
+                    // Il listener restituisce false: la mappa continua a gestire
+                    // normalmente pan e zoom.
+                    val touchSlop = android.view.ViewConfiguration.get(ctx).scaledTouchSlop
+                    var downX = 0f
+                    var downY = 0f
+                    var dragging = false
+
+                    setOnTouchListener { view, event ->
+                        when (event.actionMasked) {
+                            android.view.MotionEvent.ACTION_DOWN -> {
+                                downX = event.x
+                                downY = event.y
+                                dragging = false
+                            }
+
+                            android.view.MotionEvent.ACTION_MOVE -> {
+                                if (!dragging) {
+                                    val dx = event.x - downX
+                                    val dy = event.y - downY
+                                    if (kotlin.math.hypot(dx, dy) > touchSlop) {
+                                        dragging = true
+                                        currentOnUserPan()
+                                    }
+                                }
+                            }
+
+                            android.view.MotionEvent.ACTION_UP -> {
+                                if (!dragging) {
+                                    view.performClick()
+                                    currentOnMapTap()
+                                }
+                            }
+                        }
+                        false
+                    }
+
                     mapViewInstance = this
                 }
             },

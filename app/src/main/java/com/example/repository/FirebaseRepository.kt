@@ -200,12 +200,63 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
     }
 
+    // ---------------------------------------------------------------------
+    // SELEZIONE DEL GRUPPO
+    //
+    // Il pulsante "cambia gruppo" non funzionava per due motivi che si sommavano:
+    //
+    //  1. `clearCurrentGroupSelection` azzerava solo lo stato in memoria, mai il
+    //     campo su Firestore. Al primo re-emit del documento users/{uid} — e ne
+    //     arrivano di continuo, per token FCM, lastSeen, ecc. — il listener
+    //     rimetteva dentro il gruppo appena abbandonato.
+    //  2. Il listener calcolava `targetGroupId = lastApprovedGroupId ?: currentGroupId`.
+    //     `lastApprovedGroupId` viene scritto all'approvazione e non veniva mai
+    //     ripulito, quindi vinceva per sempre: qualunque altro gruppo scegliessi,
+    //     venivi riportato all'ultimo in cui eri stato approvato.
+    //
+    // Ora `lastApprovedGroupId` è un segnale usa-e-getta (vale solo se non c'è
+    // già una scelta esplicita) e [groupIdDismissedByUser] impedisce al listener
+    // di riproporre il gruppo che l'utente ha appena lasciato, senza bloccare
+    // l'ingresso automatico in un gruppo appena approvato.
+    // ---------------------------------------------------------------------
+
+    /** true mentre l'utente sta scegliendo un gruppo: la UI non deve auto-navigare. */
+    private val _isChoosingGroup = MutableStateFlow(false)
+    val isChoosingGroup = _isChoosingGroup.asStateFlow()
+
+    @Volatile
+    private var groupIdDismissedByUser: String? = null
+
     fun clearCurrentGroupSelection() {
         val current = _currentUserState.value
+        val leavingGroupId = current?.currentGroupId
+
+        groupIdDismissedByUser = leavingGroupId
+        _isChoosingGroup.value = true
+
         if (current != null) {
             _currentUserState.value = current.copy(currentGroupId = null)
         }
         cleanupGroupListeners()
+
+        // Senza questa scrittura la scelta non sopravvive né a un re-emit del
+        // documento né a un riavvio dell'app.
+        val uid = current?.uid
+        if (firestore != null && !uid.isNullOrBlank()) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    firestore.collection("users").document(uid).update(
+                        mapOf(
+                            "currentGroupId" to null,
+                            "lastApprovedGroupId" to null,
+                            "lastUpdated" to System.currentTimeMillis()
+                        )
+                    ).await()
+                } catch (e: Exception) {
+                    Log.w(TAG, "clearCurrentGroupSelection: update fallita: ${e.message}")
+                }
+            }
+        }
     }
 
     // Deep link navigation target from notifications
@@ -629,7 +680,20 @@ class FirebaseRepository private constructor(private val context: Context) {
                 if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
                 val lastApproved = snapshot.getString("lastApprovedGroupId")
                 val currentGroupId = snapshot.getString("currentGroupId")
-                val targetGroupId = lastApproved ?: currentGroupId
+
+                // Ordine invertito rispetto a prima: la scelta esplicita dell'utente
+                // ha la precedenza, `lastApprovedGroupId` interviene solo come
+                // fallback quando non c'è nessun gruppo selezionato.
+                val targetGroupId = currentGroupId?.takeIf { it.isNotBlank() }
+                    ?: lastApproved?.takeIf { it.isNotBlank() }
+
+                // Non riproporre il gruppo che l'utente ha appena abbandonato:
+                // altrimenti il pulsante "cambia gruppo" rimbalza indietro subito.
+                if (targetGroupId != null && targetGroupId == groupIdDismissedByUser) {
+                    Log.d(TAG, "Auto-selezione ignorata per $targetGroupId: lasciato dall'utente")
+                    return@addSnapshotListener
+                }
+
                 if (!targetGroupId.isNullOrBlank()) {
                     val existing = _userGroupsState.value.find { it.id == targetGroupId }
                     if (existing != null) {
@@ -1104,13 +1168,53 @@ class FirebaseRepository private constructor(private val context: Context) {
     }
 
     fun selectGroup(groupId: String) {
+        if (groupId.isBlank()) return
+
         val previousGroupId = _currentUserState.value?.currentGroupId
+        if (previousGroupId == groupId && _currentGroupMembers.value.isNotEmpty()) {
+            // Già dentro e con i listener attivi: rifare tutto provocherebbe solo
+            // un giro inutile di detach/attach e un lampeggio della UI.
+            _isChoosingGroup.value = false
+            return
+        }
+
         if (!previousGroupId.isNullOrBlank() && previousGroupId != groupId) {
             unsubscribeFromGroupTopic(previousGroupId)
         }
+
+        // Scelta esplicita: annulla sia il veto sul gruppo lasciato sia lo stato
+        // "sto scegliendo".
+        groupIdDismissedByUser = null
+        _isChoosingGroup.value = false
+
         _currentUserState.value = _currentUserState.value?.copy(currentGroupId = groupId)
+
+        // Stacca i listener del gruppo precedente prima di agganciare i nuovi:
+        // listenToGroupData li ricrea tutti e sei, e senza cleanup resterebbero
+        // in ascolto due gruppi insieme (notifiche doppie, membri mescolati).
+        cleanupGroupListeners()
         subscribeToGroupTopic(groupId)
         listenToGroupData(groupId)
+
+        // Persistenza, così la scelta regge al riavvio e ai re-emit del documento.
+        val uid = _currentUserState.value?.uid
+        if (firestore != null && !uid.isNullOrBlank()) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    firestore.collection("users").document(uid).set(
+                        hashMapOf(
+                            "currentGroupId" to groupId,
+                            // Consumato: da qui in poi non deve più forzare nulla.
+                            "lastApprovedGroupId" to null,
+                            "lastUpdated" to System.currentTimeMillis()
+                        ),
+                        com.google.firebase.firestore.SetOptions.merge()
+                    ).await()
+                } catch (e: Exception) {
+                    Log.w(TAG, "selectGroup: persistenza fallita: ${e.message}")
+                }
+            }
+        }
     }
 
     fun subscribeToGroupTopic(groupId: String) {
@@ -1330,6 +1434,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                             }
                         }
                         _currentGroupMessages.value = list
+                        recomputeUnreadChat(groupId, list)
                     }
                 }
 
@@ -1579,6 +1684,57 @@ class FirebaseRepository private constructor(private val context: Context) {
 
     // ================== LOCATION UPDATES ==================
 
+    // ---------------------------------------------------------------------
+    // FILTRO JITTER / ANTI-DRIFT
+    //
+    // Il GPS continua a produrre fix leggermente diversi anche a telefono fermo
+    // sul tavolo. Scriverli tutti su Firestore significa marker che vibrano sulla
+    // mappa, batteria sprecata e quota di scritture bruciata. Qui decidiamo cosa
+    // vale la pena trasmettere.
+    // ---------------------------------------------------------------------
+
+    private var lastSentLatitude: Double? = null
+    private var lastSentLongitude: Double? = null
+    private var lastSentAtMillis: Long = 0L
+
+    /** Esito della valutazione, tenuto esplicito per poterlo loggare in chiaro. */
+    private data class LocationGate(val shouldSend: Boolean, val reason: String)
+
+    private fun evaluateLocationGate(location: UserLocation): LocationGate {
+        val prevLat = lastSentLatitude
+        val prevLon = lastSentLongitude
+        if (prevLat == null || prevLon == null) {
+            return LocationGate(true, "primo fix")
+        }
+
+        val elapsed = System.currentTimeMillis() - lastSentAtMillis
+        if (elapsed >= HEARTBEAT_INTERVAL_MS) {
+            // Heartbeat: anche da fermi bisogna rinfrescare stato online, orario
+            // e livello batteria, altrimenti agli altri risultiamo scomparsi.
+            return LocationGate(true, "heartbeat")
+        }
+
+        if (location.speed > MOVING_SPEED_THRESHOLD_MS) {
+            return LocationGate(true, "in movimento (${"%.1f".format(location.speed)} m/s)")
+        }
+
+        val distance = GeofenceHelper.calculateDistanceMeters(
+            prevLat, prevLon, location.latitude, location.longitude
+        )
+
+        if (distance < MIN_DISPLACEMENT_METERS) {
+            return LocationGate(false, "spostamento ${distance.toInt()}m sotto soglia")
+        }
+
+        // Se il raggio di incertezza del fix è più ampio dello spostamento stesso,
+        // quello "spostamento" può benissimo essere solo rumore del sensore.
+        if (location.accuracy > 0f && distance <= location.accuracy) {
+            return LocationGate(false, "spostamento ${distance.toInt()}m entro l'errore ${location.accuracy.toInt()}m")
+        }
+
+        return LocationGate(true, "spostamento ${distance.toInt()}m")
+    }
+
     suspend fun updateLocation(location: UserLocation) {
         val user = _currentUserState.value ?: return
         val currentGroup = user.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id ?: return
@@ -1594,17 +1750,31 @@ class FirebaseRepository private constructor(private val context: Context) {
             return
         }
 
+        // La valutazione geofence gira su OGNI fix, anche su quelli che non
+        // trasmettiamo: un ingresso o un'uscita da un luogo non va perso solo
+        // perché lo spostamento era piccolo.
+        val gate = evaluateLocationGate(location)
+        val placeForGeofence = GeofenceHelper.findCurrentPlace(location, _currentGroupPlaces.value)
+        checkGeofenceAlert(user.displayName, placeForGeofence)
+
+        if (!gate.shouldSend) {
+            Log.v(TAG, "Fix ignorato: ${gate.reason}")
+            return
+        }
+        Log.d(TAG, "Fix trasmesso: ${gate.reason}")
+
+        lastSentLatitude = location.latitude
+        lastSentLongitude = location.longitude
+        lastSentAtMillis = System.currentTimeMillis()
+
         // Compute current place
-        val matchedPlace = GeofenceHelper.findCurrentPlace(location, _currentGroupPlaces.value)
+        val matchedPlace = placeForGeofence
         val enrichedLocation = location.copy(
             userId = user.uid,
             userName = user.displayName,
             photoBase64 = user.photoBase64 ?: location.photoBase64,
             currentPlaceName = matchedPlace?.name
         )
-
-        // Check if there is a geofence trigger event
-        checkGeofenceAlert(user.displayName, matchedPlace)
 
         // Update local list
         val currentList = _currentGroupLocations.value.toMutableList()
@@ -2054,6 +2224,18 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
     }
 
+    /**
+     * Unico imbuto per le notifiche generate dai listener Firestore.
+     *
+     * Il corpo vero sta in [com.example.notification.RadarNotifier]: qui si decide
+     * solo quale forma dare all'avviso in base alla destinazione. Le notifiche di
+     * chat vengono impilate per gruppo, quelle di luogo e SOS escono come banner.
+     *
+     * Il parametro `notificationId` non serve più — gli ID li assegna il notifier,
+     * che deve poterli ritrovare per cancellarli — ma resta nella firma per non
+     * toccare le decine di chiamate esistenti.
+     */
+    @Suppress("UNUSED_PARAMETER")
     private fun showLocalNotification(
         title: String,
         body: String,
@@ -2066,69 +2248,89 @@ class FirebaseRepository private constructor(private val context: Context) {
         senderId: String? = null
     ) {
         try {
-            // Usiamo nuovi ID canale con importanza HIGH per forzare l'heads-up
-            val channelId = if (isHighPriority) "family_radar_sos_headsup_v2" else "family_radar_headsup_channel_v2"
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager ?: return
-            
-            val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+            val groupName = groupId?.let { gid ->
+                _userGroupsState.value.find { it.id == gid }?.name
+            }
 
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                val audioAttributes = android.media.AudioAttributes.Builder()
-                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setUsage(if (isHighPriority) android.media.AudioAttributes.USAGE_ALARM else android.media.AudioAttributes.USAGE_NOTIFICATION)
-                    .build()
-
-                val channel = android.app.NotificationChannel(
-                    channelId,
-                    if (isHighPriority) "Allerte SOS Radar" else "Notifiche Radar Famiglia",
-                    android.app.NotificationManager.IMPORTANCE_HIGH // FONDAMENTALE per il banner a video
-                ).apply {
-                    description = if (isHighPriority) "Notifiche allarmi SOS immediati" else "Avvisi in tempo reale luoghi e chat"
-                    enableLights(true)
-                    enableVibration(true)
-                    setSound(soundUri, audioAttributes)
-                    lockscreenVisibility = androidx.core.app.NotificationCompat.VISIBILITY_PUBLIC
-                    if (isHighPriority) {
-                        vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 500)
-                    }
+            when {
+                destination.equals("CHAT", ignoreCase = true) && !groupId.isNullOrBlank() -> {
+                    com.example.notification.RadarNotifier.notifyChatMessage(
+                        context = context,
+                        groupId = groupId,
+                        groupName = groupName,
+                        senderName = title,
+                        body = body,
+                        timestamp = System.currentTimeMillis(),
+                        senderId = senderId
+                    )
                 }
-                notificationManager.createNotificationChannel(channel)
+
+                isHighPriority || destination.equals("ALERT", ignoreCase = true) -> {
+                    com.example.notification.RadarNotifier.notifySos(
+                        context = context,
+                        groupId = groupId,
+                        title = title,
+                        body = body,
+                        latitude = latitude,
+                        longitude = longitude,
+                        senderId = senderId
+                    )
+                }
+
+                destination.equals("MAP", ignoreCase = true) -> {
+                    com.example.notification.RadarNotifier.notifyPlaceEvent(
+                        context = context,
+                        groupId = groupId,
+                        title = title,
+                        body = body,
+                        latitude = latitude,
+                        longitude = longitude,
+                        senderId = senderId
+                    )
+                }
+
+                else -> {
+                    com.example.notification.RadarNotifier.notifyGeneric(
+                        context = context,
+                        destination = destination,
+                        title = title,
+                        body = body,
+                        groupId = groupId,
+                        senderId = senderId
+                    )
+                }
             }
-
-            val intent = Intent(context, com.example.MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra("destination", destination)
-                if (!groupId.isNullOrBlank()) putExtra("groupId", groupId)
-                if (latitude != null && !latitude.isNaN()) putExtra("latitude", latitude)
-                if (longitude != null && !longitude.isNaN()) putExtra("longitude", longitude)
-                if (!senderId.isNullOrBlank()) putExtra("senderId", senderId)
-            }
-
-            val pendingIntent = android.app.PendingIntent.getActivity(
-                context,
-                notificationId,
-                intent,
-                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-            )
-
-            val notification = androidx.core.app.NotificationCompat.Builder(context, channelId)
-                .setSmallIcon(if (isHighPriority) android.R.drawable.stat_notify_error else android.R.drawable.ic_dialog_map)
-                .setContentTitle(title)
-                .setContentText(body)
-                .setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText(body))
-                .setAutoCancel(true)
-                .setSound(soundUri)
-                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MAX) // FONDAMENTALE per heads-up
-                .setDefaults(androidx.core.app.NotificationCompat.DEFAULT_ALL)
-                .setCategory(if (isHighPriority) androidx.core.app.NotificationCompat.CATEGORY_ALARM else androidx.core.app.NotificationCompat.CATEGORY_MESSAGE)
-                .setVisibility(androidx.core.app.NotificationCompat.VISIBILITY_PUBLIC)
-                .setFullScreenIntent(pendingIntent, false) // Forza il banner popup a video sopra le altre app
-                .setContentIntent(pendingIntent)
-                .build()
-
-            notificationManager.notify(notificationId, notification)
         } catch (e: Exception) {
             Log.w(TAG, "Error showing local notification: ${e.message}")
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // MESSAGGI NON LETTI
+    //
+    // Prima il badge mostrava `messages.size`, cioè il totale storico della chat:
+    // non era un conteggio di non letti, cresceva e basta. Ora si confronta il
+    // timestamp dei messaggi con l'ultima apertura della scheda Chat.
+    // ---------------------------------------------------------------------
+
+    private val _unreadChatCount = MutableStateFlow(0)
+    val unreadChatCount = _unreadChatCount.asStateFlow()
+
+    private fun lastReadKey(groupId: String) = "chat_last_read_$groupId"
+
+    /** Da chiamare quando l'utente apre la chat: azzera badge e notifiche in status bar. */
+    fun markChatRead(groupId: String) {
+        if (groupId.isBlank()) return
+        settingsPrefs.edit().putLong(lastReadKey(groupId), System.currentTimeMillis()).apply()
+        _unreadChatCount.value = 0
+        com.example.notification.RadarNotifier.clearChatNotifications(context, groupId)
+    }
+
+    private fun recomputeUnreadChat(groupId: String, messages: List<ChatMessage>) {
+        val myUid = _currentUserState.value?.uid
+        val lastRead = settingsPrefs.getLong(lastReadKey(groupId), 0L)
+        _unreadChatCount.value = messages.count {
+            it.timestamp > lastRead && it.senderId != myUid
         }
     }
 
@@ -2138,6 +2340,15 @@ class FirebaseRepository private constructor(private val context: Context) {
     }
 
     companion object {
+        /** Sotto questa distanza dall'ultimo fix trasmesso non si scrive su Firestore. */
+        const val MIN_DISPLACEMENT_METERS = 18f
+
+        /** Oltre questa velocità si trasmette sempre: ~5,4 km/h, si è chiaramente in moto. */
+        const val MOVING_SPEED_THRESHOLD_MS = 1.5f
+
+        /** Aggiornamento forzato anche da fermi, per tenere vivi stato online e batteria. */
+        const val HEARTBEAT_INTERVAL_MS = 5 * 60_000L
+
         private const val TAG = "FirebaseRepository"
         const val GOOGLE_SERVER_CLIENT_ID = "782024869586-as3i6548kt6l7t8nst4a5pr2ntfkca9v.apps.googleusercontent.com"
 

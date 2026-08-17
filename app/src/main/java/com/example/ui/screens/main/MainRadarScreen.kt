@@ -1,4 +1,7 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class
+)
 
 package com.example.ui.screens.main
 
@@ -20,6 +23,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -147,6 +151,17 @@ fun MainRadarScreen(
     var pendingMapCameraAction by remember { mutableStateOf(false) }
     var isSimulationRunning by remember { mutableStateOf(false) }
 
+    // --- Follow Mode ---
+    // followedUserId != null significa inseguimento attivo. Il bersaglio e' se
+    // stessi finche' non si tocca un membro nel carosello.
+    var followedUserId by remember { mutableStateOf<String?>(null) }
+    var focusTargetUserId by remember { mutableStateOf<String?>(null) }
+
+    val followedLocation = followedUserId?.let { id -> locations.find { it.userId == id } }
+    val followPoint = followedLocation?.let { Pair(it.latitude, it.longitude) }
+
+    val unreadChatCount by repository.unreadChatCount.collectAsState()
+
     /** Centra la mappa su un punto e, di norma, chiude il pannello per lasciarla in vista. */
     fun focusMapOn(latitude: Double, longitude: Double, collapse: Boolean = true) {
         targetMapFocus = Pair(latitude, longitude)
@@ -226,6 +241,16 @@ fun MainRadarScreen(
         repository.consumeDeepLinkTarget()
     }
 
+    // Aprire la chat equivale a leggerla: azzera badge e notifiche in status bar.
+    // Dipende anche da messages.size perche' i messaggi che arrivano a pannello
+    // gia' aperto sono letti anch'essi.
+    LaunchedEffect(panel, currentGroup?.id, messages.size) {
+        val gid = currentGroup?.id
+        if (panel == RadarPanel.CHAT && !gid.isNullOrBlank() && isSheetExpanded) {
+            repository.markChatRead(gid)
+        }
+    }
+
     // --- Servizio di tracciamento ---
     LaunchedEffect(isTrackingEnabled, trackingIntervalSec) {
         if (isTrackingEnabled) {
@@ -273,7 +298,7 @@ fun MainRadarScreen(
             ) {
                 PanelSelector(
                     selected = panel,
-                    chatCount = messages.size,
+                    chatCount = unreadChatCount,
                     pendingCount = if (isOwnerOrAdmin) pendingMembers.size else 0,
                     memberCount = activeMembers.size,
                     placeCount = places.size,
@@ -418,6 +443,13 @@ fun MainRadarScreen(
                 currentUserId = currentUserId,
                 targetFocusPoint = targetMapFocus,
                 focusToken = focusToken,
+                followPoint = followPoint,
+                onMapTap = { if (isSheetExpanded) collapseSheet() },
+                onUserPan = {
+                    // Trascinare la mappa e' il modo naturale per dire "lasciami
+                    // guardare dove voglio": spegne l'inseguimento.
+                    if (followedUserId != null) followedUserId = null
+                },
                 onMemberSelected = { selectedMemberForSheet = it },
                 onPlaceSelected = { selectedPlaceForSheet = it },
                 onSnapshotClusterSelected = { selectedSnapshotClusterForGallery = it },
@@ -454,9 +486,31 @@ fun MainRadarScreen(
             )
 
             MapActionRail(
+                isFollowing = followedUserId != null,
+                followTargetName = followedLocation?.let {
+                    if (it.userId == currentUserId) "te" else (it.nickname ?: it.userName)
+                },
+                onToggleFollow = {
+                    if (followedUserId != null) {
+                        followedUserId = null
+                        Toast.makeText(context, "Inseguimento disattivato", Toast.LENGTH_SHORT).show()
+                    } else {
+                        val targetId = focusTargetUserId ?: currentUserId
+                        val target = locations.find { it.userId == targetId }
+                        if (target != null) {
+                            followedUserId = targetId
+                            focusMapOn(target.latitude, target.longitude, collapse = false)
+                            val label = if (targetId == currentUserId) "te" else (target.nickname ?: target.userName)
+                            Toast.makeText(context, "Inseguimento attivo su $label", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Posizione del bersaglio non disponibile", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
                 onLocateSelf = {
                     val myLoc = locations.find { it.userId == currentUserId }
                     if (myLoc != null) {
+                        focusTargetUserId = currentUserId
                         focusMapOn(myLoc.latitude, myLoc.longitude, collapse = false)
                     } else {
                         Toast.makeText(context, "Posizione non ancora disponibile", Toast.LENGTH_SHORT).show()
@@ -483,7 +537,17 @@ fun MainRadarScreen(
                 MemberCarousel(
                     locations = locations,
                     currentUserId = currentUserId,
-                    onMemberClick = { selectedMemberForSheet = it }
+                    followedUserId = followedUserId,
+                    onMemberClick = { loc ->
+                        // Tap sul carosello = centra subito su quel membro con zoom
+                        // ravvicinato. Il dettaglio resta raggiungibile dalla lista
+                        // nel pannello Membri.
+                        focusTargetUserId = loc.userId
+                        focusMapOn(loc.latitude, loc.longitude, collapse = false)
+                        // Se stavamo inseguendo qualcun altro, il bersaglio passa a lui.
+                        if (followedUserId != null) followedUserId = loc.userId
+                    },
+                    onMemberLongClick = { selectedMemberForSheet = it }
                 )
             }
         }
@@ -770,6 +834,9 @@ private fun MapTopBar(
 
 @Composable
 private fun MapActionRail(
+    isFollowing: Boolean,
+    followTargetName: String?,
+    onToggleFollow: () -> Unit,
     onLocateSelf: () -> Unit,
     onAddPlace: () -> Unit,
     onTakeSnapshot: () -> Unit,
@@ -778,8 +845,46 @@ private fun MapActionRail(
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.End
     ) {
+        // Etichetta di stato: senza, "inseguimento attivo" resterebbe un'icona
+        // accesa senza dire su chi.
+        AnimatedVisibility(visible = isFollowing && followTargetName != null) {
+            GlassSurface(
+                shape = RoundedCornerShape(Radius.pill),
+                contentPadding = Spacing.xs
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                    modifier = Modifier.padding(horizontal = Spacing.sm)
+                ) {
+                    Icon(
+                        Icons.Default.GpsFixed,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(Sizes.iconSm)
+                    )
+                    Text(
+                        text = "Segui ${followTargetName.orEmpty()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+
+        RailButton(
+            icon = if (isFollowing) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed,
+            contentDescription = if (isFollowing) "Disattiva inseguimento" else "Attiva inseguimento",
+            onClick = onToggleFollow,
+            container = if (isFollowing) MaterialTheme.colorScheme.primary
+            else RadarTheme.palette.gradients.glassTint,
+            content = if (isFollowing) MaterialTheme.colorScheme.onPrimary
+            else MaterialTheme.colorScheme.onSurface,
+            testTag = "follow_mode_fab"
+        )
         RailButton(
             icon = Icons.Default.MyLocation,
             contentDescription = "Centra sulla mia posizione",
@@ -837,7 +942,9 @@ private fun RailButton(
 private fun MemberCarousel(
     locations: List<UserLocation>,
     currentUserId: String,
+    followedUserId: String?,
     onMemberClick: (UserLocation) -> Unit,
+    onMemberLongClick: (UserLocation) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyRow(
@@ -847,12 +954,16 @@ private fun MemberCarousel(
     ) {
         items(locations, key = { it.userId }) { loc ->
             val isSelf = loc.userId == currentUserId
+            val isFollowed = loc.userId == followedUserId
             val name = if (!loc.nickname.isNullOrBlank()) loc.nickname!! else loc.userName
 
             GlassSurface(
                 shape = RoundedCornerShape(Radius.pill),
                 contentPadding = Spacing.xs,
-                modifier = Modifier.clickable { onMemberClick(loc) }
+                modifier = Modifier.combinedClickable(
+                    onClick = { onMemberClick(loc) },
+                    onLongClick = { onMemberLongClick(loc) }
+                )
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -864,6 +975,7 @@ private fun MemberCarousel(
                             name = loc.userName,
                             photoBase64 = loc.photoBase64,
                             size = Sizes.avatarSm,
+                            ringColor = if (isFollowed) MaterialTheme.colorScheme.primary else null,
                             containerColor = if (isSelf) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.secondaryContainer,
                             contentColor = if (isSelf) MaterialTheme.colorScheme.onPrimary

@@ -52,6 +52,10 @@ import java.util.Locale
  * Sulla batteria agisce invece cambiando la *precisione* richiesta: alta quando ci
  * si muove, bilanciata dopo qualche minuto di immobilità (vedi [adjustPriorityFor]).
  * È lì che sta il risparmio vero, non nel numero di fix.
+ *
+ * Se l'utente attiva il risparmio energia, la precisione resta bilanciata anche in
+ * movimento: la posizione arriva da WiFi e celle invece che dal GPS, quindi il
+ * tracciamento non si interrompe mai — cambia solo la sorgente e il raggio di errore.
  */
 class LocationTrackingService : Service() {
 
@@ -75,6 +79,11 @@ class LocationTrackingService : Service() {
         try {
             repository = FirebaseRepository.getInstance(this)
             fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+
+            // Il default del campo e' alta precisione: se il servizio parte con
+            // il risparmio energia gia' attivo, senza questa riga accenderebbe
+            // il GPS fino al primo fix, cioe' proprio cio' che si vuole evitare.
+            currentPriority = repository.locationPriority()
 
             createNotificationChannel()
 
@@ -111,6 +120,15 @@ class LocationTrackingService : Service() {
 
             ACTION_UPDATE_INTERVAL -> {
                 currentIntervalMs = intervalMsFrom(intent)
+                requestLocationUpdates()
+            }
+
+            ACTION_UPDATE_POWER_MODE -> {
+                // La precisione viene riletta dal repository dentro
+                // adjustPriorityFor; qui basta riemettere subito la richiesta
+                // per non restare sulla vecchia fino al prossimo fix.
+                currentPriority = repository.locationPriority()
+                stationarySinceMillis = 0L
                 requestLocationUpdates()
             }
 
@@ -200,6 +218,18 @@ class LocationTrackingService : Service() {
      * farlo a ogni fix costerebbe piu' di quanto si risparmia.
      */
     private fun adjustPriorityFor(location: Location) {
+        // In risparmio energia la precisione resta bilanciata sempre, anche in
+        // movimento: e' il punto stesso della modalita'. La posizione continua
+        // ad arrivare da WiFi e celle, quindi il tracciamento non si interrompe.
+        if (repository.isPowerSavingMode.value) {
+            if (currentPriority != Priority.PRIORITY_BALANCED_POWER_ACCURACY) {
+                currentPriority = Priority.PRIORITY_BALANCED_POWER_ACCURACY
+                Log.d(TAG, "Precisione: bilanciata (risparmio energia)")
+                requestLocationUpdates()
+            }
+            return
+        }
+
         val speed = if (location.hasSpeed()) location.speed else 0f
         val now = System.currentTimeMillis()
 
@@ -337,6 +367,7 @@ class LocationTrackingService : Service() {
         const val ACTION_START = "com.example.action.START_TRACKING"
         const val ACTION_STOP = "com.example.action.STOP_TRACKING"
         const val ACTION_UPDATE_INTERVAL = "com.example.action.UPDATE_INTERVAL"
+        const val ACTION_UPDATE_POWER_MODE = "com.example.action.UPDATE_POWER_MODE"
         const val ACTION_FORCE_SYNC = "com.example.action.FORCE_SYNC"
         const val EXTRA_INTERVAL_SEC = "extra_interval_sec"
 
@@ -379,6 +410,8 @@ class LocationTrackingService : Service() {
         fun updateInterval(context: Context, intervalSec: Int) {
             sendAction(context, ACTION_UPDATE_INTERVAL) { putExtra(EXTRA_INTERVAL_SEC, intervalSec) }
         }
+
+        fun updatePowerMode(context: Context) = sendAction(context, ACTION_UPDATE_POWER_MODE)
 
         fun forceSync(context: Context) = sendAction(context, ACTION_FORCE_SYNC)
 

@@ -144,6 +144,49 @@ class FirebaseRepository private constructor(private val context: Context) {
     private val _isGlobalGhostMode = MutableStateFlow(settingsPrefs.getBoolean("global_ghost_mode", false))
     val isGlobalGhostMode = _isGlobalGhostMode.asStateFlow()
 
+    // Risparmio energia (default false) persistito.
+    //
+    // Non spegne il tracciamento: cambia solo la *sorgente* della posizione.
+    // Con PRIORITY_BALANCED_POWER_ACCURACY il sistema smette di accendere il
+    // chip GPS e ricava la posizione da WiFi e celle telefoniche: precisione
+    // ~100 m invece di ~5 m, ma consumo molto piu' basso e funziona anche al
+    // chiuso. Per l'utente resta tutto uguale, continua a comparire sulla mappa.
+    private val _isPowerSavingMode = MutableStateFlow(settingsPrefs.getBoolean("power_saving_mode", false))
+    val isPowerSavingMode = _isPowerSavingMode.asStateFlow()
+
+    /**
+     * Precisione da chiedere a Play Services. Unico punto di verita': la usano
+     * sia il tracciamento in-app silenzioso sia il servizio in foreground.
+     */
+    fun locationPriority(): Int =
+        if (_isPowerSavingMode.value) Priority.PRIORITY_BALANCED_POWER_ACCURACY
+        else Priority.PRIORITY_HIGH_ACCURACY
+
+    fun setPowerSavingMode(enabled: Boolean) {
+        if (_isPowerSavingMode.value == enabled) return
+        _isPowerSavingMode.value = enabled
+        settingsPrefs.edit().putBoolean("power_saving_mode", enabled).apply()
+
+        // Entrambi i produttori vanno riagganciati con la nuova precisione,
+        // altrimenti il cambio avrebbe effetto solo al riavvio dell'app.
+        // Nessuna interruzione: startSilentLocationTracking stacca e riattacca,
+        // e il servizio riemette la richiesta senza perdere il foreground.
+        if (silentLocationCallback != null) {
+            startSilentLocationTracking()
+        }
+        if (_isBackgroundTrackingEnabled.value) {
+            com.example.service.LocationTrackingService.updatePowerMode(context)
+        }
+
+        // Passando ad alta precisione il primo fix preciso puo' distare parecchio
+        // da quello approssimato scritto per ultimo; passando a bassa precisione
+        // il raggio di errore si allarga di colpo. In entrambi i casi il gate
+        // confronterebbe grandezze non omogenee, quindi lo si azzera e si
+        // ripubblica subito: l'utente non deve accorgersi del cambio.
+        resetLocationGate()
+        pushLastKnownLocationNow()
+    }
+
     fun setTrackingFrequencySeconds(seconds: Int) {
         val clamped = seconds.coerceIn(5, 86400)
         _trackingFrequencySeconds.value = clamped
@@ -1754,7 +1797,7 @@ class FirebaseRepository private constructor(private val context: Context) {
             stopSilentLocationTracking()
 
             val interval = (_trackingFrequencySeconds.value * 1000L).coerceAtLeast(5000L)
-            val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, interval).apply {
+            val request = LocationRequest.Builder(locationPriority(), interval).apply {
                 setMinUpdateIntervalMillis(interval / 2)
                 setWaitForAccurateLocation(false)
             }.build()

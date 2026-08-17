@@ -105,6 +105,7 @@ fun MainRadarScreen(
     val trackingIntervalSec by repository.trackingFrequencySeconds.collectAsState()
     val isTrackingEnabled by repository.isBackgroundTrackingEnabled.collectAsState()
     val isGlobalGhostMode by repository.isGlobalGhostMode.collectAsState()
+    val isPowerSavingMode by repository.isPowerSavingMode.collectAsState()
     val deepLinkTarget by repository.deepLinkTarget.collectAsState()
 
     val currentGroup = userGroups.find { it.id == currentUser?.currentGroupId } ?: userGroups.firstOrNull()
@@ -418,11 +419,21 @@ fun MainRadarScreen(
                                 trackingIntervalSec = trackingIntervalSec,
                                 isTrackingEnabled = isTrackingEnabled,
                                 isGlobalGhostMode = isGlobalGhostMode,
+                                isPowerSavingMode = isPowerSavingMode,
                                 isSimulationRunning = isSimulationRunning,
                                 onEditProfileClick = { showEditProfileDialog = true },
                                 onSwitchGroup = onSwitchGroup,
                                 onUpdateInterval = { sec ->
                                     repository.setTrackingFrequencySeconds(sec)
+                                },
+                                onTogglePowerSaving = { enabled ->
+                                    repository.setPowerSavingMode(enabled)
+                                    Toast.makeText(
+                                        context,
+                                        if (enabled) "Risparmio energia attivo: posizione da WiFi e rete dati"
+                                        else "Precisione GPS ripristinata",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 },
                                 onToggleTracking = { enabled ->
                                     repository.setBackgroundTrackingEnabled(enabled)
@@ -2015,11 +2026,13 @@ private fun SettingsPanel(
     trackingIntervalSec: Int,
     isTrackingEnabled: Boolean,
     isGlobalGhostMode: Boolean,
+    isPowerSavingMode: Boolean,
     isSimulationRunning: Boolean,
     onEditProfileClick: () -> Unit,
     onSwitchGroup: () -> Unit,
     onUpdateInterval: (Int) -> Unit,
     onToggleTracking: (Boolean) -> Unit,
+    onTogglePowerSaving: (Boolean) -> Unit,
     onToggleGlobalGhostMode: (Boolean) -> Unit,
     onToggleGroupTracking: (Boolean) -> Unit,
     onToggleAccessPolicy: (Boolean) -> Unit,
@@ -2169,6 +2182,18 @@ private fun SettingsPanel(
                     checked = isTrackingEnabled,
                     onCheckedChange = onToggleTracking,
                     testTag = "tracking_switch"
+                )
+                HairlineDivider()
+                SettingsToggleRow(
+                    title = "Risparmio energia",
+                    description = "Ricava la posizione da WiFi e rete dati invece che dal GPS: " +
+                        "molta meno batteria, precisione circa 100 metri. Il tracciamento resta attivo.",
+                    icon = Icons.Default.BatterySaver,
+                    iconTint = if (isPowerSavingMode) RadarSemantic.BatteryOk
+                    else MaterialTheme.colorScheme.primary,
+                    checked = isPowerSavingMode,
+                    onCheckedChange = onTogglePowerSaving,
+                    testTag = "power_saving_switch"
                 )
                 HairlineDivider()
                 Spacer(Modifier.height(Spacing.sm))

@@ -66,12 +66,21 @@ fun OsmMapView(
     snapshots: List<PlaceSnapshot> = emptyList(),
     currentUserId: String,
     targetFocusPoint: Pair<Double, Double>? = null,
+    /**
+     * Incrementalo per ri-centrare sullo stesso [targetFocusPoint].
+     * Senza questo token la LaunchedEffect non riscatterebbe, perché una Pair con
+     * le stesse coordinate è strutturalmente uguale alla precedente: premere due
+     * volte "centra su di me" non farebbe nulla la seconda.
+     */
+    focusToken: Int = 0,
     onMemberSelected: (UserLocation) -> Unit,
     onPlaceSelected: (SavedPlace) -> Unit,
     onSnapshotClusterSelected: (PlaceSnapshotCluster) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val isDark = true
+    // La mappa segue il tema dell'app: il filtro di inversione sui tile viene
+    // applicato o rimosso nel blocco update, non solo alla creazione.
+    val isDark = com.example.ui.theme.RadarTheme.palette.isDark
     var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
     var isMapInitialized by remember { mutableStateOf(false) }
 
@@ -113,7 +122,7 @@ fun OsmMapView(
     }
 
     // Handle focus navigation
-    LaunchedEffect(targetFocusPoint) {
+    LaunchedEffect(targetFocusPoint, focusToken) {
         targetFocusPoint?.let { (lat, lon) ->
             try {
                 if (lat != 0.0 && lon != 0.0 && !lat.isNaN() && !lon.isNaN()) {
@@ -164,6 +173,25 @@ fun OsmMapView(
             },
             update = { mapView ->
                 mapViewInstance = mapView
+
+                // 0. Allinea il rendering dei tile al tema corrente (chiaro/scuro).
+                mapView.overlayManager.tilesOverlay.setColorFilter(
+                    if (isDark) {
+                        ColorMatrixColorFilter(
+                            ColorMatrix(
+                                floatArrayOf(
+                                    -0.80f, 0f, 0f, 0f, 210f,
+                                    0f, -0.80f, 0f, 0f, 215f,
+                                    0f, 0f, -0.75f, 0f, 225f,
+                                    0f, 0f, 0f, 1f, 0f
+                                )
+                            )
+                        )
+                    } else {
+                        null
+                    }
+                )
+
                 // 1. Rebuild Places Overlays
                 placeOverlays.clear()
                 places.forEach { place ->

@@ -3,7 +3,14 @@ package com.example.ui.screens.auth
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -20,29 +27,30 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.repository.FirebaseRepository
+import com.example.ui.components.InfoBanner
+import com.example.ui.components.PillChip
 import com.example.ui.components.RadarPulseAnimation
+import com.example.ui.theme.RadarTheme
+import com.example.ui.theme.Radius
+import com.example.ui.theme.Sizes
+import com.example.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
-enum class AuthMethod {
-    PHONE,
-    EMAIL
-}
+enum class AuthMethod { PHONE, EMAIL }
 
 @Composable
 fun AuthScreen(
@@ -54,38 +62,39 @@ fun AuthScreen(
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
+    val gradients = RadarTheme.palette.gradients
 
     var selectedMethod by remember { mutableStateOf(AuthMethod.PHONE) }
 
-    // Phone Auth states
+    // Telefono
     var phoneNumber by remember { mutableStateOf("+39 ") }
     var verificationId by remember { mutableStateOf<String?>(null) }
     var smsCode by remember { mutableStateOf("") }
     var phoneDisplayName by remember { mutableStateOf("") }
     var isCodeSent by remember { mutableStateOf(false) }
 
-    // Email Auth states
+    // Email
     var isLoginMode by remember { mutableStateOf(true) }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
 
-    // General states
+    // Comuni
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var successMessage by remember { mutableStateOf<String?>(null) }
+
+    fun clearFeedback() {
+        errorMessage = null
+        successMessage = null
+    }
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
-                )
+                Brush.verticalGradient(listOf(gradients.heroTop, gradients.heroBottom))
             )
     ) {
         Column(
@@ -93,548 +102,604 @@ fun AuthScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
+                .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 16.dp),
+                .padding(horizontal = Spacing.xxl, vertical = Spacing.lg),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(Spacing.xxl))
 
-            // Radar Hero Header
+            // ---- Hero ----
             Box(contentAlignment = Alignment.Center) {
                 RadarPulseAnimation(
-                    modifier = Modifier.size(100.dp),
+                    modifier = Modifier.size(150.dp),
                     color = MaterialTheme.colorScheme.primary
                 )
                 Box(
                     modifier = Modifier
-                        .size(60.dp)
+                        .size(64.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary),
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.secondary
+                                )
+                            )
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.ShareLocation,
-                        contentDescription = "Radar Logo",
+                        contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(Sizes.iconXl)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.xl))
 
             Text(
-                text = "Family Radar & Social",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                text = "Family Radar",
+                style = MaterialTheme.typography.displaySmall,
+                color = MaterialTheme.colorScheme.onSurface
             )
-
             Text(
-                text = "Localizzazione in tempo reale, geofencing e chat di gruppo",
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                modifier = Modifier.padding(top = 4.dp, bottom = 20.dp)
+                text = "La tua famiglia sulla mappa, in tempo reale",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = Spacing.xs)
             )
 
-            // Auth Main Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .shadow(8.dp, RoundedCornerShape(24.dp)),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            Spacer(Modifier.height(Spacing.xxl))
+
+            // ---- Card di accesso ----
+            Surface(
+                shape = RoundedCornerShape(Radius.xl),
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 12.dp,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .padding(Spacing.xl),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.lg)
                 ) {
-
-                    // 1. Google Sign-In Primary Action
-                    Button(
+                    // Google: azione primaria
+                    OutlinedButton(
                         onClick = {
-                            errorMessage = null
-                            successMessage = null
+                            clearFeedback()
                             isLoading = true
                             coroutineScope.launch {
-                                val targetContext = activity ?: context
-                                val result = repository.signInWithGoogle(targetContext)
+                                val result = repository.signInWithGoogle(activity ?: context)
                                 isLoading = false
                                 if (result.isSuccess) {
                                     onAuthSuccess()
                                 } else {
-                                    val err = result.exceptionOrNull()
-                                    errorMessage = err?.localizedMessage ?: "Accesso Google non riuscito"
+                                    errorMessage = result.exceptionOrNull()?.localizedMessage
+                                        ?: "Accesso Google non riuscito"
                                 }
                             }
                         },
                         enabled = !isLoading,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = RoundedCornerShape(Radius.sm),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(52.dp)
+                            .height(54.dp)
                             .testTag("google_sign_in_button")
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
+                                modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
                                 color = MaterialTheme.colorScheme.primary
                             )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "Connessione in corso...",
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 14.sp
-                            )
+                            Spacer(Modifier.width(Spacing.md))
+                            Text("Connessione…", style = MaterialTheme.typography.labelLarge)
                         } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                GoogleIcon(modifier = Modifier.size(22.dp))
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = "Accedi con Google",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
+                            GoogleIcon(modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(Spacing.md))
+                            Text(
+                                text = "Continua con Google",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         }
                     }
 
-                    // Inline Error Feedback for immediate visibility
-                    AnimatedVisibility(visible = errorMessage != null) {
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.errorContainer,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Default.Info,
-                                    contentDescription = "Info",
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    text = errorMessage ?: "",
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                    }
+                    LabeledDivider("oppure")
 
-                    // Divider
+                    // Selettore metodo
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
                     ) {
-                        HorizontalDivider(modifier = Modifier.weight(1f))
-                        Text(
-                            text = " OPPURE ",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                        HorizontalDivider(modifier = Modifier.weight(1f))
-                    }
-
-                    // Auth Method Switcher (Phone vs Email)
-                    TabRow(
-                        selectedTabIndex = if (selectedMethod == AuthMethod.PHONE) 0 else 1,
-                        containerColor = Color.Transparent,
-                        divider = {}
-                    ) {
-                        Tab(
+                        PillChip(
+                            label = "Telefono",
+                            icon = Icons.Default.PhoneAndroid,
                             selected = selectedMethod == AuthMethod.PHONE,
-                            onClick = {
-                                selectedMethod = AuthMethod.PHONE
-                                errorMessage = null
-                                successMessage = null
-                            },
-                            text = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(Icons.Default.PhoneAndroid, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Telefono", fontWeight = FontWeight.Bold, maxLines = 1)
-                                }
-                            }
+                            onClick = { selectedMethod = AuthMethod.PHONE; clearFeedback() },
+                            modifier = Modifier.weight(1f)
                         )
-                        Tab(
+                        PillChip(
+                            label = "Email",
+                            icon = Icons.Default.Email,
                             selected = selectedMethod == AuthMethod.EMAIL,
-                            onClick = {
-                                selectedMethod = AuthMethod.EMAIL
-                                errorMessage = null
-                                successMessage = null
-                            },
-                            text = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Email", fontWeight = FontWeight.Bold, maxLines = 1)
-                                }
-                            }
+                            onClick = { selectedMethod = AuthMethod.EMAIL; clearFeedback() },
+                            modifier = Modifier.weight(1f)
                         )
                     }
 
-                    // ====== PHONE AUTH FLOW ======
-                    if (selectedMethod == AuthMethod.PHONE) {
-                        if (!isCodeSent) {
-                            // Step 1: Input Phone Number
-                            OutlinedTextField(
-                                value = phoneNumber,
-                                onValueChange = { phoneNumber = it },
-                                label = { Text("Numero Telefono (es. +39...)", maxLines = 1) },
-                                placeholder = { Text("+39 333 1234567", maxLines = 1) },
-                                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Phone,
-                                    imeAction = ImeAction.Done
-                                ),
-                                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("phone_number_input"),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-
-                            Button(
-                                onClick = {
-                                    errorMessage = null
-                                    successMessage = null
-                                    val cleanedPhone = phoneNumber.trim().replace(" ", "")
-                                    if (cleanedPhone.length < 8) {
-                                        errorMessage = "Inserisci un numero valido con prefisso"
-                                        return@Button
-                                    }
-                                    if (activity == null) {
-                                        errorMessage = "Errore di contesto Activity"
-                                        return@Button
-                                    }
-
-                                    isLoading = true
-                                    repository.sendPhoneVerificationCode(
-                                        activity = activity,
-                                        phoneNumber = cleanedPhone,
-                                        onCodeSent = { vId ->
-                                            isLoading = false
-                                            verificationId = vId
-                                            isCodeSent = true
-                                            successMessage = "Codice SMS inviato a $cleanedPhone"
-                                        },
-                                        onVerificationCompleted = {
-                                            isLoading = false
-                                            onAuthSuccess()
-                                        },
-                                        onVerificationFailed = { e ->
-                                            isLoading = false
-                                            errorMessage = e.localizedMessage ?: "Errore invio SMS di verifica"
+                    AnimatedContent(
+                        targetState = selectedMethod,
+                        transitionSpec = {
+                            val forward = targetState.ordinal > initialState.ordinal
+                            val offset = if (forward) 1 else -1
+                            (slideInHorizontally(tween(220)) { it * offset / 4 } + fadeIn(tween(220)))
+                                .togetherWith(
+                                    slideOutHorizontally(tween(180)) { -it * offset / 4 } + fadeOut(tween(180))
+                                )
+                        },
+                        label = "auth_method"
+                    ) { method ->
+                        when (method) {
+                            AuthMethod.PHONE -> PhoneAuthForm(
+                                phoneNumber = phoneNumber,
+                                onPhoneChange = { phoneNumber = it },
+                                smsCode = smsCode,
+                                onSmsCodeChange = { smsCode = it.filter { c -> c.isDigit() }.take(6) },
+                                displayName = phoneDisplayName,
+                                onDisplayNameChange = { phoneDisplayName = it },
+                                isCodeSent = isCodeSent,
+                                isLoading = isLoading,
+                                onSendCode = {
+                                    clearFeedback()
+                                    val cleaned = phoneNumber.trim().replace(" ", "")
+                                    when {
+                                        cleaned.length < 8 ->
+                                            errorMessage = "Inserisci un numero valido con prefisso"
+                                        activity == null ->
+                                            errorMessage = "Errore di contesto Activity"
+                                        else -> {
+                                            isLoading = true
+                                            repository.sendPhoneVerificationCode(
+                                                activity = activity,
+                                                phoneNumber = cleaned,
+                                                onCodeSent = { vId ->
+                                                    isLoading = false
+                                                    verificationId = vId
+                                                    isCodeSent = true
+                                                    successMessage = "Codice SMS inviato a $cleaned"
+                                                },
+                                                onVerificationCompleted = {
+                                                    isLoading = false
+                                                    onAuthSuccess()
+                                                },
+                                                onVerificationFailed = { e ->
+                                                    isLoading = false
+                                                    errorMessage = e.localizedMessage
+                                                        ?: "Errore invio SMS di verifica"
+                                                }
+                                            )
                                         }
-                                    )
+                                    }
                                 },
-                                enabled = !isLoading,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp)
-                                    .testTag("send_phone_code_button"),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                if (isLoading) {
-                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                } else {
-                                    Icon(Icons.Default.Sms, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Invia Codice SMS", fontSize = 15.sp, maxLines = 1)
-                                }
-                            }
-                        } else {
-                            // Step 2: Input Verification Code & Name
-                            Text(
-                                text = "Codice inviato via SMS su $phoneNumber",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1
-                            )
-
-                            OutlinedTextField(
-                                value = smsCode,
-                                onValueChange = { smsCode = it.take(6) },
-                                label = { Text("Codice di Verifica (6 cifre)", maxLines = 1) },
-                                leadingIcon = { Icon(Icons.Default.Pin, contentDescription = null) },
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Number,
-                                    imeAction = ImeAction.Next
-                                ),
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("sms_code_input"),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-
-                            OutlinedTextField(
-                                value = phoneDisplayName,
-                                onValueChange = { phoneDisplayName = it },
-                                label = { Text("Nome visualizzato", maxLines = 1) },
-                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Text,
-                                    imeAction = ImeAction.Done
-                                ),
-                                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("phone_name_input"),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-
-                            Button(
-                                onClick = {
-                                    errorMessage = null
-                                    successMessage = null
-                                    val code = smsCode.trim()
+                                onVerify = {
+                                    clearFeedback()
                                     val vId = verificationId
-                                    if (vId == null || code.length < 6) {
+                                    if (vId == null || smsCode.length < 6) {
                                         errorMessage = "Inserisci il codice completo a 6 cifre"
-                                        return@Button
-                                    }
-
-                                    isLoading = true
-                                    coroutineScope.launch {
-                                        val result = repository.verifyPhoneCodeAndSignIn(
-                                            verificationId = vId,
-                                            smsCode = code,
-                                            displayName = phoneDisplayName.trim(),
-                                            phoneNumber = phoneNumber.trim()
-                                        )
-                                        isLoading = false
-                                        if (result.isSuccess) {
-                                            onAuthSuccess()
-                                        } else {
-                                            errorMessage = result.exceptionOrNull()?.localizedMessage ?: "Codice di verifica non valido o scaduto"
+                                    } else {
+                                        isLoading = true
+                                        coroutineScope.launch {
+                                            val result = repository.verifyPhoneCodeAndSignIn(
+                                                verificationId = vId,
+                                                smsCode = smsCode.trim(),
+                                                displayName = phoneDisplayName.trim(),
+                                                phoneNumber = phoneNumber.trim()
+                                            )
+                                            isLoading = false
+                                            if (result.isSuccess) {
+                                                onAuthSuccess()
+                                            } else {
+                                                errorMessage = result.exceptionOrNull()?.localizedMessage
+                                                    ?: "Codice non valido o scaduto"
+                                            }
                                         }
                                     }
                                 },
-                                enabled = !isLoading,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp)
-                                    .testTag("verify_phone_code_button"),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                if (isLoading) {
-                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                } else {
-                                    Text("Verifica e Accedi", fontSize = 15.sp, maxLines = 1)
-                                }
-                            }
-
-                            TextButton(
-                                onClick = {
+                                onEditNumber = {
                                     isCodeSent = false
                                     smsCode = ""
-                                    errorMessage = null
-                                    successMessage = null
+                                    clearFeedback()
                                 },
-                                modifier = Modifier.align(Alignment.CenterHorizontally)
-                            ) {
-                                Text("Modifica numero di telefono")
-                            }
-                        }
-                    }
+                                onImeDone = { focusManager.clearFocus() }
+                            )
 
-                    // ====== EMAIL & PASSWORD FLOW ======
-                    if (selectedMethod == AuthMethod.EMAIL) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            TextButton(
-                                onClick = { isLoginMode = true; errorMessage = null }
-                            ) {
-                                Text(
-                                    "Accedi",
-                                    fontWeight = if (isLoginMode) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isLoginMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            TextButton(
-                                onClick = { isLoginMode = false; errorMessage = null }
-                            ) {
-                                Text(
-                                    "Registrati",
-                                    fontWeight = if (!isLoginMode) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (!isLoginMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        if (!isLoginMode) {
-                            OutlinedTextField(
-                                value = displayName,
-                                onValueChange = { displayName = it },
-                                label = { Text("Nome Completo") },
-                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
+                            AuthMethod.EMAIL -> EmailAuthForm(
+                                isLoginMode = isLoginMode,
+                                onModeChange = { isLoginMode = it; clearFeedback() },
+                                email = email,
+                                onEmailChange = { email = it },
+                                password = password,
+                                onPasswordChange = { password = it },
+                                passwordVisible = passwordVisible,
+                                onTogglePasswordVisibility = { passwordVisible = !passwordVisible },
+                                displayName = displayName,
+                                onDisplayNameChange = { displayName = it },
+                                isLoading = isLoading,
+                                onSubmit = {
+                                    clearFeedback()
+                                    if (email.isBlank() || password.isBlank()) {
+                                        errorMessage = "Inserisci email e password per continuare"
+                                    } else {
+                                        isLoading = true
+                                        coroutineScope.launch {
+                                            val result = if (isLoginMode) {
+                                                repository.signInWithEmail(email.trim(), password)
+                                            } else {
+                                                repository.signUpWithEmail(
+                                                    email.trim(), password, displayName.trim()
+                                                )
+                                            }
+                                            isLoading = false
+                                            if (result.isSuccess) {
+                                                onAuthSuccess()
+                                            } else {
+                                                errorMessage = result.exceptionOrNull()?.localizedMessage
+                                                    ?: "Errore di autenticazione"
+                                            }
+                                        }
+                                    }
+                                },
+                                onImeDone = { focusManager.clearFocus() }
                             )
                         }
-
-                        OutlinedTextField(
-                            value = email,
-                            onValueChange = { email = it },
-                            label = { Text("Email") },
-                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-
-                        OutlinedTextField(
-                            value = password,
-                            onValueChange = { password = it },
-                            label = { Text("Password") },
-                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                            trailingIcon = {
-                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                    Icon(
-                                        if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                        contentDescription = null
-                                    )
-                                }
-                            },
-                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-
-                        Button(
-                            onClick = {
-                                errorMessage = null
-                                if (email.isBlank() || password.isBlank()) {
-                                    errorMessage = "Inserisci email e password per continuare"
-                                    return@Button
-                                }
-                                isLoading = true
-                                coroutineScope.launch {
-                                    val result = if (isLoginMode) {
-                                        repository.signInWithEmail(email.trim(), password)
-                                    } else {
-                                        repository.signUpWithEmail(email.trim(), password, displayName.trim())
-                                    }
-                                    isLoading = false
-                                    if (result.isSuccess) {
-                                        onAuthSuccess()
-                                    } else {
-                                        errorMessage = result.exceptionOrNull()?.localizedMessage ?: "Errore di autenticazione"
-                                    }
-                                }
-                            },
-                            enabled = !isLoading,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            if (isLoading) {
-                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                            } else {
-                                Text(if (isLoginMode) "Accedi" else "Crea Account", fontSize = 15.sp)
-                            }
-                        }
                     }
 
-                    // Success Feedback
                     AnimatedVisibility(visible = successMessage != null) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer
-                        ) {
-                            Text(
-                                text = successMessage ?: "",
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(10.dp)
-                            )
-                        }
+                        InfoBanner(
+                            text = successMessage.orEmpty(),
+                            icon = Icons.Default.CheckCircle,
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            accentColor = MaterialTheme.colorScheme.secondary
+                        )
                     }
 
-                    // Error Feedback
                     AnimatedVisibility(visible = errorMessage != null) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.errorContainer
-                        ) {
-                            Text(
-                                text = errorMessage ?: "",
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(10.dp)
-                            )
-                        }
+                        InfoBanner(
+                            text = errorMessage.orEmpty(),
+                            icon = Icons.Default.ErrorOutline
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(Modifier.height(Spacing.xl))
+
+            Text(
+                text = "La posizione è condivisa solo con i gruppi a cui appartieni " +
+                    "e puoi interromperla in qualsiasi momento.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = Spacing.md)
+            )
+
+            Spacer(Modifier.height(Spacing.xxl))
+        }
+    }
+}
+
+// ============================================================================
+// FORM
+// ============================================================================
+
+@Composable
+private fun PhoneAuthForm(
+    phoneNumber: String,
+    onPhoneChange: (String) -> Unit,
+    smsCode: String,
+    onSmsCodeChange: (String) -> Unit,
+    displayName: String,
+    onDisplayNameChange: (String) -> Unit,
+    isCodeSent: Boolean,
+    isLoading: Boolean,
+    onSendCode: () -> Unit,
+    onVerify: () -> Unit,
+    onEditNumber: () -> Unit,
+    onImeDone: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+        if (!isCodeSent) {
+            OutlinedTextField(
+                value = phoneNumber,
+                onValueChange = onPhoneChange,
+                label = { Text("Numero di telefono") },
+                placeholder = { Text("+39 333 1234567") },
+                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Phone,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(onDone = { onImeDone() }),
+                singleLine = true,
+                shape = RoundedCornerShape(Radius.sm),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("phone_number_input")
+            )
+
+            PrimaryActionButton(
+                label = "Invia codice SMS",
+                icon = Icons.Default.Sms,
+                isLoading = isLoading,
+                onClick = onSendCode,
+                testTag = "send_phone_code_button"
+            )
+        } else {
+            Text(
+                text = "Abbiamo inviato un codice a $phoneNumber",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            OutlinedTextField(
+                value = smsCode,
+                onValueChange = onSmsCodeChange,
+                label = { Text("Codice a 6 cifre") },
+                leadingIcon = { Icon(Icons.Default.Pin, contentDescription = null) },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Next
+                ),
+                singleLine = true,
+                shape = RoundedCornerShape(Radius.sm),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("sms_code_input")
+            )
+
+            OutlinedTextField(
+                value = displayName,
+                onValueChange = onDisplayNameChange,
+                label = { Text("Come ti chiami") },
+                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { onImeDone() }),
+                singleLine = true,
+                shape = RoundedCornerShape(Radius.sm),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("phone_name_input")
+            )
+
+            PrimaryActionButton(
+                label = "Verifica e accedi",
+                icon = Icons.Default.LockOpen,
+                isLoading = isLoading,
+                onClick = onVerify,
+                testTag = "verify_phone_code_button"
+            )
+
+            TextButton(
+                onClick = onEditNumber,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Text("Cambia numero")
+            }
         }
     }
 }
 
 @Composable
+private fun EmailAuthForm(
+    isLoginMode: Boolean,
+    onModeChange: (Boolean) -> Unit,
+    email: String,
+    onEmailChange: (String) -> Unit,
+    password: String,
+    onPasswordChange: (String) -> Unit,
+    passwordVisible: Boolean,
+    onTogglePasswordVisibility: () -> Unit,
+    displayName: String,
+    onDisplayNameChange: (String) -> Unit,
+    isLoading: Boolean,
+    onSubmit: () -> Unit,
+    onImeDone: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+        ) {
+            PillChip(
+                label = "Accedi",
+                selected = isLoginMode,
+                onClick = { onModeChange(true) },
+                modifier = Modifier.weight(1f)
+            )
+            PillChip(
+                label = "Registrati",
+                selected = !isLoginMode,
+                onClick = { onModeChange(false) },
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        AnimatedVisibility(visible = !isLoginMode) {
+            OutlinedTextField(
+                value = displayName,
+                onValueChange = onDisplayNameChange,
+                label = { Text("Nome completo") },
+                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                singleLine = true,
+                shape = RoundedCornerShape(Radius.sm),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        OutlinedTextField(
+            value = email,
+            onValueChange = onEmailChange,
+            label = { Text("Email") },
+            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Email,
+                imeAction = ImeAction.Next
+            ),
+            singleLine = true,
+            shape = RoundedCornerShape(Radius.sm),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = password,
+            onValueChange = onPasswordChange,
+            label = { Text("Password") },
+            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+            trailingIcon = {
+                IconButton(onClick = onTogglePasswordVisibility) {
+                    Icon(
+                        if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        contentDescription = if (passwordVisible) "Nascondi password" else "Mostra password"
+                    )
+                }
+            },
+            visualTransformation = if (passwordVisible) VisualTransformation.None
+            else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = { onImeDone() }),
+            singleLine = true,
+            shape = RoundedCornerShape(Radius.sm),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        PrimaryActionButton(
+            label = if (isLoginMode) "Accedi" else "Crea account",
+            icon = if (isLoginMode) Icons.Default.Login else Icons.Default.PersonAdd,
+            isLoading = isLoading,
+            onClick = onSubmit
+        )
+    }
+}
+
+// ============================================================================
+// COMPONENTI LOCALI
+// ============================================================================
+
+@Composable
+private fun PrimaryActionButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isLoading: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    testTag: String? = null
+) {
+    Button(
+        onClick = onClick,
+        enabled = !isLoading,
+        shape = RoundedCornerShape(Radius.sm),
+        modifier = modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+        } else {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
+            Spacer(Modifier.width(Spacing.sm))
+            Text(label, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+}
+
+@Composable
+private fun LabeledDivider(label: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.outline
+        )
+        Text(
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = Spacing.md)
+        )
+        HorizontalDivider(
+            modifier = Modifier.weight(1f),
+            color = MaterialTheme.colorScheme.outline
+        )
+    }
+}
+
+/**
+ * Logo Google disegnato su Canvas: quattro archi colorati più la barra orizzontale.
+ * Evita di dover impacchettare l'asset ufficiale, che ha vincoli di licenza sul brand.
+ */
+@Composable
 fun GoogleIcon(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
-        val w = size.width
-        val h = size.height
-        val cx = w / 2f
-        val cy = h / 2f
+        val stroke = size.minDimension * 0.22f
+        val inset = stroke / 2f
+        val arcSize = Size(size.width - stroke, size.height - stroke)
+        val topLeft = Offset(inset, inset)
 
-        // Blue, Green, Yellow, Red standard Google "G" quadrant geometry
         val red = Color(0xFFEA4335)
         val blue = Color(0xFF4285F4)
         val yellow = Color(0xFFFBBC05)
         val green = Color(0xFF34A853)
 
-        // Draw stylized Google G
-        drawCircle(color = blue, radius = w * 0.45f, center = Offset(cx, cy))
-        drawCircle(color = Color.White, radius = w * 0.28f, center = Offset(cx, cy))
+        // Archi: rosso in alto, giallo a sinistra, verde in basso, blu a destra.
+        drawArc(
+            color = red, startAngle = -135f, sweepAngle = 100f, useCenter = false,
+            topLeft = topLeft, size = arcSize,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
+        )
+        drawArc(
+            color = yellow, startAngle = 125f, sweepAngle = 90f, useCenter = false,
+            topLeft = topLeft, size = arcSize,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
+        )
+        drawArc(
+            color = green, startAngle = 35f, sweepAngle = 90f, useCenter = false,
+            topLeft = topLeft, size = arcSize,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
+        )
+        drawArc(
+            color = blue, startAngle = -35f, sweepAngle = 70f, useCenter = false,
+            topLeft = topLeft, size = arcSize,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
+        )
+
+        // Barra orizzontale della "G".
         drawRect(
             color = blue,
-            topLeft = Offset(cx, cy - h * 0.12f),
-            size = androidx.compose.ui.geometry.Size(w * 0.48f, h * 0.24f)
+            topLeft = Offset(size.width * 0.5f, size.height * 0.5f - stroke / 2f),
+            size = Size(size.width * 0.5f - inset, stroke)
         )
     }
 }
 
 private fun Context.findActivity(): Activity? {
-    var ctx = this
+    var ctx: Context = this
     while (ctx is ContextWrapper) {
         if (ctx is Activity) return ctx
         ctx = ctx.baseContext

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.example.ui.screens.groups
 
 import androidx.compose.animation.AnimatedVisibility
@@ -17,17 +19,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.model.GroupData
 import com.example.repository.FirebaseRepository
+import com.example.ui.components.EmptyState
+import com.example.ui.components.InfoBanner
+import com.example.ui.components.RadarBadge
+import com.example.ui.components.SectionHeader
+import com.example.ui.theme.RadarTheme
+import com.example.ui.theme.Radius
+import com.example.ui.theme.Sizes
+import com.example.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupSelectScreen(
     repository: FirebaseRepository,
@@ -37,6 +45,7 @@ fun GroupSelectScreen(
     val coroutineScope = rememberCoroutineScope()
     val userGroups by repository.userGroupsState.collectAsState()
     val currentUser by repository.currentUserState.collectAsState()
+    val gradients = RadarTheme.palette.gradients
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var showJoinDialog by remember { mutableStateOf(false) }
@@ -49,11 +58,14 @@ fun GroupSelectScreen(
     var infoMessage by remember { mutableStateOf<String?>(null) }
     var isSubmitting by remember { mutableStateOf(false) }
 
-    // Real-time automatic transition: as soon as member is approved or a group becomes active, navigate!
+    // Non appena l'admin approva, il listener del repository aggiorna lo stato
+    // e la schermata passa da sola al radar: nessun refresh manuale.
     LaunchedEffect(currentUser?.currentGroupId, userGroups) {
         val currentGid = currentUser?.currentGroupId
         if (!currentGid.isNullOrBlank()) {
-            val activeGroup = userGroups.find { it.id == currentGid && it.userMembershipStatus == "ACTIVE" }
+            val activeGroup = userGroups.find {
+                it.id == currentGid && it.userMembershipStatus == "ACTIVE"
+            }
             if (activeGroup != null) {
                 showJoinDialog = false
                 showCreateDialog = false
@@ -64,21 +76,66 @@ fun GroupSelectScreen(
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
+        modifier = modifier,
+        containerColor = MaterialTheme.colorScheme.background,
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = {
+                    newGroupName = ""
+                    newGroupDesc = ""
+                    newGroupRequiresApproval = true
+                    showCreateDialog = true
+                },
+                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                text = { Text("Nuovo gruppo") },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shape = RoundedCornerShape(Radius.md),
+                modifier = Modifier.testTag("create_group_fab")
+            )
+        }
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(gradients.heroTop, gradients.heroBottom),
+                        endY = 700f
+                    )
+                )
+                .padding(innerPadding),
+            contentPadding = PaddingValues(
+                start = Spacing.lg,
+                end = Spacing.lg,
+                top = Spacing.sm,
+                bottom = 96.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md)
+        ) {
+            // ---- Intestazione ----
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(vertical = Spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "I Tuoi Gruppi Radar",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                            text = "Ciao, ${currentUser?.displayName ?: "utente"}",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            "Bentornato, ${currentUser?.displayName ?: "Utente"}",
-                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            text = "Scegli un gruppo da seguire sul radar",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                },
-                actions = {
                     IconButton(
                         onClick = { repository.signOut() },
                         modifier = Modifier.testTag("logout_button")
@@ -90,633 +147,249 @@ fun GroupSelectScreen(
                         )
                     }
                 }
-            )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = {
-                    newGroupName = ""
-                    newGroupDesc = ""
-                    newGroupRequiresApproval = true
-                    showCreateDialog = true
-                },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Nuovo Gruppo") },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.testTag("create_group_fab")
-            )
-        },
-        modifier = modifier
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp)
-        ) {
-            // Quick Action Card: Join with Code
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "Hai un codice invito?",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        )
-                        Text(
-                            "Unisciti al radar di familiari o amici inserendo il codice di 6 caratteri.",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                            )
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Button(
-                        onClick = {
-                            joinCodeInput = ""
-                            errorMessage = null
-                            infoMessage = null
-                            showJoinDialog = true
-                        },
-                        modifier = Modifier.testTag("join_with_code_button"),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("Unisciti")
-                    }
-                }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                "I tuoi gruppi:",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
-
-            if (userGroups.isEmpty()) {
-                Box(
+            // ---- Ingresso con codice ----
+            item {
+                Surface(
+                    onClick = {
+                        joinCodeInput = ""
+                        errorMessage = null
+                        infoMessage = null
+                        showJoinDialog = true
+                    },
+                    shape = RoundedCornerShape(Radius.lg),
+                    color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
+                        .testTag("join_with_code_button")
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.padding(24.dp)
+                    Row(
+                        modifier = Modifier.padding(Spacing.lg),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.md)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                                .size(Sizes.avatarMd)
+                                .clip(RoundedCornerShape(Radius.sm))
+                                .background(MaterialTheme.colorScheme.primary),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                Icons.Default.GroupAdd,
+                                Icons.Default.VpnKey,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(32.dp)
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(Sizes.iconMd)
                             )
                         }
-                        Text(
-                            "Nessun gruppo",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            "Crea un nuovo gruppo o inserisci un codice invito per iniziare a condividere la posizione in tempo reale.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp)
-                ) {
-                    items(userGroups, key = { it.id }) { group ->
-                        val isCurrent = group.id == currentUser?.currentGroupId
-                        val isPending = group.userMembershipStatus == "PENDING"
-                        GroupItemCard(
-                            group = group,
-                            isCurrent = isCurrent,
-                            isPending = isPending,
-                            onSelect = {
-                                if (isPending) {
-                                    pendingGroupInfoDialog = group
-                                } else {
-                                    repository.selectGroup(group.id)
-                                    onGroupSelected(group)
-                                }
-                            }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Hai un codice invito?",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                text = "Sei caratteri e sei dentro al radar del gruppo",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                 }
             }
-        }
 
-        // ================== CREATE GROUP DIALOG ==================
-        if (showCreateDialog) {
-            AlertDialog(
-                onDismissRequest = {
-                    if (!isSubmitting) showCreateDialog = false
-                },
-                shape = RoundedCornerShape(20.dp),
-                containerColor = MaterialTheme.colorScheme.surface,
-                icon = {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.GroupAdd,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                },
-                title = {
-                    Text(
-                        "Crea Nuovo Gruppo",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        textAlign = TextAlign.Center
+            // ---- Elenco gruppi ----
+            if (userGroups.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = "I tuoi gruppi",
+                        subtitle = "${userGroups.size} in totale",
+                        modifier = Modifier.padding(top = Spacing.sm)
                     )
-                },
-                text = {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            "Crea una stanza privata e sicura per condividere posizione e messaggi.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        OutlinedTextField(
-                            value = newGroupName,
-                            onValueChange = { newGroupName = it },
-                            label = { Text("Nome Gruppo (es. Famiglia)") },
-                            placeholder = { Text("es. Famiglia Rossi") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("group_name_input")
-                        )
-                        OutlinedTextField(
-                            value = newGroupDesc,
-                            onValueChange = { newGroupDesc = it },
-                            label = { Text("Descrizione (facoltativa)") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                }
 
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            "Politica di Accesso:",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
-                        )
-
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (newGroupRequiresApproval) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { newGroupRequiresApproval = true }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                RadioButton(
-                                    selected = newGroupRequiresApproval,
-                                    onClick = { newGroupRequiresApproval = true }
-                                )
-                                Column {
-                                    Text(
-                                        "Approvazione richiesta (Consigliato)",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
-                                    )
-                                    Text(
-                                        "L'amministratore deve approvare ogni richiesta di accesso con codice.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                items(userGroups, key = { it.id }) { group ->
+                    GroupCard(
+                        group = group,
+                        isCurrent = group.id == currentUser?.currentGroupId,
+                        isPending = group.userMembershipStatus == "PENDING",
+                        onSelect = {
+                            if (group.userMembershipStatus == "PENDING") {
+                                pendingGroupInfoDialog = group
+                            } else {
+                                repository.selectGroup(group.id)
+                                onGroupSelected(group)
                             }
                         }
+                    )
+                }
+            } else {
+                item {
+                    EmptyState(
+                        title = "Nessun gruppo",
+                        description = "Crea un gruppo o inserisci un codice invito per " +
+                            "iniziare a condividere la posizione in tempo reale.",
+                        icon = Icons.Default.GroupAdd,
+                        lottieAsset = "empty_groups",
+                        modifier = Modifier.padding(top = Spacing.xxl)
+                    )
+                }
+            }
+        }
+    }
 
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (!newGroupRequiresApproval) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { newGroupRequiresApproval = false }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                RadioButton(
-                                    selected = !newGroupRequiresApproval,
-                                    onClick = { newGroupRequiresApproval = false }
-                                )
-                                Column {
-                                    Text(
-                                        "Accesso diretto senza approvazione",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
-                                    )
-                                    Text(
-                                        "Chiunque abbia il codice invito entra immediatamente nel gruppo.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            if (newGroupName.isNotBlank()) {
-                                isSubmitting = true
-                                coroutineScope.launch {
-                                    val result = repository.createGroup(
-                                        newGroupName.trim(),
-                                        newGroupDesc.trim(),
-                                        newGroupRequiresApproval
-                                    )
-                                    isSubmitting = false
-                                    showCreateDialog = false
-                                    if (result.isSuccess) {
-                                        onGroupSelected(result.getOrThrow())
-                                    }
-                                }
-                            }
-                        },
-                        enabled = newGroupName.isNotBlank() && !isSubmitting,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.testTag("confirm_create_group_button")
-                    ) {
-                        if (isSubmitting) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary)
-                        } else {
-                            Text("Crea Gruppo")
-                        }
-                    }
-                },
-                dismissButton = {
-                    OutlinedButton(
-                        onClick = { showCreateDialog = false },
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = !isSubmitting
-                    ) {
-                        Text("Annulla")
+    // ======================= DIALOG =======================
+
+    if (showCreateDialog) {
+        CreateGroupDialog(
+            name = newGroupName,
+            onNameChange = { newGroupName = it },
+            description = newGroupDesc,
+            onDescriptionChange = { newGroupDesc = it },
+            requiresApproval = newGroupRequiresApproval,
+            onRequiresApprovalChange = { newGroupRequiresApproval = it },
+            isSubmitting = isSubmitting,
+            onConfirm = {
+                if (newGroupName.isNotBlank()) {
+                    isSubmitting = true
+                    coroutineScope.launch {
+                        val result = repository.createGroup(
+                            newGroupName.trim(),
+                            newGroupDesc.trim(),
+                            newGroupRequiresApproval
+                        )
+                        isSubmitting = false
+                        showCreateDialog = false
+                        result.getOrNull()?.let(onGroupSelected)
                     }
                 }
-            )
-        }
+            },
+            onDismiss = { if (!isSubmitting) showCreateDialog = false }
+        )
+    }
 
-        // ================== PENDING GROUP INFO DIALOG ==================
-        pendingGroupInfoDialog?.let { group ->
-            AlertDialog(
-                onDismissRequest = { pendingGroupInfoDialog = null },
-                shape = RoundedCornerShape(20.dp),
-                containerColor = MaterialTheme.colorScheme.surface,
-                icon = {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.tertiaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.HourglassTop,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.tertiary
-                        )
-                    }
-                },
-                title = {
-                    Text(
-                        "Richiesta in Sospeso",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        textAlign = TextAlign.Center
-                    )
-                },
-                text = {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            "Hai richiesto di accedere al gruppo \"${group.name}\".",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.tertiary
-                                )
-                                Text(
-                                    "In attesa di approvazione dall'amministratore del gruppo. L'accesso al radar si attiverà automaticamente appena sarai confermato.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer
-                                )
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = { pendingGroupInfoDialog = null },
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Ho capito")
-                    }
-                },
-                dismissButton = {
-                    OutlinedButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                repository.leaveGroup(group.id)
-                                pendingGroupInfoDialog = null
-                            }
-                        },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Annulla richiesta")
-                    }
-                }
-            )
-        }
-
-        // ================== JOIN GROUP DIALOG ==================
-        if (showJoinDialog) {
-            AlertDialog(
-                onDismissRequest = {
-                    if (!isSubmitting) {
-                        showJoinDialog = false
-                        errorMessage = null
-                        infoMessage = null
-                    }
-                },
-                shape = RoundedCornerShape(20.dp),
-                containerColor = MaterialTheme.colorScheme.surface,
-                icon = {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.secondaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.VpnKey,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.secondary
-                        )
-                    }
-                },
-                title = {
-                    Text(
-                        "Unisciti con Codice",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        textAlign = TextAlign.Center
-                    )
-                },
-                text = {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            "Inserisci il codice di 6 caratteri generato dal proprietario del gruppo:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        OutlinedTextField(
-                            value = joinCodeInput,
-                            onValueChange = {
-                                joinCodeInput = it.uppercase().filter { c -> c.isLetterOrDigit() }.take(6)
-                                errorMessage = null
-                            },
-                            label = { Text("Codice Invito") },
-                            placeholder = { Text("es. FAM982") },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("join_code_input")
-                        )
-
-                        AnimatedVisibility(visible = errorMessage != null, enter = fadeIn(), exit = fadeOut()) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.errorContainer,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                                    Text(
-                                        errorMessage ?: "",
-                                        color = MaterialTheme.colorScheme.onErrorContainer,
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                }
-                            }
-                        }
-
-                        AnimatedVisibility(visible = infoMessage != null, enter = fadeIn(), exit = fadeOut()) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.5.dp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Column {
-                                        Text(
-                                            "In attesa di approvazione...",
-                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                        Text(
-                                            "La schermata si sbloccherà automaticamente non appena l'amministratore approverà la richiesta.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            if (joinCodeInput.isNotBlank()) {
-                                isSubmitting = true
-                                errorMessage = null
-                                infoMessage = null
-                                coroutineScope.launch {
-                                    val result = repository.joinGroupByCode(joinCodeInput.trim())
-                                    isSubmitting = false
-                                    if (result.isSuccess) {
-                                        showJoinDialog = false
-                                        val activeGroup = repository.userGroupsState.value.find { it.id == repository.currentUserState.value?.currentGroupId }
-                                        if (activeGroup != null) {
-                                            onGroupSelected(activeGroup)
-                                        }
-                                    } else {
-                                        val msg = result.exceptionOrNull()?.message ?: "Codice non valido o gruppo inesistente"
-                                        if (msg.contains("approvazione") || msg.contains("inviata")) {
-                                            infoMessage = msg
-                                        } else {
-                                            errorMessage = msg
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        enabled = joinCodeInput.isNotBlank() && !isSubmitting,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.testTag("confirm_join_group_button")
-                    ) {
-                        if (isSubmitting) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary)
-                        } else {
-                            Text("Invia Richiesta")
-                        }
-                    }
-                },
-                dismissButton = {
-                    OutlinedButton(
-                        onClick = {
+    if (showJoinDialog) {
+        JoinGroupDialog(
+            code = joinCodeInput,
+            onCodeChange = {
+                joinCodeInput = it.uppercase().filter { c -> c.isLetterOrDigit() }.take(6)
+                errorMessage = null
+            },
+            errorMessage = errorMessage,
+            infoMessage = infoMessage,
+            isSubmitting = isSubmitting,
+            onConfirm = {
+                if (joinCodeInput.isNotBlank()) {
+                    isSubmitting = true
+                    errorMessage = null
+                    infoMessage = null
+                    coroutineScope.launch {
+                        val result = repository.joinGroupByCode(joinCodeInput.trim())
+                        isSubmitting = false
+                        if (result.isSuccess) {
                             showJoinDialog = false
-                            errorMessage = null
-                            infoMessage = null
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = !isSubmitting
-                    ) {
-                        Text("Chiudi")
+                            repository.userGroupsState.value
+                                .find { it.id == repository.currentUserState.value?.currentGroupId }
+                                ?.let(onGroupSelected)
+                        } else {
+                            val msg = result.exceptionOrNull()?.message
+                                ?: "Codice non valido o gruppo inesistente"
+                            // Il repository segnala l'attesa di approvazione come errore:
+                            // qui lo distinguiamo per mostrarlo come informazione, non come fallimento.
+                            if (msg.contains("approvazione") || msg.contains("inviata")) {
+                                infoMessage = msg
+                            } else {
+                                errorMessage = msg
+                            }
+                        }
                     }
                 }
-            )
-        }
+            },
+            onDismiss = {
+                if (!isSubmitting) {
+                    showJoinDialog = false
+                    errorMessage = null
+                    infoMessage = null
+                }
+            }
+        )
+    }
+
+    pendingGroupInfoDialog?.let { group ->
+        PendingRequestDialog(
+            groupName = group.name,
+            onAcknowledge = { pendingGroupInfoDialog = null },
+            onCancelRequest = {
+                coroutineScope.launch {
+                    repository.leaveGroup(group.id)
+                    pendingGroupInfoDialog = null
+                }
+            }
+        )
     }
 }
 
+// ============================================================================
+// CARD GRUPPO
+// ============================================================================
+
 @Composable
-private fun GroupItemCard(
+private fun GroupCard(
     group: GroupData,
     isCurrent: Boolean,
-    isPending: Boolean = false,
+    isPending: Boolean,
     onSelect: () -> Unit
 ) {
-    val cardBg = when {
-        isPending -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.25f)
-        isCurrent -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-        else -> MaterialTheme.colorScheme.surface
+    val accent = when {
+        isPending -> MaterialTheme.colorScheme.tertiary
+        isCurrent -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.secondary
     }
 
-    val borderStroke = when {
-        isPending -> androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.6f))
-        isCurrent -> androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
-        else -> null
-    }
-
-    Card(
+    Surface(
+        onClick = onSelect,
+        shape = RoundedCornerShape(Radius.lg),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = if (isCurrent) 6.dp else 1.dp,
+        border = if (isCurrent) androidx.compose.foundation.BorderStroke(2.dp, accent) else null,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onSelect() }
-            .testTag("group_card_${group.id}"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = cardBg),
-        border = borderStroke
+            .testTag("group_card_${group.id}")
     ) {
         Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
+            modifier = Modifier.padding(Spacing.lg),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md)
         ) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(if (isPending) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary),
+                    .size(Sizes.avatarLg)
+                    .clip(RoundedCornerShape(Radius.md))
+                    .background(
+                        Brush.linearGradient(
+                            listOf(accent, accent.copy(alpha = 0.65f))
+                        )
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 if (isPending) {
                     Icon(
                         Icons.Default.HourglassTop,
                         contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
+                        tint = androidx.compose.ui.graphics.Color.White,
+                        modifier = Modifier.size(Sizes.iconLg)
                     )
                 } else {
                     Text(
-                        text = group.name.firstOrNull()?.uppercaseChar()?.toString() ?: "G",
-                        style = MaterialTheme.typography.titleMedium.copy(color = Color.White, fontWeight = FontWeight.Bold)
+                        text = group.name.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "G",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = androidx.compose.ui.graphics.Color.White
                     )
                 }
             }
@@ -724,76 +397,380 @@ private fun GroupItemCard(
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
                 ) {
                     Text(
                         text = group.name,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
-                    if (isCurrent && !isPending) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.primary
-                        ) {
-                            Text(
-                                "ATTIVO",
-                                color = Color.White,
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                maxLines = 1
-                            )
-                        }
-                    } else if (isPending) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.tertiary
-                        ) {
-                            Text(
-                                "IN ATTESA",
-                                color = MaterialTheme.colorScheme.onTertiary,
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                maxLines = 1
-                            )
-                        }
+                    when {
+                        isPending -> RadarBadge(
+                            text = "In attesa",
+                            containerColor = MaterialTheme.colorScheme.tertiary,
+                            contentColor = MaterialTheme.colorScheme.onTertiary
+                        )
+                        isCurrent -> RadarBadge("Attivo")
                     }
                 }
-                if (isPending) {
-                    Text(
-                        text = "Richiesta inviata. In attesa di approvazione admin.",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = MaterialTheme.colorScheme.tertiary,
-                            fontWeight = FontWeight.Medium
-                        ),
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+
+                Text(
+                    text = when {
+                        isPending -> "Richiesta inviata, in attesa dell'amministratore"
+                        group.description.isNotBlank() -> group.description
+                        else -> "Nessuna descrizione"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isPending) MaterialTheme.colorScheme.tertiary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(Modifier.height(Spacing.xs))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+                ) {
+                    Icon(
+                        Icons.Default.Tag,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(Sizes.iconSm)
                     )
-                } else if (group.description.isNotBlank()) {
                     Text(
-                        text = group.description,
-                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        text = group.joinCode,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Codice: ${group.joinCode}",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        color = MaterialTheme.colorScheme.secondary,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    maxLines = 1
-                )
             }
 
             Icon(
-                if (isPending) Icons.Default.Info else Icons.Default.ChevronRight,
+                imageVector = if (isPending) Icons.Default.Info else Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = if (isPending) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant
+                tint = if (isPending) MaterialTheme.colorScheme.tertiary
+                else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+// ============================================================================
+// DIALOG
+// ============================================================================
+
+@Composable
+private fun CreateGroupDialog(
+    name: String,
+    onNameChange: (String) -> Unit,
+    description: String,
+    onDescriptionChange: (String) -> Unit,
+    requiresApproval: Boolean,
+    onRequiresApprovalChange: (Boolean) -> Unit,
+    isSubmitting: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(Radius.xl),
+        containerColor = MaterialTheme.colorScheme.surface,
+        icon = {
+            DialogIcon(Icons.Default.GroupAdd, MaterialTheme.colorScheme.primary)
+        },
+        title = {
+            Text(
+                text = "Crea un gruppo",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                Text(
+                    text = "Una stanza privata per condividere posizione e messaggi.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = onNameChange,
+                    label = { Text("Nome del gruppo") },
+                    placeholder = { Text("es. Famiglia Rossi") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(Radius.sm),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("group_name_input")
+                )
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = onDescriptionChange,
+                    label = { Text("Descrizione (facoltativa)") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(Radius.sm),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Text(
+                    text = "Chi può entrare",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                AccessPolicyOption(
+                    selected = requiresApproval,
+                    title = "Con approvazione",
+                    description = "Approvi tu ogni richiesta. Consigliato.",
+                    onClick = { onRequiresApprovalChange(true) }
+                )
+                AccessPolicyOption(
+                    selected = !requiresApproval,
+                    title = "Accesso diretto",
+                    description = "Chi ha il codice entra subito.",
+                    onClick = { onRequiresApprovalChange(false) }
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = name.isNotBlank() && !isSubmitting,
+                shape = RoundedCornerShape(Radius.sm),
+                modifier = Modifier.testTag("confirm_create_group_button")
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text("Crea")
+                }
+            }
+        },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onDismiss,
+                enabled = !isSubmitting,
+                shape = RoundedCornerShape(Radius.sm)
+            ) { Text("Annulla") }
+        }
+    )
+}
+
+@Composable
+private fun AccessPolicyOption(
+    selected: Boolean,
+    title: String,
+    description: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(Radius.sm),
+        color = if (selected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+        ) {
+            RadioButton(selected = selected, onClick = onClick)
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun JoinGroupDialog(
+    code: String,
+    onCodeChange: (String) -> Unit,
+    errorMessage: String?,
+    infoMessage: String?,
+    isSubmitting: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(Radius.xl),
+        containerColor = MaterialTheme.colorScheme.surface,
+        icon = { DialogIcon(Icons.Default.VpnKey, MaterialTheme.colorScheme.secondary) },
+        title = {
+            Text(
+                text = "Unisciti con il codice",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                Text(
+                    text = "Inserisci i sei caratteri ricevuti dal proprietario del gruppo.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = onCodeChange,
+                    label = { Text("Codice invito") },
+                    placeholder = { Text("FAM982") },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.headlineSmall.copy(
+                        textAlign = TextAlign.Center
+                    ),
+                    shape = RoundedCornerShape(Radius.sm),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("join_code_input")
+                )
+
+                AnimatedVisibility(
+                    visible = errorMessage != null,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    InfoBanner(
+                        text = errorMessage.orEmpty(),
+                        icon = Icons.Default.ErrorOutline
+                    )
+                }
+
+                AnimatedVisibility(
+                    visible = infoMessage != null,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    InfoBanner(
+                        text = infoMessage.orEmpty(),
+                        icon = Icons.Default.HourglassTop,
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        accentColor = MaterialTheme.colorScheme.tertiary,
+                        trailing = {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = code.isNotBlank() && !isSubmitting,
+                shape = RoundedCornerShape(Radius.sm),
+                modifier = Modifier.testTag("confirm_join_group_button")
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text("Invia richiesta")
+                }
+            }
+        },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onDismiss,
+                enabled = !isSubmitting,
+                shape = RoundedCornerShape(Radius.sm)
+            ) { Text("Chiudi") }
+        }
+    )
+}
+
+@Composable
+private fun PendingRequestDialog(
+    groupName: String,
+    onAcknowledge: () -> Unit,
+    onCancelRequest: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onAcknowledge,
+        shape = RoundedCornerShape(Radius.xl),
+        containerColor = MaterialTheme.colorScheme.surface,
+        icon = { DialogIcon(Icons.Default.HourglassTop, MaterialTheme.colorScheme.tertiary) },
+        title = {
+            Text(
+                text = "Richiesta in sospeso",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                Text(
+                    text = "Hai chiesto di entrare in \"$groupName\".",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                InfoBanner(
+                    text = "Appena l'amministratore approva, il radar si sblocca da solo. " +
+                        "Non serve riaprire l'app.",
+                    icon = Icons.Default.Schedule,
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    accentColor = MaterialTheme.colorScheme.tertiary
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onAcknowledge, shape = RoundedCornerShape(Radius.sm)) {
+                Text("Ho capito")
+            }
+        },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onCancelRequest,
+                shape = RoundedCornerShape(Radius.sm),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) { Text("Annulla richiesta") }
+        }
+    )
+}
+
+@Composable
+private fun DialogIcon(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: androidx.compose.ui.graphics.Color
+) {
+    Box(
+        modifier = Modifier
+            .size(Sizes.avatarLg)
+            .clip(CircleShape)
+            .background(tint.copy(alpha = 0.15f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(Sizes.iconLg))
     }
 }

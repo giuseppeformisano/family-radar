@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.example.ui.screens.main
 
 import android.Manifest
@@ -9,18 +11,24 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -32,33 +40,25 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.example.model.*
 import com.example.repository.FirebaseRepository
 import com.example.service.LocationTrackingService
 import com.example.ui.components.*
-import com.example.ui.theme.ThemeMode
-import com.example.ui.theme.ThemePreferences
+import com.example.ui.theme.*
 import com.example.util.ImageUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -66,7 +66,20 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.random.Random
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** I quattro pannelli del bottom sheet sopra la mappa. */
+private enum class RadarPanel(val label: String) {
+    MEMBERS("Membri"),
+    CHAT("Chat"),
+    PLACES("Luoghi"),
+    SETTINGS("Impostazioni")
+}
+
+enum class TrackingTimeUnit(val label: String, val multiplier: Int) {
+    SECONDS("Secondi", 1),
+    MINUTES("Minuti", 60),
+    HOURS("Ore", 3600)
+}
+
 @Composable
 fun MainRadarScreen(
     repository: FirebaseRepository,
@@ -91,18 +104,40 @@ fun MainRadarScreen(
 
     val currentGroup = userGroups.find { it.id == currentUser?.currentGroupId } ?: userGroups.firstOrNull()
     val currentUserId = currentUser?.uid ?: ""
-    val isOwnerOrAdmin = currentGroup?.ownerId == currentUserId || members.find { it.userId == currentUserId }?.role in listOf("owner", "admin")
+    val isOwnerOrAdmin = currentGroup?.ownerId == currentUserId ||
+        members.find { it.userId == currentUserId }?.role in listOf("owner", "admin")
     val pendingMembers = remember(members) { members.filter { it.status == "PENDING" } }
     val activeMembers = remember(members) { members.filter { it.status == "ACTIVE" } }
 
-    var selectedTab by remember { mutableStateOf(0) }
+    // --- Stato del bottom sheet ---
+    val sheetState = rememberStandardBottomSheetState(
+        initialValue = SheetValue.PartiallyExpanded,
+        skipHiddenState = true
+    )
+    val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
+    val isSheetExpanded = sheetState.currentValue == SheetValue.Expanded
+    var panel by remember { mutableStateOf(RadarPanel.MEMBERS) }
+
+    fun openPanel(target: RadarPanel) {
+        panel = target
+        coroutineScope.launch { sheetState.expand() }
+    }
+
+    fun collapseSheet() {
+        coroutineScope.launch { sheetState.partialExpand() }
+    }
+
+    // --- Stato UI locale ---
     var selectedMemberForSheet by remember { mutableStateOf<UserLocation?>(null) }
     var selectedPlaceForSheet by remember { mutableStateOf<SavedPlace?>(null) }
     var showAddPlaceDialog by remember { mutableStateOf(false) }
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var memberToKick by remember { mutableStateOf<GroupMember?>(null) }
     var showLeaveDialog by remember { mutableStateOf(false) }
+    var showSosConfirmDialog by remember { mutableStateOf(false) }
     var targetMapFocus by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    // Il token forza il ri-centraggio anche quando le coordinate non cambiano.
+    var focusToken by remember { mutableIntStateOf(0) }
     var fullScreenImageSource by remember { mutableStateOf<Any?>(null) }
     var selectedSnapshotClusterForGallery by remember { mutableStateOf<PlaceSnapshotCluster?>(null) }
     var capturedSnapshotUri by remember { mutableStateOf<Uri?>(null) }
@@ -110,7 +145,16 @@ fun MainRadarScreen(
     var pendingMapCameraUri by remember { mutableStateOf<Uri?>(null) }
     var showSnapshotSourceDialog by remember { mutableStateOf(false) }
     var pendingMapCameraAction by remember { mutableStateOf(false) }
+    var isSimulationRunning by remember { mutableStateOf(false) }
 
+    /** Centra la mappa su un punto e, di norma, chiude il pannello per lasciarla in vista. */
+    fun focusMapOn(latitude: Double, longitude: Double, collapse: Boolean = true) {
+        targetMapFocus = Pair(latitude, longitude)
+        focusToken++
+        if (collapse) collapseSheet()
+    }
+
+    // --- Acquisizione istantanee geolocalizzate ---
     val takeSnapshotLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { isSuccess ->
@@ -123,29 +167,21 @@ fun MainRadarScreen(
 
     val snapshotGalleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) {
-            capturedSnapshotUri = uri
-        }
-    }
+    ) { uri -> if (uri != null) capturedSnapshotUri = uri }
 
     val mapCameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (isGranted) {
-            if (pendingMapCameraAction) {
-                pendingMapCameraAction = false
-                val uri = pendingMapCameraUri ?: ImageUtils.createTempImageUri(context)
-                pendingMapCameraUri = uri
-                if (uri != null) {
-                    try {
-                        takeSnapshotLauncher.launch(uri)
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "Impossibile aprire fotocamera: ${e.message}", Toast.LENGTH_SHORT).show()
-                    }
+        if (isGranted && pendingMapCameraAction) {
+            pendingMapCameraAction = false
+            val uri = pendingMapCameraUri ?: ImageUtils.createTempImageUri(context)
+            pendingMapCameraUri = uri
+            if (uri != null) {
+                runCatching { takeSnapshotLauncher.launch(uri) }.onFailure {
+                    Toast.makeText(context, "Impossibile aprire fotocamera: ${it.message}", Toast.LENGTH_SHORT).show()
                 }
             }
-        } else {
+        } else if (!isGranted) {
             pendingMapCameraAction = false
             Toast.makeText(context, "Permesso fotocamera non concesso", Toast.LENGTH_SHORT).show()
         }
@@ -158,12 +194,9 @@ fun MainRadarScreen(
             return
         }
         pendingMapCameraUri = tempUri
-
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-            try {
-                takeSnapshotLauncher.launch(tempUri)
-            } catch (e: Exception) {
-                Toast.makeText(context, "Impossibile aprire fotocamera: ${e.message}", Toast.LENGTH_SHORT).show()
+            runCatching { takeSnapshotLauncher.launch(tempUri) }.onFailure {
+                Toast.makeText(context, "Impossibile aprire fotocamera: ${it.message}", Toast.LENGTH_SHORT).show()
             }
         } else {
             pendingMapCameraAction = true
@@ -171,27 +204,29 @@ fun MainRadarScreen(
         }
     }
 
-    // Observe Deep Link Navigation
+    // --- Navigazione da notifica ---
     LaunchedEffect(deepLinkTarget) {
         val target = deepLinkTarget ?: return@LaunchedEffect
         if (!target.groupId.isNullOrBlank() && target.groupId != currentGroup?.id) {
             repository.selectGroup(target.groupId)
         }
         when (target.destination.uppercase()) {
-            "CHAT" -> selectedTab = 1
-            "ALERT" -> selectedTab = 2
+            "CHAT" -> { panel = RadarPanel.CHAT; sheetState.expand() }
+            "ALERT" -> { panel = RadarPanel.MEMBERS; sheetState.expand() }
+            "MEMBERS", "SETTINGS" -> { panel = RadarPanel.SETTINGS; sheetState.expand() }
             "MAP" -> {
-                selectedTab = 0
-                if (target.latitude != null && target.longitude != null && !target.latitude.isNaN() && !target.longitude.isNaN()) {
-                    targetMapFocus = Pair(target.latitude, target.longitude)
+                sheetState.partialExpand()
+                if (target.latitude != null && target.longitude != null &&
+                    !target.latitude.isNaN() && !target.longitude.isNaN()
+                ) {
+                    focusMapOn(target.latitude, target.longitude, collapse = false)
                 }
             }
-            "MEMBERS", "SETTINGS" -> selectedTab = 3
         }
         repository.consumeDeepLinkTarget()
     }
 
-    // Start background tracking service on launch if enabled
+    // --- Servizio di tracciamento ---
     LaunchedEffect(isTrackingEnabled, trackingIntervalSec) {
         if (isTrackingEnabled) {
             LocationTrackingService.start(context, trackingIntervalSec)
@@ -200,776 +235,965 @@ fun MainRadarScreen(
         }
     }
 
-    // Auto simulated movement for demo/emulator interaction
-    var isSimulationRunning by remember { mutableStateOf(false) }
+    // --- Simulazione movimento (utile su emulatore) ---
     LaunchedEffect(isSimulationRunning) {
         while (isSimulationRunning) {
             delay(4000)
-            val updated = locations.map { loc ->
+            locations.forEach { loc ->
                 if (loc.userId != currentUser?.uid) {
-                    val deltaLat = (Random.nextDouble() - 0.5) * 0.0008
-                    val deltaLon = (Random.nextDouble() - 0.5) * 0.0008
-                    loc.copy(
-                        latitude = loc.latitude + deltaLat,
-                        longitude = loc.longitude + deltaLon,
-                        speed = (Random.nextFloat() * 10f) + 2f,
-                        timestamp = System.currentTimeMillis()
+                    repository.updateLocation(
+                        loc.copy(
+                            latitude = loc.latitude + (Random.nextDouble() - 0.5) * 0.0008,
+                            longitude = loc.longitude + (Random.nextDouble() - 0.5) * 0.0008,
+                            speed = (Random.nextFloat() * 10f) + 2f,
+                            timestamp = System.currentTimeMillis()
+                        )
                     )
-                } else loc
+                }
             }
-            updated.forEach { repository.updateLocation(it) }
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            RadarPulseAnimation(
-                                modifier = Modifier.size(36.dp),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1f, fill = false)) {
-                            Text(
-                                text = currentGroup?.name ?: "Radar Gruppo",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "Codice: ${currentGroup?.joinCode ?: "---"} • ${members.size} Membri",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                },
-                actions = {
-                    // Compact SOS / Emergency Alert Button
-                    IconButton(
-                        onClick = {
-                            val gid = currentGroup?.id
-                            if (!gid.isNullOrBlank()) {
-                                repository.sendSosAlert(gid)
-                                Toast.makeText(context, "Allerta SOS inviata al gruppo", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        modifier = Modifier.testTag("sos_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = "Invia SOS",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val sheetContentHeight = screenHeight * 0.86f
 
-                    // Simulation movement play/pause toggle
-                    IconButton(
-                        onClick = {
-                            isSimulationRunning = !isSimulationRunning
-                            Toast.makeText(
-                                context,
-                                if (isSimulationRunning) "Simulazione movimento GPS avviata" else "Simulazione arrestata",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        },
-                        modifier = Modifier.testTag("simulation_toggle_button")
-                    ) {
-                        Icon(
-                            if (isSimulationRunning) Icons.Default.DirectionsRun else Icons.Default.PlayCircle,
-                            contentDescription = "Simula Movimento",
-                            tint = if (isSimulationRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    // Switch group button (navigates to GroupSelectScreen)
-                    IconButton(
-                        onClick = onSwitchGroup,
-                        modifier = Modifier.testTag("switch_group_button")
-                    ) {
-                        Icon(Icons.Default.SwapHoriz, contentDescription = "Cambia Gruppo")
-                    }
-                }
-            )
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 3.dp
+    BottomSheetScaffold(
+        modifier = modifier,
+        scaffoldState = scaffoldState,
+        sheetPeekHeight = Sizes.sheetPeek,
+        sheetShape = RoundedCornerShape(topStart = Radius.xl, topEnd = Radius.xl),
+        sheetContainerColor = MaterialTheme.colorScheme.surface,
+        sheetShadowElevation = Elevation.overlay,
+        sheetDragHandle = { SheetHandle(expanded = isSheetExpanded) },
+        containerColor = MaterialTheme.colorScheme.background,
+        sheetContent = {
+            Column(modifier = Modifier
+                .fillMaxWidth()
+                .height(sheetContentHeight)
             ) {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Default.Radar, contentDescription = "Radar") },
-                    label = { Text("Radar", maxLines = 1, fontSize = 11.sp) },
-                    modifier = Modifier.testTag("nav_radar_tab")
+                PanelSelector(
+                    selected = panel,
+                    chatCount = messages.size,
+                    pendingCount = if (isOwnerOrAdmin) pendingMembers.size else 0,
+                    memberCount = activeMembers.size,
+                    placeCount = places.size,
+                    onSelect = { openPanel(it) }
                 )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = {
-                        BadgedBox(badge = {
-                            if (messages.isNotEmpty()) {
-                                Badge { Text("${messages.size.coerceAtMost(99)}", maxLines = 1) }
-                            }
-                        }) {
-                            Icon(Icons.Default.Chat, contentDescription = "Chat")
-                        }
-                    },
-                    label = { Text("Chat", maxLines = 1, fontSize = 11.sp) },
-                    modifier = Modifier.testTag("nav_chat_tab")
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Default.Place, contentDescription = "Luoghi") },
-                    label = { Text("Luoghi", maxLines = 1, fontSize = 11.sp) },
-                    modifier = Modifier.testTag("nav_places_tab")
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
-                    icon = {
-                        BadgedBox(badge = {
-                            if (isOwnerOrAdmin && pendingMembers.isNotEmpty()) {
-                                Badge(
-                                    containerColor = MaterialTheme.colorScheme.tertiary,
-                                    contentColor = MaterialTheme.colorScheme.onTertiary
-                                ) {
-                                    Text("${pendingMembers.size}", maxLines = 1)
-                                }
-                            }
-                        }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Impostazioni")
-                        }
-                    },
-                    label = { Text("Impostazioni", maxLines = 1, fontSize = 11.sp) },
-                    modifier = Modifier.testTag("nav_members_tab")
-                )
-            }
-        },
-        modifier = modifier
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            when (selectedTab) {
-                0 -> RadarMapTab(
-                    locations = locations,
-                    places = places,
-                    snapshots = snapshots,
-                    currentUserId = currentUser?.uid ?: "",
-                    targetFocusPoint = targetMapFocus,
-                    onMemberClick = { selectedMemberForSheet = it },
-                    onPlaceClick = { place ->
-                        try {
-                            selectedPlaceForSheet = place
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Errore selezione luogo: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    onSnapshotClusterClick = { cluster ->
-                        selectedSnapshotClusterForGallery = cluster
-                    },
-                    onAddPlaceClick = { showAddPlaceDialog = true },
-                    onTakeSnapshotClick = {
-                        showSnapshotSourceDialog = true
-                    }
-                )
-                1 -> GroupChatTab(
-                    messages = messages,
-                    currentUserId = currentUser?.uid ?: "",
-                    groupId = currentGroup?.id ?: "",
-                    repository = repository,
-                    onImageClick = { fullScreenImageSource = it }
-                )
-                2 -> PlacesGeofenceTab(
-                    places = places,
-                    alerts = geofenceAlerts,
-                    onPlaceClick = { place ->
-                        try {
-                            selectedPlaceForSheet = place
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Errore selezione luogo: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    onAddPlaceClick = { showAddPlaceDialog = true },
-                    onDeletePlace = { placeId ->
-                        coroutineScope.launch { repository.deletePlace(placeId) }
-                    }
-                )
-                3 -> MembersSettingsTab(
-                    members = members,
-                    locations = locations,
-                    currentGroup = currentGroup,
-                    currentUser = currentUser,
-                    trackingIntervalSec = trackingIntervalSec,
-                    isTrackingEnabled = isTrackingEnabled,
-                    isGlobalGhostMode = isGlobalGhostMode,
-                    repository = repository,
-                    onSwitchGroup = onSwitchGroup,
-                    onEditProfileClick = { showEditProfileDialog = true },
-                    onRequestKickMember = { mem -> memberToKick = mem },
-                    onRequestLeaveGroup = { showLeaveDialog = true },
-                    onUpdateInterval = { sec ->
-                        repository.setTrackingFrequencySeconds(sec)
-                        val formatted = when {
-                            sec % 3600 == 0 -> "${sec / 3600} ore"
-                            sec % 60 == 0 -> "${sec / 60} minuti"
-                            else -> "$sec secondi"
-                        }
-                        Toast.makeText(context, "Frequenza GPS aggiornata: ogni $formatted", Toast.LENGTH_SHORT).show()
-                    },
-                    onToggleTracking = { enabled ->
-                        repository.setBackgroundTrackingEnabled(enabled)
-                        Toast.makeText(context, if (enabled) "Tracciamento in background attivato" else "Tracciamento in background disattivato", Toast.LENGTH_SHORT).show()
-                    },
-                    onToggleGlobalGhostMode = { enabled ->
-                        repository.setGlobalGhostMode(enabled)
-                        Toast.makeText(context, if (enabled) "Modalità Fantasma attivata (Sei invisibile)" else "Modalità Fantasma disattivata (Posizione visibile)", Toast.LENGTH_SHORT).show()
-                    },
-                    onToggleGroupTracking = { enabled ->
-                        val gid = currentGroup?.id ?: return@MembersSettingsTab
-                        coroutineScope.launch {
-                            repository.updateMemberGroupTracking(gid, enabled)
-                            Toast.makeText(context, if (enabled) "Posizione condivisa nel gruppo" else "Posizione nascosta in questo gruppo", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    onToggleAccessPolicy = { reqApproval ->
-                        val gid = currentGroup?.id ?: return@MembersSettingsTab
-                        coroutineScope.launch {
-                            repository.updateGroupAccessPolicy(gid, reqApproval)
-                            Toast.makeText(context, if (reqApproval) "Approvazione admin richiesta per i nuovi membri" else "Accesso diretto con codice invito abilitato", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    onApproveJoinRequest = { memberId ->
-                        val gid = currentGroup?.id ?: return@MembersSettingsTab
-                        coroutineScope.launch {
-                            val res = repository.approveJoinRequest(gid, memberId)
-                            if (res.isSuccess) {
-                                Toast.makeText(context, "Richiesta approvata con successo!", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(context, "Errore approvazione: ${res.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    },
-                    onRejectJoinRequest = { memberId ->
-                        val gid = currentGroup?.id ?: return@MembersSettingsTab
-                        coroutineScope.launch {
-                            val res = repository.rejectJoinRequest(gid, memberId)
-                            if (res.isSuccess) {
-                                Toast.makeText(context, "Richiesta rifiutata", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(context, "Errore: ${res.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    },
-                    onMemberClick = { memLoc ->
-                        selectedMemberForSheet = memLoc
-                    },
-                    onLogout = {
-                        LocationTrackingService.stop(context)
-                        repository.signOut()
-                    }
-                )
-            }
 
-            // Member Detail Bottom Sheet
-            selectedMemberForSheet?.let { loc ->
-                MemberDetailSheet(
-                    location = loc,
-                    isSelf = loc.userId == currentUser?.uid,
-                    onDismiss = { selectedMemberForSheet = null },
-                    onNavigateToChat = {
-                        selectedMemberForSheet = null
-                        selectedTab = 1
-                    },
-                    onEditProfileClick = {
-                        selectedMemberForSheet = null
-                        showEditProfileDialog = true
-                    }
-                )
-            }
-
-            // Place Detail Bottom Sheet
-            selectedPlaceForSheet?.let { place ->
-                PlaceDetailSheet(
-                    place = place,
-                    onDismiss = { selectedPlaceForSheet = null },
-                    onShowOnMap = {
-                        try {
-                            if (it.latitude != 0.0 && it.longitude != 0.0 && !it.latitude.isNaN() && !it.longitude.isNaN()) {
-                                targetMapFocus = Pair(it.latitude, it.longitude)
-                                selectedTab = 0
-                            } else {
-                                Toast.makeText(context, "Coordinate del luogo non valide", Toast.LENGTH_SHORT).show()
-                            }
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Errore visualizzazione mappa: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    onDeletePlace = { toDelete ->
-                        coroutineScope.launch {
-                            repository.deletePlace(toDelete.id)
-                            Toast.makeText(context, "Luogo '${toDelete.name}' eliminato", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                )
-            }
-
-            // Edit Group Profile Dialog
-            if (showEditProfileDialog && currentGroup != null && currentUser != null) {
-                val myMember = members.find { it.userId == currentUser?.uid } ?: GroupMember(
-                    userId = currentUser?.uid ?: "",
-                    displayName = currentUser?.displayName ?: "Utente",
-                    role = "member"
-                )
-                EditGroupProfileDialog(
-                    currentMember = myMember,
-                    onDismiss = { showEditProfileDialog = false },
-                    onSaveProfile = { newDisplayName, newNickname, newPhotoBase64 ->
-                        coroutineScope.launch {
-                            val res = repository.updateGroupMemberProfile(
-                                groupId = currentGroup.id,
-                                memberId = myMember.userId,
-                                displayName = newDisplayName,
-                                nickname = newNickname,
-                                photoBase64 = newPhotoBase64
-                            )
-                            showEditProfileDialog = false
-                            if (res.isSuccess) {
-                                Toast.makeText(context, "Profilo aggiornato", Toast.LENGTH_SHORT).show()
-                            } else {
-                                Toast.makeText(context, "Errore salvataggio: ${res.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    }
-                )
-            }
-
-            // Add Place Dialog
-            if (showAddPlaceDialog) {
-                val myLoc = locations.find { it.userId == currentUser?.uid } ?: locations.firstOrNull()
-                AddPlaceDialog(
-                    initialLat = myLoc?.latitude ?: 41.9028,
-                    initialLon = myLoc?.longitude ?: 12.4964,
-                    onDismiss = { showAddPlaceDialog = false },
-                    onPlaceAdded = { place ->
-                        showAddPlaceDialog = false
-                        coroutineScope.launch {
-                            repository.addPlace(place)
-                            Toast.makeText(context, "Luogo '${place.name}' aggiunto", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                )
-            }
-
-            // Kick Member Confirmation Dialog (M3 Style)
-            memberToKick?.let { targetMember ->
-                AlertDialog(
-                    onDismissRequest = { memberToKick = null },
-                    shape = RoundedCornerShape(20.dp),
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    icon = {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.errorContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.PersonRemove,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    },
-                    title = {
-                        Text(
-                            "Espelli Membro",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                            textAlign = TextAlign.Center
-                        )
-                    },
-                    text = {
-                        Text(
-                            "Vuoi davvero rimuovere '${targetMember.displayName}' dal gruppo? L'utente non avrà più accesso ai dati della mappa, posizioni e messaggi.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                val target = targetMember
-                                memberToKick = null
-                                if (currentGroup != null) {
+                Box(modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                ) {
+                    AnimatedContent(
+                        targetState = panel,
+                        transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
+                        label = "panel_switch"
+                    ) { current ->
+                        when (current) {
+                            RadarPanel.MEMBERS -> MembersPanel(
+                                members = activeMembers,
+                                pendingMembers = pendingMembers,
+                                locations = locations,
+                                currentUserId = currentUserId,
+                                isOwnerOrAdmin = isOwnerOrAdmin,
+                                isLoading = members.isEmpty() && currentGroup != null,
+                                onMemberClick = { loc ->
+                                    selectedMemberForSheet = loc
+                                    collapseSheet()
+                                },
+                                onFocusMember = { loc -> focusMapOn(loc.latitude, loc.longitude) },
+                                onKickMember = { memberToKick = it },
+                                onApprove = { memberId ->
+                                    val gid = currentGroup?.id ?: return@MembersPanel
                                     coroutineScope.launch {
-                                        repository.removeMemberFromGroup(currentGroup.id, target.userId)
+                                        val res = repository.approveJoinRequest(gid, memberId)
+                                        Toast.makeText(
+                                            context,
+                                            if (res.isSuccess) "Richiesta approvata"
+                                            else "Errore: ${res.exceptionOrNull()?.message}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                },
+                                onReject = { memberId ->
+                                    val gid = currentGroup?.id ?: return@MembersPanel
+                                    coroutineScope.launch {
+                                        val res = repository.rejectJoinRequest(gid, memberId)
+                                        Toast.makeText(
+                                            context,
+                                            if (res.isSuccess) "Richiesta rifiutata"
+                                            else "Errore: ${res.exceptionOrNull()?.message}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                 }
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                        ) {
-                            Text("Espelli")
-                        }
-                    },
-                    dismissButton = {
-                        OutlinedButton(
-                            onClick = { memberToKick = null },
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Annulla")
-                        }
-                    }
-                )
-            }
-
-            // Leave Group Confirmation Dialog (M3 Style)
-            if (showLeaveDialog && currentGroup != null) {
-                AlertDialog(
-                    onDismissRequest = { showLeaveDialog = false },
-                    shape = RoundedCornerShape(20.dp),
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    icon = {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.errorContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.ExitToApp,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    },
-                    title = {
-                        Text(
-                            "Abbandona Gruppo",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                            textAlign = TextAlign.Center
-                        )
-                    },
-                    text = {
-                        Text(
-                            "Sei sicuro di voler abbandonare il gruppo '${currentGroup.name}'? La tua posizione non sarà più condivisa e non riceverai più notifiche.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                showLeaveDialog = false
-                                coroutineScope.launch {
-                                    repository.leaveGroup(currentGroup.id)
-                                    onSwitchGroup()
-                                }
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                        ) {
-                            Text("Abbandona")
-                        }
-                    },
-                    dismissButton = {
-                        OutlinedButton(
-                            onClick = { showLeaveDialog = false },
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Annulla")
-                        }
-                    }
-                )
-            }
-
-            // Snapshot Source Selection Dialog (Camera vs Gallery)
-            if (showSnapshotSourceDialog) {
-                AlertDialog(
-                    onDismissRequest = { showSnapshotSourceDialog = false },
-                    shape = RoundedCornerShape(20.dp),
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    icon = {
-                        Icon(
-                            Icons.Default.AddAPhoto,
-                            contentDescription = null,
-                            tint = Color(0xFFEA580C),
-                            modifier = Modifier.size(32.dp)
-                        )
-                    },
-                    title = {
-                        Text(
-                            "Nuova Istantanea Luogo",
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                            textAlign = TextAlign.Center
-                        )
-                    },
-                    text = {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 4.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Text(
-                                "Scegli come acquisire la foto da geolocalizzare sulla mappa:",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
                             )
 
-                            Spacer(modifier = Modifier.height(4.dp))
+                            RadarPanel.CHAT -> ChatPanel(
+                                messages = messages,
+                                currentUserId = currentUserId,
+                                groupId = currentGroup?.id ?: "",
+                                repository = repository,
+                                onImageClick = { fullScreenImageSource = it }
+                            )
 
-                            FilledTonalButton(
-                                onClick = {
-                                    showSnapshotSourceDialog = false
-                                    launchMapCameraSafe()
+                            RadarPanel.PLACES -> PlacesPanel(
+                                places = places,
+                                alerts = geofenceAlerts,
+                                onPlaceClick = {
+                                    selectedPlaceForSheet = it
+                                    collapseSheet()
                                 },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Scatta Foto Live")
-                            }
-
-                            OutlinedButton(
-                                onClick = {
-                                    showSnapshotSourceDialog = false
-                                    snapshotGalleryLauncher.launch("image/*")
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Scegli da Galleria")
-                            }
-                        }
-                    },
-                    confirmButton = {},
-                    dismissButton = {
-                        TextButton(
-                            onClick = { showSnapshotSourceDialog = false },
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Annulla")
-                        }
-                    }
-                )
-            }
-
-            // Fullscreen Image Viewer
-            fullScreenImageSource?.let { source ->
-                FullScreenMediaViewer(
-                    imageSource = source,
-                    onDismiss = { fullScreenImageSource = null }
-                )
-            }
-
-            // Snapshot Cluster Gallery Viewer
-            selectedSnapshotClusterForGallery?.let { cluster ->
-                SnapshotClusterGalleryDialog(
-                    snapshots = cluster.snapshots,
-                    onDismiss = { selectedSnapshotClusterForGallery = null }
-                )
-            }
-
-            // Add Place Snapshot Dialog
-            if (capturedSnapshotUri != null || capturedSnapshotBitmap != null) {
-                val myLoc = locations.find { it.userId == currentUser?.uid } ?: locations.firstOrNull()
-                AddPlaceSnapshotDialog(
-                    imageUri = capturedSnapshotUri,
-                    bitmap = capturedSnapshotBitmap,
-                    latitude = myLoc?.latitude ?: 41.9028,
-                    longitude = myLoc?.longitude ?: 12.4964,
-                    repository = repository,
-                    onDismiss = {
-                        capturedSnapshotUri = null
-                        capturedSnapshotBitmap = null
-                    },
-                    onPublished = {
-                        capturedSnapshotUri = null
-                        capturedSnapshotBitmap = null
-                    }
-                )
-            }
-        }
-    }
-}
-
-// ================== TAB 0: RADAR & MAP ==================
-
-@Composable
-private fun RadarMapTab(
-    locations: List<UserLocation>,
-    places: List<SavedPlace>,
-    snapshots: List<PlaceSnapshot> = emptyList(),
-    currentUserId: String,
-    targetFocusPoint: Pair<Double, Double>? = null,
-    onMemberClick: (UserLocation) -> Unit,
-    onPlaceClick: (SavedPlace) -> Unit,
-    onSnapshotClusterClick: (PlaceSnapshotCluster) -> Unit = {},
-    onAddPlaceClick: () -> Unit,
-    onTakeSnapshotClick: () -> Unit = {}
-) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Live OSM Map View with 60 FPS layer switching & Expandable Layers Button
-        OsmMapView(
-            locations = locations,
-            places = places,
-            snapshots = snapshots,
-            currentUserId = currentUserId,
-            targetFocusPoint = targetFocusPoint,
-            onMemberSelected = onMemberClick,
-            onPlaceSelected = onPlaceClick,
-            onSnapshotClusterSelected = onSnapshotClusterClick
-        )
-
-        // Top Floating Member Carousel
-        if (locations.isNotEmpty()) {
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 0.dp)
-                    .align(Alignment.TopCenter),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(locations, key = { it.userId }) { userLoc ->
-                    val isSelf = userLoc.userId == currentUserId
-                    val timeStr = formatShortTime(userLoc.timestamp)
-                    val avatarBitmap = remember(userLoc.photoBase64) {
-                        ImageUtils.base64ToBitmap(userLoc.photoBase64)
-                    }
-                    val effectiveName = if (!userLoc.nickname.isNullOrBlank()) userLoc.nickname else userLoc.userName
-
-                    Card(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .clickable { onMemberClick(userLoc) }
-                            .shadow(4.dp, RoundedCornerShape(20.dp)),
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isSelf) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (avatarBitmap != null) {
-                                    Image(
-                                        bitmap = avatarBitmap.asImageBitmap(),
-                                        contentDescription = "Avatar",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else {
-                                    Text(
-                                        text = userLoc.userName.firstOrNull()?.uppercaseChar()?.toString() ?: "U",
-                                        style = MaterialTheme.typography.labelMedium.copy(
-                                            color = if (isSelf) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    )
+                                onFocusPlace = { place -> focusMapOn(place.latitude, place.longitude) },
+                                onAddPlaceClick = { showAddPlaceDialog = true },
+                                onDeletePlace = { placeId ->
+                                    coroutineScope.launch { repository.deletePlace(placeId) }
                                 }
-                            }
-                            Column {
-                                Text(
-                                    text = if (isSelf) "Tu ($effectiveName)" else effectiveName,
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = "${userLoc.batteryLevel}% • $timeStr",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = if (userLoc.batteryLevel <= 20) Color(0xFFEF4444) else MaterialTheme.colorScheme.onSurfaceVariant
-                                    ),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                            )
+
+                            RadarPanel.SETTINGS -> SettingsPanel(
+                                currentUser = currentUser,
+                                currentGroup = currentGroup,
+                                myMember = members.find { it.userId == currentUserId },
+                                isOwnerOrAdmin = isOwnerOrAdmin,
+                                activeMemberCount = activeMembers.size,
+                                pendingMemberCount = pendingMembers.size,
+                                trackingIntervalSec = trackingIntervalSec,
+                                isTrackingEnabled = isTrackingEnabled,
+                                isGlobalGhostMode = isGlobalGhostMode,
+                                isSimulationRunning = isSimulationRunning,
+                                onEditProfileClick = { showEditProfileDialog = true },
+                                onSwitchGroup = onSwitchGroup,
+                                onUpdateInterval = { sec ->
+                                    repository.setTrackingFrequencySeconds(sec)
+                                },
+                                onToggleTracking = { enabled ->
+                                    repository.setBackgroundTrackingEnabled(enabled)
+                                    Toast.makeText(
+                                        context,
+                                        if (enabled) "Tracciamento in background attivato"
+                                        else "Tracciamento in background disattivato",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                },
+                                onToggleGlobalGhostMode = { enabled ->
+                                    repository.setGlobalGhostMode(enabled)
+                                    Toast.makeText(
+                                        context,
+                                        if (enabled) "Modalità Fantasma attiva: sei invisibile"
+                                        else "Modalità Fantasma disattivata",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                },
+                                onToggleGroupTracking = { enabled ->
+                                    val gid = currentGroup?.id ?: return@SettingsPanel
+                                    coroutineScope.launch {
+                                        repository.updateMemberGroupTracking(gid, enabled)
+                                    }
+                                },
+                                onToggleAccessPolicy = { requiresApproval ->
+                                    val gid = currentGroup?.id ?: return@SettingsPanel
+                                    coroutineScope.launch {
+                                        repository.updateGroupAccessPolicy(gid, requiresApproval)
+                                    }
+                                },
+                                onToggleSimulation = { isSimulationRunning = it },
+                                onRequestLeaveGroup = { showLeaveDialog = true },
+                                onLogout = {
+                                    LocationTrackingService.stop(context)
+                                    repository.signOut()
+                                }
+                            )
                         }
                     }
                 }
             }
         }
+    ) { _ ->
+        Box(modifier = Modifier.fillMaxSize()) {
+            OsmMapView(
+                locations = locations,
+                places = places,
+                snapshots = snapshots,
+                currentUserId = currentUserId,
+                targetFocusPoint = targetMapFocus,
+                focusToken = focusToken,
+                onMemberSelected = { selectedMemberForSheet = it },
+                onPlaceSelected = { selectedPlaceForSheet = it },
+                onSnapshotClusterSelected = { selectedSnapshotClusterForGallery = it },
+                modifier = Modifier.fillMaxSize()
+            )
 
-        // Bottom Left Compact Actions (Add Place mini-FAB & Take Snapshot mini-FAB right next to each other)
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 16.dp, bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Add Place Mini-FAB (Compact icon only)
-            SmallFloatingActionButton(
-                onClick = onAddPlaceClick,
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = CircleShape,
+            // Sfumatura in alto: rende leggibile la barra sopra qualunque tipo di mappa.
+            Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), CircleShape)
-                    .testTag("add_place_fab")
+                    .fillMaxWidth()
+                    .height(160.dp)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                RadarTheme.palette.gradients.mapScrimTop,
+                                RadarTheme.palette.gradients.mapScrimBottom
+                            )
+                        )
+                    )
+            )
+
+            MapTopBar(
+                groupName = currentGroup?.name ?: "Radar",
+                joinCode = currentGroup?.joinCode,
+                memberCount = activeMembers.size,
+                onlineCount = locations.count { System.currentTimeMillis() - it.timestamp < 5 * 60_000L },
+                onSwitchGroup = onSwitchGroup,
+                onSos = { showSosConfirmDialog = true },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(horizontal = Spacing.lg, vertical = Spacing.sm)
+            )
+
+            MapActionRail(
+                onLocateSelf = {
+                    val myLoc = locations.find { it.userId == currentUserId }
+                    if (myLoc != null) {
+                        focusMapOn(myLoc.latitude, myLoc.longitude, collapse = false)
+                    } else {
+                        Toast.makeText(context, "Posizione non ancora disponibile", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onAddPlace = { showAddPlaceDialog = true },
+                onTakeSnapshot = { showSnapshotSourceDialog = true },
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = Spacing.lg)
+            )
+
+            // Carosello membri: visibile solo con il pannello chiuso, così a sheet
+            // aperto lo schermo non mostra due volte la stessa informazione.
+            AnimatedVisibility(
+                visible = !isSheetExpanded && locations.isNotEmpty(),
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 76.dp)
+            ) {
+                MemberCarousel(
+                    locations = locations,
+                    currentUserId = currentUserId,
+                    onMemberClick = { selectedMemberForSheet = it }
+                )
+            }
+        }
+    }
+
+    // ======================= OVERLAY: FOGLI E DIALOG =======================
+
+    selectedMemberForSheet?.let { loc ->
+        MemberDetailSheet(
+            location = loc,
+            isSelf = loc.userId == currentUserId,
+            onDismiss = { selectedMemberForSheet = null },
+            onNavigateToChat = {
+                selectedMemberForSheet = null
+                openPanel(RadarPanel.CHAT)
+            },
+            onEditProfileClick = {
+                selectedMemberForSheet = null
+                showEditProfileDialog = true
+            }
+        )
+    }
+
+    selectedPlaceForSheet?.let { place ->
+        PlaceDetailSheet(
+            place = place,
+            onDismiss = { selectedPlaceForSheet = null },
+            onShowOnMap = {
+                if (it.latitude != 0.0 && it.longitude != 0.0 && !it.latitude.isNaN() && !it.longitude.isNaN()) {
+                    focusMapOn(it.latitude, it.longitude)
+                } else {
+                    Toast.makeText(context, "Coordinate del luogo non valide", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDeletePlace = { toDelete ->
+                coroutineScope.launch {
+                    repository.deletePlace(toDelete.id)
+                    Toast.makeText(context, "Luogo '${toDelete.name}' eliminato", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+    }
+
+    if (showEditProfileDialog && currentGroup != null && currentUser != null) {
+        val myMember = members.find { it.userId == currentUserId } ?: GroupMember(
+            userId = currentUserId,
+            displayName = currentUser?.displayName ?: "Utente",
+            role = "member"
+        )
+        EditGroupProfileDialog(
+            currentMember = myMember,
+            onDismiss = { showEditProfileDialog = false },
+            onSaveProfile = { newDisplayName, newNickname, newPhotoBase64 ->
+                coroutineScope.launch {
+                    val res = repository.updateGroupMemberProfile(
+                        groupId = currentGroup.id,
+                        memberId = myMember.userId,
+                        displayName = newDisplayName,
+                        nickname = newNickname,
+                        photoBase64 = newPhotoBase64
+                    )
+                    showEditProfileDialog = false
+                    Toast.makeText(
+                        context,
+                        if (res.isSuccess) "Profilo aggiornato"
+                        else "Errore salvataggio: ${res.exceptionOrNull()?.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        )
+    }
+
+    if (showAddPlaceDialog) {
+        val myLoc = locations.find { it.userId == currentUserId } ?: locations.firstOrNull()
+        AddPlaceDialog(
+            initialLat = myLoc?.latitude ?: 41.9028,
+            initialLon = myLoc?.longitude ?: 12.4964,
+            onDismiss = { showAddPlaceDialog = false },
+            onPlaceAdded = { place ->
+                showAddPlaceDialog = false
+                coroutineScope.launch {
+                    repository.addPlace(place)
+                    Toast.makeText(context, "Luogo '${place.name}' aggiunto", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+    }
+
+    if (showSosConfirmDialog) {
+        ConfirmDialog(
+            icon = Icons.Default.CrisisAlert,
+            iconTint = RadarSemantic.Sos,
+            title = "Invia allerta SOS",
+            message = "Tutti i membri di ${currentGroup?.name ?: "questo gruppo"} riceveranno " +
+                "una notifica di emergenza con la tua posizione attuale.",
+            confirmLabel = "Invia SOS",
+            onConfirm = {
+                showSosConfirmDialog = false
+                val gid = currentGroup?.id
+                if (!gid.isNullOrBlank()) {
+                    repository.sendSosAlert(gid)
+                    Toast.makeText(context, "Allerta SOS inviata al gruppo", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onDismiss = { showSosConfirmDialog = false }
+        )
+    }
+
+    memberToKick?.let { target ->
+        ConfirmDialog(
+            icon = Icons.Default.PersonRemove,
+            iconTint = MaterialTheme.colorScheme.error,
+            title = "Espelli membro",
+            message = "Vuoi rimuovere '${target.displayName}' dal gruppo? " +
+                "Non avrà più accesso a mappa, posizioni e messaggi.",
+            confirmLabel = "Espelli",
+            onConfirm = {
+                memberToKick = null
+                if (currentGroup != null) {
+                    coroutineScope.launch {
+                        repository.removeMemberFromGroup(currentGroup.id, target.userId)
+                    }
+                }
+            },
+            onDismiss = { memberToKick = null }
+        )
+    }
+
+    if (showLeaveDialog && currentGroup != null) {
+        ConfirmDialog(
+            icon = Icons.Default.ExitToApp,
+            iconTint = MaterialTheme.colorScheme.error,
+            title = "Abbandona gruppo",
+            message = "Vuoi uscire da '${currentGroup.name}'? La tua posizione non sarà " +
+                "più condivisa e non riceverai più notifiche.",
+            confirmLabel = "Abbandona",
+            onConfirm = {
+                showLeaveDialog = false
+                coroutineScope.launch {
+                    repository.leaveGroup(currentGroup.id)
+                    onSwitchGroup()
+                }
+            },
+            onDismiss = { showLeaveDialog = false }
+        )
+    }
+
+    if (showSnapshotSourceDialog) {
+        SnapshotSourceDialog(
+            onCamera = {
+                showSnapshotSourceDialog = false
+                launchMapCameraSafe()
+            },
+            onGallery = {
+                showSnapshotSourceDialog = false
+                snapshotGalleryLauncher.launch("image/*")
+            },
+            onDismiss = { showSnapshotSourceDialog = false }
+        )
+    }
+
+    fullScreenImageSource?.let { source ->
+        FullScreenMediaViewer(
+            imageSource = source,
+            onDismiss = { fullScreenImageSource = null }
+        )
+    }
+
+    selectedSnapshotClusterForGallery?.let { cluster ->
+        SnapshotClusterGalleryDialog(
+            snapshots = cluster.snapshots,
+            onDismiss = { selectedSnapshotClusterForGallery = null }
+        )
+    }
+
+    if (capturedSnapshotUri != null || capturedSnapshotBitmap != null) {
+        val myLoc = locations.find { it.userId == currentUserId } ?: locations.firstOrNull()
+        AddPlaceSnapshotDialog(
+            imageUri = capturedSnapshotUri,
+            bitmap = capturedSnapshotBitmap,
+            latitude = myLoc?.latitude ?: 41.9028,
+            longitude = myLoc?.longitude ?: 12.4964,
+            repository = repository,
+            onDismiss = {
+                capturedSnapshotUri = null
+                capturedSnapshotBitmap = null
+            },
+            onPublished = {
+                capturedSnapshotUri = null
+                capturedSnapshotBitmap = null
+            }
+        )
+    }
+}
+
+// ============================================================================
+// SOVRAPPOSIZIONI SULLA MAPPA
+// ============================================================================
+
+@Composable
+private fun MapTopBar(
+    groupName: String,
+    joinCode: String?,
+    memberCount: Int,
+    onlineCount: Int,
+    onSwitchGroup: () -> Unit,
+    onSos: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    GlassSurface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(Radius.lg),
+        contentPadding = Spacing.sm
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            RadarPulseCompact(modifier = Modifier.size(Sizes.avatarSm))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = groupName,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(RadarSemantic.Online)
+                    )
+                    Text(
+                        text = "$onlineCount online · $memberCount membri" +
+                            if (!joinCode.isNullOrBlank()) " · $joinCode" else "",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            IconButton(
+                onClick = onSwitchGroup,
+                modifier = Modifier.testTag("switch_group_button")
             ) {
                 Icon(
-                    Icons.Default.AddLocationAlt,
-                    contentDescription = "Aggiungi Luogo",
-                    modifier = Modifier.size(22.dp)
+                    Icons.Default.SwapHoriz,
+                    contentDescription = "Cambia gruppo",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            // Take Snapshot Mini-FAB (Placed immediately to the right of Add Place, compact icon only)
-            SmallFloatingActionButton(
-                onClick = onTakeSnapshotClick,
-                containerColor = Color(0xFFEA580C),
-                contentColor = Color.White,
+            // SOS: unico elemento sempre a piena saturazione, per essere trovato al volo.
+            Surface(
+                onClick = onSos,
                 shape = CircleShape,
+                color = RadarSemantic.Sos,
                 modifier = Modifier
-                    .size(44.dp)
-                    .border(1.dp, Color(0xFFC2410C).copy(alpha = 0.4f), CircleShape)
-                    .testTag("take_geo_snapshot_fab")
+                    .size(Sizes.fab)
+                    .testTag("sos_button")
             ) {
-                Icon(
-                    Icons.Default.AddAPhoto,
-                    contentDescription = "Scatta Istantanea",
-                    modifier = Modifier.size(22.dp)
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Warning,
+                        contentDescription = "Invia SOS",
+                        tint = Color.White,
+                        modifier = Modifier.size(Sizes.iconLg)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MapActionRail(
+    onLocateSelf: () -> Unit,
+    onAddPlace: () -> Unit,
+    onTakeSnapshot: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        RailButton(
+            icon = Icons.Default.MyLocation,
+            contentDescription = "Centra sulla mia posizione",
+            onClick = onLocateSelf,
+            testTag = "locate_self_fab"
+        )
+        RailButton(
+            icon = Icons.Default.AddLocationAlt,
+            contentDescription = "Aggiungi luogo",
+            onClick = onAddPlace,
+            testTag = "add_place_fab"
+        )
+        RailButton(
+            icon = Icons.Default.AddAPhoto,
+            contentDescription = "Scatta istantanea",
+            onClick = onTakeSnapshot,
+            container = RadarSemantic.Snapshot,
+            content = Color.White,
+            testTag = "take_geo_snapshot_fab"
+        )
+    }
+}
+
+@Composable
+private fun RailButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    container: Color = RadarTheme.palette.gradients.glassTint,
+    content: Color = MaterialTheme.colorScheme.onSurface,
+    testTag: String? = null
+) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = container,
+        shadowElevation = Elevation.floating,
+        modifier = modifier
+            .size(Sizes.fab)
+            .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = content,
+                modifier = Modifier.size(Sizes.iconLg)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MemberCarousel(
+    locations: List<UserLocation>,
+    currentUserId: String,
+    onMemberClick: (UserLocation) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyRow(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = Spacing.lg),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+    ) {
+        items(locations, key = { it.userId }) { loc ->
+            val isSelf = loc.userId == currentUserId
+            val name = if (!loc.nickname.isNullOrBlank()) loc.nickname!! else loc.userName
+
+            GlassSurface(
+                shape = RoundedCornerShape(Radius.pill),
+                contentPadding = Spacing.xs,
+                modifier = Modifier.clickable { onMemberClick(loc) }
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    modifier = Modifier.padding(end = Spacing.sm)
+                ) {
+                    Box {
+                        RadarAvatar(
+                            name = loc.userName,
+                            photoBase64 = loc.photoBase64,
+                            size = Sizes.avatarSm,
+                            containerColor = if (isSelf) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = if (isSelf) MaterialTheme.colorScheme.onPrimary
+                            else MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        PresenceDot(
+                            lastSeenMillis = loc.timestamp,
+                            modifier = Modifier.align(Alignment.BottomEnd)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = if (isSelf) "Tu" else name,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        BatteryBadge(level = loc.batteryLevel, isCharging = loc.isCharging)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// SELETTORE DI PANNELLO
+// ============================================================================
+
+@Composable
+private fun PanelSelector(
+    selected: RadarPanel,
+    chatCount: Int,
+    pendingCount: Int,
+    memberCount: Int,
+    placeCount: Int,
+    onSelect: (RadarPanel) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+    ) {
+        PillChip(
+            label = "${RadarPanel.MEMBERS.label} ($memberCount)",
+            selected = selected == RadarPanel.MEMBERS,
+            onClick = { onSelect(RadarPanel.MEMBERS) },
+            icon = Icons.Default.Group,
+            modifier = Modifier.testTag("nav_members_tab")
+        )
+        PillChip(
+            label = RadarPanel.CHAT.label,
+            selected = selected == RadarPanel.CHAT,
+            onClick = { onSelect(RadarPanel.CHAT) },
+            icon = Icons.Default.Chat,
+            badgeCount = chatCount.coerceAtMost(99),
+            modifier = Modifier.testTag("nav_chat_tab")
+        )
+        PillChip(
+            label = "${RadarPanel.PLACES.label} ($placeCount)",
+            selected = selected == RadarPanel.PLACES,
+            onClick = { onSelect(RadarPanel.PLACES) },
+            icon = Icons.Default.Place,
+            modifier = Modifier.testTag("nav_places_tab")
+        )
+        PillChip(
+            label = RadarPanel.SETTINGS.label,
+            selected = selected == RadarPanel.SETTINGS,
+            onClick = { onSelect(RadarPanel.SETTINGS) },
+            icon = Icons.Default.Settings,
+            badgeCount = pendingCount,
+            modifier = Modifier.testTag("nav_settings_tab")
+        )
+    }
+}
+
+// ============================================================================
+// PANNELLO: MEMBRI
+// ============================================================================
+
+@Composable
+private fun MembersPanel(
+    members: List<GroupMember>,
+    pendingMembers: List<GroupMember>,
+    locations: List<UserLocation>,
+    currentUserId: String,
+    isOwnerOrAdmin: Boolean,
+    isLoading: Boolean,
+    onMemberClick: (UserLocation) -> Unit,
+    onFocusMember: (UserLocation) -> Unit,
+    onKickMember: (GroupMember) -> Unit,
+    onApprove: (String) -> Unit,
+    onReject: (String) -> Unit
+) {
+    if (isLoading) {
+        MemberListSkeleton(modifier = Modifier.padding(Spacing.lg))
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = Spacing.lg,
+            end = Spacing.lg,
+            top = Spacing.sm,
+            bottom = Spacing.xxxl
+        ),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+    ) {
+        if (isOwnerOrAdmin && pendingMembers.isNotEmpty()) {
+            item {
+                SectionHeader(
+                    title = "In attesa di approvazione",
+                    subtitle = "Hanno inserito il codice invito e aspettano il tuo via libera",
+                    icon = Icons.Default.PendingActions
+                )
+            }
+            items(pendingMembers, key = { "pending_${it.userId}" }) { pending ->
+                PendingMemberRow(
+                    member = pending,
+                    onApprove = { onApprove(pending.userId) },
+                    onReject = { onReject(pending.userId) }
+                )
+            }
+            item { Spacer(Modifier.height(Spacing.sm)) }
+        }
+
+        if (members.isEmpty()) {
+            item {
+                EmptyState(
+                    title = "Nessun membro attivo",
+                    description = "Condividi il codice invito del gruppo per far entrare " +
+                        "familiari e amici nel radar.",
+                    icon = Icons.Default.GroupAdd,
+                    lottieAsset = "empty_members"
+                )
+            }
+        } else {
+            items(members, key = { it.userId }) { member ->
+                val loc = locations.find { it.userId == member.userId }
+                MemberRow(
+                    member = member,
+                    location = loc,
+                    isSelf = member.userId == currentUserId,
+                    canKick = isOwnerOrAdmin && member.userId != currentUserId,
+                    onClick = { loc?.let(onMemberClick) },
+                    onFocus = { loc?.let(onFocusMember) },
+                    onKick = { onKickMember(member) }
                 )
             }
         }
     }
 }
 
-// ================== TAB 1: GROUP CHAT & SOCIAL ==================
+@Composable
+private fun MemberRow(
+    member: GroupMember,
+    location: UserLocation?,
+    isSelf: Boolean,
+    canKick: Boolean,
+    onClick: () -> Unit,
+    onFocus: () -> Unit,
+    onKick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        enabled = location != null,
+        shape = RoundedCornerShape(Radius.md),
+        color = if (isSelf) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md)
+        ) {
+            Box {
+                RadarAvatar(
+                    name = member.displayName,
+                    photoBase64 = member.photoBase64,
+                    size = Sizes.avatarMd
+                )
+                if (location != null) {
+                    PresenceDot(
+                        lastSeenMillis = location.timestamp,
+                        modifier = Modifier.align(Alignment.BottomEnd)
+                    )
+                }
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+                ) {
+                    Text(
+                        text = if (isSelf) "${member.displayName} (tu)" else member.displayName,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    when (member.role) {
+                        "owner" -> RadarBadge("Proprietario")
+                        "admin" -> RadarBadge(
+                            text = "Admin",
+                            containerColor = MaterialTheme.colorScheme.secondary,
+                            contentColor = MaterialTheme.colorScheme.onSecondary
+                        )
+                    }
+                }
+
+                val subtitle = buildString {
+                    if (!member.nickname.isNullOrBlank()) append("${member.nickname} · ")
+                    if (location != null) {
+                        append(location.currentPlaceName?.takeIf { it.isNotBlank() } ?: "In movimento")
+                        append(" · ${formatShortTime(location.timestamp)}")
+                    } else {
+                        append("Posizione non condivisa")
+                    }
+                }
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                if (location != null) {
+                    Spacer(Modifier.height(Spacing.xxs))
+                    BatteryBadge(level = location.batteryLevel, isCharging = location.isCharging)
+                }
+            }
+
+            if (location != null) {
+                IconButton(onClick = onFocus) {
+                    Icon(
+                        Icons.Default.NearMe,
+                        contentDescription = "Mostra sulla mappa",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(Sizes.iconMd)
+                    )
+                }
+            }
+            if (canKick) {
+                IconButton(onClick = onKick) {
+                    Icon(
+                        Icons.Default.PersonRemove,
+                        contentDescription = "Rimuovi membro",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(Sizes.iconMd)
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
-private fun GroupChatTab(
+private fun PendingMemberRow(
+    member: GroupMember,
+    onApprove: () -> Unit,
+    onReject: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(Radius.md),
+        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.45f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(Spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md)
+        ) {
+            RadarAvatar(
+                name = member.displayName,
+                photoBase64 = member.photoBase64,
+                size = Sizes.avatarMd,
+                containerColor = MaterialTheme.colorScheme.tertiary,
+                contentColor = MaterialTheme.colorScheme.onTertiary
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = member.displayName,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Richiesta di accesso",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            FilledTonalIconButton(
+                onClick = onApprove,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Icon(Icons.Default.Check, contentDescription = "Approva")
+            }
+            FilledTonalIconButton(
+                onClick = onReject,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                )
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "Rifiuta")
+            }
+        }
+    }
+}
+
+// ============================================================================
+// PANNELLO: CHAT
+// ============================================================================
+
+@Composable
+private fun ChatPanel(
     messages: List<ChatMessage>,
     currentUserId: String,
     groupId: String,
@@ -981,34 +1205,36 @@ private fun GroupChatTab(
     val listState = rememberLazyListState()
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+
     var inputText by remember { mutableStateOf("") }
     var isUploading by remember { mutableStateOf(false) }
     var pendingChatCamera by remember { mutableStateOf(false) }
     var pendingChatCameraUri by remember { mutableStateOf<Uri?>(null) }
 
+    fun sendImage(uri: Uri, caption: String) {
+        if (groupId.isBlank()) return
+        isUploading = true
+        coroutineScope.launch {
+            val res = repository.compressImageToBase64(uri, maxDimension = 1280, quality = 85)
+            isUploading = false
+            val base64 = res.getOrNull()
+            if (res.isSuccess && !base64.isNullOrBlank()) {
+                repository.sendMessage(
+                    groupId,
+                    ChatMessage(text = caption, imageBase64 = base64, type = MessageType.IMAGE)
+                )
+            } else {
+                Toast.makeText(context, "Errore elaborazione immagine", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     val cameraPhotoLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { isSuccess ->
         val uri = pendingChatCameraUri
-        if (isSuccess && uri != null && groupId.isNotBlank()) {
-            isUploading = true
-            coroutineScope.launch {
-                val compressRes = repository.compressImageToBase64(uri, maxDimension = 1280, quality = 85)
-                isUploading = false
-                if (compressRes.isSuccess) {
-                    val base64 = compressRes.getOrNull()
-                    if (!base64.isNullOrBlank()) {
-                        val msg = ChatMessage(
-                            text = "Foto scattata in chat",
-                            imageBase64 = base64,
-                            type = MessageType.IMAGE
-                        )
-                        repository.sendMessage(groupId, msg)
-                    }
-                } else {
-                    Toast.makeText(context, "Errore elaborazione foto", Toast.LENGTH_SHORT).show()
-                }
-            }
+        if (isSuccess && uri != null) {
+            sendImage(uri, "Foto scattata in chat")
         } else {
             Toast.makeText(context, "Nessuna foto acquisita", Toast.LENGTH_SHORT).show()
         }
@@ -1017,22 +1243,18 @@ private fun GroupChatTab(
     val chatCameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (isGranted) {
-            if (pendingChatCamera) {
-                pendingChatCamera = false
-                val uri = pendingChatCameraUri ?: ImageUtils.createTempImageUri(context)
-                pendingChatCameraUri = uri
-                if (uri != null) {
-                    try {
-                        cameraPhotoLauncher.launch(uri)
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "Impossibile avviare fotocamera: ${e.message}", Toast.LENGTH_SHORT).show()
-                    }
+        if (isGranted && pendingChatCamera) {
+            pendingChatCamera = false
+            val uri = pendingChatCameraUri ?: ImageUtils.createTempImageUri(context)
+            pendingChatCameraUri = uri
+            if (uri != null) {
+                runCatching { cameraPhotoLauncher.launch(uri) }.onFailure {
+                    Toast.makeText(context, "Impossibile avviare fotocamera: ${it.message}", Toast.LENGTH_SHORT).show()
                 }
             }
-        } else {
+        } else if (!isGranted) {
             pendingChatCamera = false
-            Toast.makeText(context, "Permesso fotocamera necessario per scattare foto live", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Permesso fotocamera necessario", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1043,12 +1265,9 @@ private fun GroupChatTab(
             return
         }
         pendingChatCameraUri = tempUri
-
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-            try {
-                cameraPhotoLauncher.launch(tempUri)
-            } catch (e: Exception) {
-                Toast.makeText(context, "Impossibile avviare fotocamera: ${e.message}", Toast.LENGTH_SHORT).show()
+            runCatching { cameraPhotoLauncher.launch(tempUri) }.onFailure {
+                Toast.makeText(context, "Impossibile avviare fotocamera: ${it.message}", Toast.LENGTH_SHORT).show()
             }
         } else {
             pendingChatCamera = true
@@ -1058,32 +1277,19 @@ private fun GroupChatTab(
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null && groupId.isNotBlank()) {
-            isUploading = true
-            coroutineScope.launch {
-                val compressRes = repository.compressImageToBase64(uri)
-                isUploading = false
-                if (compressRes.isSuccess) {
-                    val base64 = compressRes.getOrNull()
-                    if (!base64.isNullOrBlank()) {
-                        val msg = ChatMessage(
-                            text = "Immagine condivisa",
-                            imageBase64 = base64,
-                            type = MessageType.IMAGE
-                        )
-                        repository.sendMessage(groupId, msg)
-                    }
-                } else {
-                    Toast.makeText(context, "Errore caricamento immagine", Toast.LENGTH_SHORT).show()
-                }
-            }
+    ) { uri: Uri? -> if (uri != null) sendImage(uri, "Immagine condivisa") }
+
+    fun sendText() {
+        val trimmed = inputText.trim()
+        if (trimmed.isNotBlank() && groupId.isNotBlank()) {
+            repository.sendMessage(groupId, ChatMessage(text = trimmed, type = MessageType.TEXT))
+            inputText = ""
         }
     }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.size - 1)
+            runCatching { listState.animateScrollToItem(messages.size - 1) }
         }
     }
 
@@ -1091,123 +1297,118 @@ private fun GroupChatTab(
         modifier = Modifier
             .fillMaxSize()
             .imePadding()
-            .background(MaterialTheme.colorScheme.background)
             .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = {
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
-                    }
-                )
+                detectTapGestures(onTap = {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                })
             }
     ) {
-        // Messages List
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(messages, key = { it.id }) { msg ->
-                val isMe = msg.senderId == currentUserId
-                ChatMessageBubble(
-                    message = msg,
-                    isMe = isMe,
-                    onImageClick = onImageClick,
-                    onDismissKeyboard = {
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
-                    }
+        if (messages.isEmpty()) {
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                EmptyState(
+                    title = "Ancora nessun messaggio",
+                    description = "Scrivi al gruppo, condividi una foto o la tua posizione.",
+                    icon = Icons.Default.ChatBubbleOutline,
+                    lottieAsset = "empty_chat"
                 )
+            }
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+            ) {
+                items(messages, key = { it.id }) { msg ->
+                    ChatBubble(
+                        message = msg,
+                        isMe = msg.senderId == currentUserId,
+                        onImageClick = onImageClick
+                    )
+                }
             }
         }
 
-        if (isUploading) {
+        AnimatedVisibility(visible = isUploading) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
 
-        // Input Field & Buttons
         Surface(
             color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 2.dp,
+            tonalElevation = Elevation.raised,
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
                 modifier = Modifier
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                    .fillMaxWidth(),
+                    .navigationBarsPadding()
+                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
             ) {
-                // Live Camera Button
                 IconButton(
                     onClick = { launchChatCameraSafe() },
                     modifier = Modifier.testTag("chat_camera_button")
                 ) {
                     Icon(
                         Icons.Default.PhotoCamera,
-                        contentDescription = "Scatta Foto Live",
+                        contentDescription = "Scatta foto",
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
-
-                // Photo Attachment Button
                 IconButton(
                     onClick = { photoPickerLauncher.launch("image/*") },
                     modifier = Modifier.testTag("attach_photo_button")
                 ) {
                     Icon(
                         Icons.Default.AddPhotoAlternate,
-                        contentDescription = "Allega Immagine",
+                        contentDescription = "Allega immagine",
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
 
-                // Text Input
                 OutlinedTextField(
                     value = inputText,
                     onValueChange = { inputText = it },
-                    placeholder = { Text("Scrivi un messaggio...") },
+                    placeholder = { Text("Scrivi un messaggio…") },
                     modifier = Modifier
                         .weight(1f)
                         .testTag("chat_input_field"),
-                    shape = RoundedCornerShape(24.dp),
-                    maxLines = 3,
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Sentences,
-                        imeAction = ImeAction.Send
+                    shape = RoundedCornerShape(Radius.pill),
+                    maxLines = 4,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
                     ),
-                    keyboardActions = KeyboardActions(onSend = {
-                        if (inputText.isNotBlank()) {
-                            val msg = ChatMessage(text = inputText.trim(), type = MessageType.TEXT)
-                            repository.sendMessage(groupId, msg)
-                            inputText = ""
-                        }
-                    })
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Send
+                    ),
+                    keyboardActions = KeyboardActions(onSend = { sendText() })
                 )
 
-                // Send Button
-                IconButton(
-                    onClick = {
-                        if (inputText.isNotBlank()) {
-                            val msg = ChatMessage(text = inputText.trim(), type = MessageType.TEXT)
-                            repository.sendMessage(groupId, msg)
-                            inputText = ""
-                        }
-                    },
+                val canSend = inputText.isNotBlank()
+                Surface(
+                    onClick = { sendText() },
+                    enabled = canSend,
+                    shape = CircleShape,
+                    color = if (canSend) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.surfaceVariant,
                     modifier = Modifier
-                        .size(46.dp)
-                        .clip(CircleShape)
-                        .background(if (inputText.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                        .size(Sizes.fab)
                         .testTag("send_message_button")
                 ) {
-                    Icon(
-                        Icons.Default.Send,
-                        contentDescription = "Invia",
-                        tint = if (inputText.isNotBlank()) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Send,
+                            contentDescription = "Invia",
+                            tint = if (canSend) MaterialTheme.colorScheme.onPrimary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(Sizes.iconMd)
+                        )
+                    }
                 }
             }
         }
@@ -1215,441 +1416,385 @@ private fun GroupChatTab(
 }
 
 @Composable
-private fun ChatMessageBubble(
+private fun ChatBubble(
     message: ChatMessage,
     isMe: Boolean,
-    onImageClick: (Any) -> Unit,
-    onDismissKeyboard: () -> Unit = {}
+    onImageClick: (Any) -> Unit
 ) {
-    if (message.type == MessageType.GEOFENCE_ALERT) {
-        // Geofence System Pill
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { onDismissKeyboard() },
-            contentAlignment = Alignment.Center
-        ) {
+    when (message.type) {
+        MessageType.GEOFENCE_ALERT -> {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Surface(
+                    shape = RoundedCornerShape(Radius.pill),
+                    color = MaterialTheme.colorScheme.secondaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+                    ) {
+                        Icon(
+                            Icons.Default.NotificationsActive,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(Sizes.iconSm)
+                        )
+                        Text(
+                            text = message.text,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+            }
+            return
+        }
+
+        MessageType.SOS_ALERT -> {
             Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f)
+                shape = RoundedCornerShape(Radius.md),
+                color = MaterialTheme.colorScheme.errorContainer,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(Spacing.lg),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md)
                 ) {
-                    Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.secondary)
-                    Text(
-                        text = message.text,
-                        style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Icon(
+                        Icons.Default.CrisisAlert,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(Sizes.iconXl)
                     )
+                    Column {
+                        Text(
+                            text = "Allerta SOS · ${message.senderName}",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = message.text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
                 }
             }
+            return
         }
-        return
+
+        else -> Unit
     }
 
-    if (message.type == MessageType.SOS_ALERT) {
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { onDismissKeyboard() }
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(Icons.Default.CrisisAlert, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp))
-                Column {
-                    Text(
-                        text = "Allerta SOS: ${message.senderName}",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
-                    )
-                    Text(message.text, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        }
-        return
-    }
-
-    // Normal Message Bubble
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onDismissKeyboard() },
+        modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
     ) {
         if (!isMe) {
             Text(
                 text = message.senderName,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                ),
-                modifier = Modifier.padding(start = 8.dp, bottom = 2.dp)
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = Spacing.md, bottom = Spacing.xxs)
             )
         }
 
         Surface(
             shape = RoundedCornerShape(
-                topStart = 16.dp,
-                topEnd = 16.dp,
-                bottomStart = if (isMe) 16.dp else 4.dp,
-                bottomEnd = if (isMe) 4.dp else 16.dp
+                topStart = Radius.md,
+                topEnd = Radius.md,
+                bottomStart = if (isMe) Radius.md else Radius.xs,
+                bottomEnd = if (isMe) Radius.xs else Radius.md
             ),
-            color = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.widthIn(max = 280.dp)
+            color = if (isMe) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.widthIn(max = 300.dp)
         ) {
-            Column(modifier = Modifier.padding(10.dp)) {
-                val base64Bitmap = remember(message.imageBase64) {
+            Column(modifier = Modifier.padding(Spacing.sm)) {
+                val bitmap = remember(message.imageBase64) {
                     ImageUtils.base64ToBitmap(message.imageBase64)
                 }
                 val imageSource = message.getImageSource()
 
-                if (base64Bitmap != null) {
+                if (bitmap != null) {
                     Image(
-                        bitmap = base64Bitmap.asImageBitmap(),
+                        bitmap = bitmap.asImageBitmap(),
                         contentDescription = "Immagine condivisa",
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(180.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { message.imageBase64?.let { onImageClick(it) } },
+                            .height(190.dp)
+                            .clip(RoundedCornerShape(Radius.sm))
+                            .clickable { message.imageBase64?.let(onImageClick) },
                         contentScale = ContentScale.Crop
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(Modifier.height(Spacing.xs))
                 } else if (imageSource != null) {
                     AsyncImage(
                         model = imageSource,
                         contentDescription = "Immagine condivisa",
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(180.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .height(190.dp)
+                            .clip(RoundedCornerShape(Radius.sm))
                             .clickable { onImageClick(imageSource) },
                         contentScale = ContentScale.Crop
                     )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(Modifier.height(Spacing.xs))
                 }
 
-                if (message.text.isNotBlank() && message.text != "Immagine condivisa" && message.text != "Foto condivisa") {
+                val hidePlaceholderCaption = message.text == "Immagine condivisa" ||
+                    message.text == "Foto condivisa" ||
+                    message.text == "Foto scattata in chat"
+
+                if (message.text.isNotBlank() && !hidePlaceholderCaption) {
                     Text(
                         text = message.text,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            color = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isMe) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurface
                     )
                 }
 
                 Text(
                     text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        fontSize = 10.sp
-                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .align(Alignment.End)
-                        .padding(top = 2.dp)
+                        .padding(top = Spacing.xxs)
                 )
             }
         }
     }
 }
 
-// ================== TAB 2: PLACES & GEOFENCE ==================
+// ============================================================================
+// PANNELLO: LUOGHI
+// ============================================================================
 
 @Composable
-private fun PlacesGeofenceTab(
+private fun PlacesPanel(
     places: List<SavedPlace>,
     alerts: List<GeofenceEvent>,
     onPlaceClick: (SavedPlace) -> Unit,
+    onFocusPlace: (SavedPlace) -> Unit,
     onAddPlaceClick: () -> Unit,
     onDeletePlace: (String) -> Unit
 ) {
-    Scaffold(
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onAddPlaceClick,
-                icon = { Icon(Icons.Default.AddLocation, contentDescription = null) },
-                text = { Text("Aggiungi Luogo") },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.testTag("add_place_tab_fab")
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = Spacing.lg,
+            end = Spacing.lg,
+            top = Spacing.sm,
+            bottom = Spacing.xxxl
+        ),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+    ) {
+        item {
+            SectionHeader(
+                title = "Zone sicure",
+                subtitle = "Avvisi automatici quando un membro arriva o si allontana",
+                icon = Icons.Default.Security,
+                action = {
+                    FilledTonalButton(
+                        onClick = onAddPlaceClick,
+                        shape = RoundedCornerShape(Radius.sm),
+                        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
+                        modifier = Modifier.testTag("add_place_tab_fab")
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                        Spacer(Modifier.width(Spacing.xs))
+                        Text("Aggiungi")
+                    }
+                }
             )
         }
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(vertical = 16.dp)
-        ) {
-            // Geofence Activity Summary Card
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.secondary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Security, contentDescription = null, tint = Color.White)
-                        }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Zone Sicure del Gruppo",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Text(
-                                "Ricevi notifiche automatiche all'arrivo o partenza dei membri.",
-                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                        }
-                    }
-                }
-            }
 
-            // Places List
+        if (places.isEmpty()) {
             item {
-                Text(
-                    "Luoghi Salvati (${places.size})",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.padding(top = 8.dp)
+                EmptyState(
+                    title = "Nessuna zona impostata",
+                    description = "Aggiungi Casa, Scuola, Lavoro o Palestra per ricevere " +
+                        "avvisi quando qualcuno entra o esce.",
+                    icon = Icons.Default.PinDrop,
+                    lottieAsset = "empty_places"
                 )
             }
-
-            if (places.isEmpty()) {
-                item {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(Icons.Default.PinDrop, contentDescription = null, modifier = Modifier.size(36.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("Nessun luogo sicuro impostato", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
-                            Text(
-                                "Aggiungi Casa, Scuola, Lavoro o Palestra per ricevere avvisi automatici quando un membro entra o esce.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                }
-            } else {
-                items(places, key = { it.id }) { place ->
-                    PlaceItemCard(
-                        place = place,
-                        onClick = { onPlaceClick(place) },
-                        onDelete = { onDeletePlace(place.id) }
-                    )
-                }
+        } else {
+            items(places, key = { it.id }) { place ->
+                PlaceRow(
+                    place = place,
+                    onClick = { onPlaceClick(place) },
+                    onFocus = { onFocusPlace(place) },
+                    onDelete = { onDeletePlace(place.id) }
+                )
             }
+        }
 
-            // Recent Alerts
-            if (alerts.isNotEmpty()) {
-                item {
-                    Text(
-                        "Attività Recente Geofence",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        modifier = Modifier.padding(top = 16.dp)
-                    )
-                }
-
-                items(alerts.take(5), key = { it.id }) { alert ->
-                    Card(
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Icon(
-                                if (alert.isInside) Icons.Default.Login else Icons.Default.Logout,
-                                contentDescription = null,
-                                tint = if (alert.isInside) Color(0xFF22C55E) else Color(0xFFEAB308),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "${alert.userName} ${if (alert.isInside) "è arrivato a" else "è partito da"} ${alert.placeName}",
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
-                                )
-                                Text(
-                                    SimpleDateFormat("HH:mm - dd MMM", Locale.getDefault()).format(Date(alert.timestamp)),
-                                    style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                )
-                            }
-                        }
-                    }
-                }
+        if (alerts.isNotEmpty()) {
+            item {
+                Spacer(Modifier.height(Spacing.sm))
+                SectionHeader(
+                    title = "Attività recente",
+                    icon = Icons.Default.History
+                )
+            }
+            items(alerts.take(8), key = { it.id }) { alert ->
+                GeofenceAlertRow(alert)
             }
         }
     }
 }
 
 @Composable
-private fun PlaceItemCard(
+private fun PlaceRow(
     place: SavedPlace,
     onClick: () -> Unit,
+    onFocus: () -> Unit,
     onDelete: () -> Unit
 ) {
-    Card(
+    val accent = placeColor(place.category)
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(Radius.md),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .testTag("place_card_${place.id}"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .testTag("place_card_${place.id}")
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
+            modifier = Modifier.padding(Spacing.md),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md)
         ) {
             Box(
                 modifier = Modifier
-                    .size(46.dp)
-                    .clip(CircleShape)
-                    .background(
-                        when (place.category) {
-                            PlaceCategory.HOME -> Color(0xFF648AC8).copy(alpha = 0.2f)
-                            PlaceCategory.WORK -> Color(0xFF6A948D).copy(alpha = 0.2f)
-                            PlaceCategory.SCHOOL -> Color(0xFFD97706).copy(alpha = 0.2f)
-                            PlaceCategory.GYM -> Color(0xFFDC2626).copy(alpha = 0.2f)
-                            PlaceCategory.OTHER -> Color(0xFF64748B).copy(alpha = 0.2f)
-                        }
-                    ),
+                    .size(Sizes.avatarMd)
+                    .clip(RoundedCornerShape(Radius.sm))
+                    .background(accent.copy(alpha = 0.18f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    when (place.category) {
-                        PlaceCategory.HOME -> Icons.Default.Home
-                        PlaceCategory.WORK -> Icons.Default.Work
-                        PlaceCategory.SCHOOL -> Icons.Default.School
-                        PlaceCategory.GYM -> Icons.Default.FitnessCenter
-                        PlaceCategory.OTHER -> Icons.Default.Place
-                    },
+                    imageVector = placeIcon(place.category),
                     contentDescription = null,
-                    tint = when (place.category) {
-                        PlaceCategory.HOME -> Color(0xFF648AC8)
-                        PlaceCategory.WORK -> Color(0xFF6A948D)
-                        PlaceCategory.SCHOOL -> Color(0xFFD97706)
-                        PlaceCategory.GYM -> Color(0xFFDC2626)
-                        PlaceCategory.OTHER -> Color(0xFF64748B)
-                    },
-                    modifier = Modifier.size(24.dp)
+                    tint = accent,
+                    modifier = Modifier.size(Sizes.iconLg)
                 )
             }
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = place.name,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Categoria: ${place.category.label} • Raggio: ${place.radiusMeters.toInt()}m",
-                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    text = "${place.category.label} · raggio ${place.radiusMeters.toInt()} m",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
                 )
             }
 
+            IconButton(onClick = onFocus) {
+                Icon(
+                    Icons.Default.NearMe,
+                    contentDescription = "Mostra sulla mappa",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(Sizes.iconMd)
+                )
+            }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.DeleteOutline, contentDescription = "Elimina Luogo", tint = MaterialTheme.colorScheme.error)
+                Icon(
+                    Icons.Default.DeleteOutline,
+                    contentDescription = "Elimina luogo",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(Sizes.iconMd)
+                )
             }
         }
     }
 }
 
-// ================== TAB 3: USER & GROUP SETTINGS ==================
-
-enum class TrackingTimeUnit(val label: String, val multiplier: Int) {
-    SECONDS("Secondi", 1),
-    MINUTES("Minuti", 60),
-    HOURS("Ore", 3600)
+@Composable
+private fun GeofenceAlertRow(alert: GeofenceEvent) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(Sizes.avatarSm)
+                .clip(CircleShape)
+                .background(
+                    (if (alert.isInside) RadarSemantic.Online else RadarSemantic.Idle)
+                        .copy(alpha = 0.18f)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (alert.isInside) Icons.Default.Login else Icons.Default.Logout,
+                contentDescription = null,
+                tint = if (alert.isInside) RadarSemantic.Online else RadarSemantic.Idle,
+                modifier = Modifier.size(Sizes.iconSm)
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "${alert.userName} ${if (alert.isInside) "è arrivato a" else "è uscito da"} ${alert.placeName}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = SimpleDateFormat("HH:mm · dd MMM", Locale.getDefault()).format(Date(alert.timestamp)),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
 
+// ============================================================================
+// PANNELLO: IMPOSTAZIONI
+// ============================================================================
+
 @Composable
-private fun MembersSettingsTab(
-    members: List<GroupMember>,
-    locations: List<UserLocation>,
-    currentGroup: GroupData?,
+private fun SettingsPanel(
     currentUser: UserData?,
+    currentGroup: GroupData?,
+    myMember: GroupMember?,
+    isOwnerOrAdmin: Boolean,
+    activeMemberCount: Int,
+    pendingMemberCount: Int,
     trackingIntervalSec: Int,
     isTrackingEnabled: Boolean,
     isGlobalGhostMode: Boolean,
-    repository: FirebaseRepository,
-    onSwitchGroup: () -> Unit,
+    isSimulationRunning: Boolean,
     onEditProfileClick: () -> Unit,
-    onRequestKickMember: (GroupMember) -> Unit,
-    onRequestLeaveGroup: () -> Unit,
+    onSwitchGroup: () -> Unit,
     onUpdateInterval: (Int) -> Unit,
     onToggleTracking: (Boolean) -> Unit,
     onToggleGlobalGhostMode: (Boolean) -> Unit,
     onToggleGroupTracking: (Boolean) -> Unit,
     onToggleAccessPolicy: (Boolean) -> Unit,
-    onApproveJoinRequest: (String) -> Unit,
-    onRejectJoinRequest: (String) -> Unit,
-    onMemberClick: (UserLocation) -> Unit,
+    onToggleSimulation: (Boolean) -> Unit,
+    onRequestLeaveGroup: () -> Unit,
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
     val currentThemeMode by ThemePreferences.themeModeFlow.collectAsState()
 
-    val currentUserId = currentUser?.uid ?: ""
-    val myMember = members.find { it.userId == currentUserId }
-    val myRole = myMember?.role ?: "member"
-    val isOwnerOrAdmin = myRole == "owner" || myRole == "admin" || currentGroup?.ownerId == currentUserId
-
-    val pendingMembers = remember(members) { members.filter { it.status == "PENDING" } }
-    val activeMembers = remember(members) { members.filter { it.status == "ACTIVE" } }
-
-    // Dynamic Interval State (Textfield + Unit Selector)
     var intervalUnit by remember {
         mutableStateOf(
             when {
@@ -1669,726 +1814,525 @@ private fun MembersSettingsTab(
         )
     }
 
-    fun applyIntervalChange(rawText: String, unit: TrackingTimeUnit) {
-        val num = rawText.toIntOrNull() ?: 1
-        val calculatedSeconds = (num * unit.multiplier).coerceIn(5, 86400)
-        onUpdateInterval(calculatedSeconds)
+    fun applyInterval(raw: String, unit: TrackingTimeUnit) {
+        val num = raw.toIntOrNull() ?: return
+        onUpdateInterval((num * unit.multiplier).coerceIn(5, 86400))
     }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(vertical = 16.dp)
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = Spacing.lg,
+            end = Spacing.lg,
+            top = Spacing.sm,
+            bottom = Spacing.xxxl
+        ),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md)
     ) {
-
-        // ================= SECTION 0: PENDING APPROVAL REQUESTS (ADMIN ONLY) =================
-        if (isOwnerOrAdmin && pendingMembers.isNotEmpty()) {
-            item {
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f)
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)),
-                    modifier = Modifier.fillMaxWidth()
+        // ---- Profilo ----
+        item {
+            SettingsCard {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.PendingActions,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.tertiary
-                            )
-                            Text(
-                                "Richieste di Accesso in Sospeso (${pendingMembers.size})",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer
-                                )
-                            )
-                        }
-
+                    RadarAvatar(
+                        name = currentUser?.displayName ?: "Utente",
+                        photoBase64 = currentUser?.photoBase64,
+                        size = Sizes.avatarLg
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "Questi utenti hanno inserito il codice invito e sono in attesa della tua approvazione per accedere alla mappa e ai messaggi.",
-                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f))
+                            text = currentUser?.displayName ?: "Utente Radar",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            pendingMembers.forEach { pendingUser ->
-                                val avatarBitmap = remember(pendingUser.photoBase64) {
-                                    ImageUtils.base64ToBitmap(pendingUser.photoBase64)
-                                }
-                                Card(
-                                    shape = RoundedCornerShape(14.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(40.dp)
-                                                .clip(CircleShape)
-                                                .background(MaterialTheme.colorScheme.tertiary),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            if (avatarBitmap != null) {
-                                                Image(
-                                                    bitmap = avatarBitmap.asImageBitmap(),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    contentScale = ContentScale.Crop
-                                                )
-                                            } else {
-                                                Text(
-                                                    pendingUser.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U",
-                                                    color = MaterialTheme.colorScheme.onTertiary,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                        }
-
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                pendingUser.displayName,
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Text(
-                                                "In attesa di approvazione",
-                                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.tertiary)
-                                            )
-                                        }
-
-                                        // Action buttons: Approve & Reject
-                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            FilledTonalIconButton(
-                                                onClick = { onApproveJoinRequest(pendingUser.userId) },
-                                                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                                )
-                                            ) {
-                                                Icon(Icons.Default.Check, contentDescription = "Approva")
-                                            }
-
-                                            FilledTonalIconButton(
-                                                onClick = { onRejectJoinRequest(pendingUser.userId) },
-                                                colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                                )
-                                            ) {
-                                                Icon(Icons.Default.Close, contentDescription = "Rifiuta")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ================= SECTION 1: IMPOSTAZIONI UTENTE GLOBALI =================
-        item {
-            Text(
-                "Impostazioni Utente",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            )
-        }
-
-        // Profile Card
-        item {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        val avatarBitmap = remember(currentUser?.photoBase64) {
-                            ImageUtils.base64ToBitmap(currentUser?.photoBase64)
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(54.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primaryContainer),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (avatarBitmap != null) {
-                                Image(
-                                    bitmap = avatarBitmap.asImageBitmap(),
-                                    contentDescription = "Foto Profilo",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Text(
-                                    text = currentUser?.displayName?.firstOrNull()?.uppercaseChar()?.toString() ?: "U",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            }
-                        }
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = currentUser?.displayName ?: "Utente Radar",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (!currentUser?.email.isNullOrBlank()) {
-                                Text(
-                                    text = currentUser?.email ?: "",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-
-                        FilledTonalButton(
-                            onClick = onEditProfileClick,
-                            shape = RoundedCornerShape(12.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Modifica")
-                        }
-                    }
-                }
-            }
-        }
-
-        // Global Ghost Mode & Theme Card
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    // Global Ghost Mode Toggle
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    if (isGlobalGhostMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = null,
-                                    tint = if (isGlobalGhostMode) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Text(
-                                    "Modalità Fantasma Globale",
-                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
-                                )
-                            }
-                            Text(
-                                "Nasconde la tua posizione e ti rende invisibile su tutti i gruppi contemporaneamente",
-                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                        }
-                        Switch(
-                            checked = isGlobalGhostMode,
-                            onCheckedChange = onToggleGlobalGhostMode,
-                            modifier = Modifier.testTag("global_ghost_mode_switch")
-                        )
-                    }
-
-                    Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-
-                    // App Theme Selector
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Tema Applicazione", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            listOf(
-                                ThemeMode.SYSTEM to "Sistema",
-                                ThemeMode.LIGHT to "Chiaro",
-                                ThemeMode.DARK to "Scuro"
-                            ).forEach { (mode, label) ->
-                                val selected = currentThemeMode == mode
-                                FilterChip(
-                                    selected = selected,
-                                    onClick = { ThemePreferences.setThemeMode(context, mode) },
-                                    label = { Text(label, fontSize = 12.sp) },
-                                    leadingIcon = {
-                                        Icon(
-                                            when (mode) {
-                                                ThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
-                                                ThemeMode.LIGHT -> Icons.Default.LightMode
-                                                ThemeMode.DARK -> Icons.Default.DarkMode
-                                            },
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ================= SECTION 2: TRACCIAMENTO GPS GLOBALE =================
-        item {
-            Text(
-                "Tracciamento GPS & Frequenza",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary),
-                modifier = Modifier.padding(top = 8.dp)
-            )
-        }
-
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    // Background Tracking Switch (Default enabled)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Tracciamento in Background", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold))
-                            Text(
-                                "Mantiene attiva la posizione e il radar tramite servizio in background persistente",
-                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                        }
-                        Switch(
-                            checked = isTrackingEnabled,
-                            onCheckedChange = onToggleTracking,
-                            modifier = Modifier.testTag("tracking_switch")
-                        )
-                    }
-
-                    Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-
-                    // Dynamic Frequency Input (Numeric TextField + Unit Selector)
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val secondary = currentUser?.email?.takeIf { it.isNotBlank() }
+                            ?: currentUser?.phoneNumber?.takeIf { it.isNotBlank() }
+                            ?: "Account anonimo"
                         Text(
-                            "Intervallo Aggiornamento Posizione GPS",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                            text = secondary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                    }
+                    FilledTonalButton(
+                        onClick = onEditProfileClick,
+                        shape = RoundedCornerShape(Radius.sm),
+                        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                        Spacer(Modifier.width(Spacing.xs))
+                        Text("Modifica")
+                    }
+                }
+            }
+        }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = intervalText,
-                                onValueChange = { input ->
-                                    val filtered = input.filter { it.isDigit() }.take(5)
-                                    intervalText = filtered
-                                    if (filtered.isNotBlank()) {
-                                        applyIntervalChange(filtered, intervalUnit)
-                                    }
-                                },
-                                label = { Text("Valore") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = Modifier
-                                    .weight(0.45f)
-                                    .testTag("interval_input_field"),
-                                shape = RoundedCornerShape(12.dp),
-                                singleLine = true
-                            )
+        // ---- Privacy ----
+        item {
+            SettingsCard {
+                SettingsToggleRow(
+                    title = "Modalità fantasma",
+                    description = "Nasconde la tua posizione in tutti i gruppi contemporaneamente",
+                    icon = if (isGlobalGhostMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                    iconTint = if (isGlobalGhostMode) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary,
+                    checked = isGlobalGhostMode,
+                    onCheckedChange = onToggleGlobalGhostMode,
+                    testTag = "global_ghost_mode_switch"
+                )
+                HairlineDivider()
+                SettingsToggleRow(
+                    title = "Condividi in questo gruppo",
+                    description = "Se disattivato resti invisibile solo ai membri di ${currentGroup?.name ?: "questo gruppo"}",
+                    icon = Icons.Default.ShareLocation,
+                    checked = myMember?.isTrackingActive ?: true,
+                    onCheckedChange = onToggleGroupTracking,
+                    testTag = "group_tracking_switch"
+                )
+            }
+        }
 
-                            // Unit Selector (Segmented Chips)
-                            Row(
-                                modifier = Modifier.weight(0.55f),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                listOf(
-                                    TrackingTimeUnit.SECONDS to "Sec",
-                                    TrackingTimeUnit.MINUTES to "Min",
-                                    TrackingTimeUnit.HOURS to "Ore"
-                                ).forEach { (unit, label) ->
-                                    val isSel = intervalUnit == unit
-                                    FilterChip(
-                                        selected = isSel,
-                                        onClick = {
-                                            intervalUnit = unit
-                                            if (intervalText.isNotBlank()) {
-                                                applyIntervalChange(intervalText, unit)
-                                            }
-                                        },
-                                        label = { Text(label, fontSize = 11.sp) },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                }
-                            }
-                        }
-
-                        val calculated = (intervalText.toIntOrNull() ?: 1) * intervalUnit.multiplier
-                        Text(
-                            text = "Intervallo effettivo: ogni $calculated secondi",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.primary)
+        // ---- Tema ----
+        item {
+            SettingsCard {
+                SectionHeader(title = "Aspetto", icon = Icons.Default.Palette)
+                Spacer(Modifier.height(Spacing.sm))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
+                    listOf(
+                        Triple(ThemeMode.SYSTEM, "Sistema", Icons.Default.BrightnessAuto),
+                        Triple(ThemeMode.LIGHT, "Chiaro", Icons.Default.LightMode),
+                        Triple(ThemeMode.DARK, "Scuro", Icons.Default.DarkMode)
+                    ).forEach { (mode, label, icon) ->
+                        PillChip(
+                            label = label,
+                            icon = icon,
+                            selected = currentThemeMode == mode,
+                            onClick = { ThemePreferences.setThemeMode(context, mode) },
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
             }
         }
 
-        // ================= SECTION 3: IMPOSTAZIONI GRUPPO ATTUALE =================
+        // ---- GPS ----
         item {
-            Text(
-                "Impostazioni Gruppo: ${currentGroup?.name ?: ""}",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary),
-                modifier = Modifier.padding(top = 8.dp)
-            )
+            SettingsCard {
+                SettingsToggleRow(
+                    title = "Tracciamento in background",
+                    description = "Mantiene attivo il radar anche ad app chiusa, con notifica persistente",
+                    icon = Icons.Default.GpsFixed,
+                    checked = isTrackingEnabled,
+                    onCheckedChange = onToggleTracking,
+                    testTag = "tracking_switch"
+                )
+                HairlineDivider()
+                Spacer(Modifier.height(Spacing.sm))
+                Text(
+                    text = "Frequenza aggiornamento posizione",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(Spacing.sm))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
+                    OutlinedTextField(
+                        value = intervalText,
+                        onValueChange = { input ->
+                            val filtered = input.filter { it.isDigit() }.take(5)
+                            intervalText = filtered
+                            if (filtered.isNotBlank()) applyInterval(filtered, intervalUnit)
+                        },
+                        label = { Text("Valore") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(Radius.sm),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        ),
+                        modifier = Modifier
+                            .width(110.dp)
+                            .testTag("interval_input_field")
+                    )
+                    TrackingTimeUnit.entries.forEach { unit ->
+                        PillChip(
+                            label = unit.label.take(3),
+                            selected = intervalUnit == unit,
+                            onClick = {
+                                intervalUnit = unit
+                                if (intervalText.isNotBlank()) applyInterval(intervalText, unit)
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(Spacing.sm))
+                val effective = (intervalText.toIntOrNull() ?: 0) * intervalUnit.multiplier
+                Text(
+                    text = "Aggiornamento ogni ${formatInterval(effective)}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
 
-        // Group Info & Invite Code Banner
+        // ---- Gruppo ----
         item {
-            Card(
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text(
-                                text = currentGroup?.name ?: "Gruppo Famiglia",
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                            )
-                            Text(
-                                text = "${activeMembers.size} Membri Attivi" + if (pendingMembers.isNotEmpty()) " • ${pendingMembers.size} in attesa" else "",
-                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                        }
-
+            SettingsCard {
+                SectionHeader(
+                    title = currentGroup?.name ?: "Gruppo",
+                    subtitle = "$activeMemberCount membri attivi" +
+                        if (pendingMemberCount > 0) " · $pendingMemberCount in attesa" else "",
+                    icon = Icons.Default.Group,
+                    action = {
                         OutlinedButton(
                             onClick = onSwitchGroup,
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(Radius.sm),
+                            contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)
                         ) {
-                            Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                            Spacer(Modifier.width(Spacing.xs))
                             Text("Cambia")
                         }
                     }
+                )
 
-                    Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                Spacer(Modifier.height(Spacing.md))
 
-                    // Join Code Banner
+                Surface(
+                    shape = RoundedCornerShape(Radius.sm),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f))
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        modifier = Modifier.padding(Spacing.md),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text("Codice Invito:", style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onPrimaryContainer))
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                currentGroup?.joinCode ?: "------",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                text = "Codice invito",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                text = currentGroup?.joinCode ?: "——————",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
-                        Button(
+                        FilledTonalButton(
                             onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clip = ClipData.newPlainText("Codice Invito", currentGroup?.joinCode ?: "")
-                                clipboard.setPrimaryClip(clip)
-                                Toast.makeText(context, "Codice invito copiato!", Toast.LENGTH_SHORT).show()
+                                clipboard.setPrimaryClip(
+                                    ClipData.newPlainText("Codice invito", currentGroup?.joinCode ?: "")
+                                )
+                                Toast.makeText(context, "Codice copiato", Toast.LENGTH_SHORT).show()
                             },
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            shape = RoundedCornerShape(Radius.sm)
                         ) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                            Spacer(Modifier.width(Spacing.xs))
                             Text("Copia")
                         }
                     }
                 }
-            }
-        }
 
-        // Per-Group Settings Card (Sharing in this group & Admin Access Policy)
-        item {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    // Per-Group Location Sharing Toggle (for current user)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Condividi Posizione in Questo Gruppo",
-                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
-                            )
-                            Text(
-                                "Se disattivato, la tua posizione non sarà visibile solo ai membri di questo gruppo",
-                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                        }
-                        Switch(
-                            checked = myMember?.isTrackingActive ?: true,
-                            onCheckedChange = onToggleGroupTracking,
-                            modifier = Modifier.testTag("group_tracking_switch")
-                        )
-                    }
-
-                    // Admin Access Policy Toggle (Visible only to Admin/Owner)
-                    if (isOwnerOrAdmin && currentGroup != null) {
-                        Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.AdminPanelSettings,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.secondary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        "Richiedi Approvazione Nuovi Membri",
-                                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
-                                    )
-                                }
-                                Text(
-                                    if (currentGroup.requiresApproval)
-                                        "I nuovi utenti che inseriscono il codice invito devono essere approvati da te prima di accedere."
-                                    else
-                                        "Chiunque abbia il codice invito accede direttamente al gruppo senza approvazione.",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                )
-                            }
-                            Switch(
-                                checked = currentGroup.requiresApproval,
-                                onCheckedChange = onToggleAccessPolicy,
-                                modifier = Modifier.testTag("access_policy_switch")
-                            )
-                        }
-                    }
+                if (isOwnerOrAdmin && currentGroup != null) {
+                    Spacer(Modifier.height(Spacing.md))
+                    HairlineDivider()
+                    SettingsToggleRow(
+                        title = "Approvazione nuovi membri",
+                        description = if (currentGroup.requiresApproval)
+                            "Chi usa il codice invito deve essere approvato da te"
+                        else
+                            "Chiunque abbia il codice entra subito nel gruppo",
+                        icon = Icons.Default.AdminPanelSettings,
+                        checked = currentGroup.requiresApproval,
+                        onCheckedChange = onToggleAccessPolicy,
+                        testTag = "access_policy_switch"
+                    )
                 }
             }
         }
 
-        // Group Members List
+        // ---- Strumenti sviluppo ----
         item {
-            Text(
-                "Gestione Membri del Gruppo (${activeMembers.size})",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-            )
+            SettingsCard {
+                SettingsToggleRow(
+                    title = "Simula movimento",
+                    description = "Muove i membri di prova sulla mappa. Utile su emulatore",
+                    icon = if (isSimulationRunning) Icons.Default.DirectionsRun else Icons.Default.PlayCircle,
+                    checked = isSimulationRunning,
+                    onCheckedChange = onToggleSimulation,
+                    testTag = "simulation_toggle_button"
+                )
+            }
         }
 
-        items(activeMembers, key = { it.userId }) { member ->
-            val isMe = member.userId == currentUserId
-            val loc = locations.find { it.userId == member.userId }
-            val avatarBitmap = remember(member.photoBase64) { ImageUtils.base64ToBitmap(member.photoBase64) }
-
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isMe) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
-                    else MaterialTheme.colorScheme.surface
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
+        // ---- Azioni distruttive ----
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                OutlinedButton(
+                    onClick = onRequestLeaveGroup,
+                    shape = RoundedCornerShape(Radius.sm),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(enabled = loc != null) { loc?.let { onMemberClick(it) } }
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        .testTag("leave_group_button")
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (avatarBitmap != null) {
-                            Image(
-                                bitmap = avatarBitmap.asImageBitmap(),
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Text(
-                                member.displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                member.displayName,
-                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (member.role == "owner") {
-                                Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primary) {
-                                    Text("PROPRIETARIO", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
-                                }
-                            } else if (member.role == "admin") {
-                                Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.secondary) {
-                                    Text("ADMIN", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
-                                }
-                            }
-                        }
-                        if (!member.nickname.isNullOrBlank()) {
-                            Text(
-                                "Soprannome: ${member.nickname}",
-                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                        }
-                        if (loc != null) {
-                            Text(
-                                "Batteria: ${loc.batteryLevel}% • Aggiornato: ${formatShortTime(loc.timestamp)}",
-                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                        }
-                    }
-
-                    // Kick Button if Admin/Owner and not kicking self
-                    if (isOwnerOrAdmin && !isMe) {
-                        IconButton(
-                            onClick = { onRequestKickMember(member) }
-                        ) {
-                            Icon(Icons.Default.PersonRemove, contentDescription = "Rimuovi Membro", tint = MaterialTheme.colorScheme.error)
-                        }
-                    }
+                    Icon(Icons.Default.ExitToApp, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
+                    Spacer(Modifier.width(Spacing.sm))
+                    Text("Abbandona il gruppo")
                 }
-            }
-        }
-
-        // Leave Group Button
-        item {
-            OutlinedButton(
-                onClick = onRequestLeaveGroup,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("leave_group_button")
-            ) {
-                Icon(Icons.Default.ExitToApp, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Abbandona Questo Gruppo")
-            }
-        }
-
-        // Sign Out Button
-        item {
-            Button(
-                onClick = onLogout,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("logout_app_button")
-            ) {
-                Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Disconnetti Account")
+                Button(
+                    onClick = onLogout,
+                    shape = RoundedCornerShape(Radius.sm),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("logout_app_button")
+                ) {
+                    Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
+                    Spacer(Modifier.width(Spacing.sm))
+                    Text("Disconnetti account")
+                }
             }
         }
     }
 }
 
-// ================== HELPER FUNCTIONS ==================
+@Composable
+private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(Radius.lg),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(Spacing.lg),
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun SettingsToggleRow(
+    title: String,
+    description: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    testTag: String? = null
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier.size(Sizes.iconMd)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = if (testTag != null) Modifier.testTag(testTag) else Modifier
+        )
+    }
+}
+
+// ============================================================================
+// DIALOG CONDIVISI
+// ============================================================================
+
+@Composable
+private fun ConfirmDialog(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconTint: Color,
+    title: String,
+    message: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(Radius.xl),
+        containerColor = MaterialTheme.colorScheme.surface,
+        icon = {
+            Box(
+                modifier = Modifier
+                    .size(Sizes.avatarLg)
+                    .clip(CircleShape)
+                    .background(iconTint.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(Sizes.iconLg))
+            }
+        },
+        title = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                shape = RoundedCornerShape(Radius.sm),
+                colors = ButtonDefaults.buttonColors(containerColor = iconTint)
+            ) { Text(confirmLabel) }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(Radius.sm)) {
+                Text("Annulla")
+            }
+        }
+    )
+}
+
+@Composable
+private fun SnapshotSourceDialog(
+    onCamera: () -> Unit,
+    onGallery: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(Radius.xl),
+        containerColor = MaterialTheme.colorScheme.surface,
+        icon = {
+            Box(
+                modifier = Modifier
+                    .size(Sizes.avatarLg)
+                    .clip(CircleShape)
+                    .background(RadarSemantic.Snapshot.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.AddAPhoto,
+                    contentDescription = null,
+                    tint = RadarSemantic.Snapshot,
+                    modifier = Modifier.size(Sizes.iconLg)
+                )
+            }
+        },
+        title = {
+            Text(
+                text = "Nuova istantanea",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                Text(
+                    text = "La foto verrà agganciata alla tua posizione attuale sulla mappa.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(Spacing.xs))
+                FilledTonalButton(
+                    onClick = onCamera,
+                    shape = RoundedCornerShape(Radius.sm),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
+                    Spacer(Modifier.width(Spacing.sm))
+                    Text("Scatta ora")
+                }
+                OutlinedButton(
+                    onClick = onGallery,
+                    shape = RoundedCornerShape(Radius.sm),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
+                    Spacer(Modifier.width(Spacing.sm))
+                    Text("Scegli dalla galleria")
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Annulla") }
+        }
+    )
+}
+
+// ============================================================================
+// UTILITÀ
+// ============================================================================
+
+private fun placeColor(category: PlaceCategory): Color = when (category) {
+    PlaceCategory.HOME -> RadarSemantic.PlaceHome
+    PlaceCategory.WORK -> RadarSemantic.PlaceWork
+    PlaceCategory.SCHOOL -> RadarSemantic.PlaceSchool
+    PlaceCategory.GYM -> RadarSemantic.PlaceGym
+    PlaceCategory.OTHER -> RadarSemantic.PlaceOther
+}
+
+private fun placeIcon(category: PlaceCategory) = when (category) {
+    PlaceCategory.HOME -> Icons.Default.Home
+    PlaceCategory.WORK -> Icons.Default.Work
+    PlaceCategory.SCHOOL -> Icons.Default.School
+    PlaceCategory.GYM -> Icons.Default.FitnessCenter
+    PlaceCategory.OTHER -> Icons.Default.Place
+}
+
+private fun formatInterval(seconds: Int): String = when {
+    seconds <= 0 -> "—"
+    seconds % 3600 == 0 -> "${seconds / 3600} ore"
+    seconds % 60 == 0 -> "${seconds / 60} minuti"
+    else -> "$seconds secondi"
+}
 
 private fun formatShortTime(timestamp: Long): String {
     val diff = System.currentTimeMillis() - timestamp
     return when {
-        diff < 60_000 -> "Adesso"
-        diff < 3600_000 -> "${diff / 60_000}m fa"
+        diff < 60_000 -> "adesso"
+        diff < 3_600_000 -> "${diff / 60_000} min fa"
         else -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
     }
 }

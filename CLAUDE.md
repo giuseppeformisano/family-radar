@@ -77,6 +77,12 @@ Navigation is a `AppScreen` enum (`AUTH` / `GROUP_SELECT` / `MAIN_RADAR`) plus a
 screen against auth state, group membership, and any pending deep link. `navigation-compose` is a
 dependency but unused.
 
+Inside `MAIN_RADAR` there is a second, independent level of navigation: `MainRadarScreen` is a
+`BottomSheetScaffold` whose *content* is the full-screen osmdroid map and whose *sheet* holds four
+panels (`RadarPanel`: MEMBERS / CHAT / PLACES / SETTINGS) switched by a pill selector. There is no
+bottom navigation bar — the sheet peeks at `Sizes.sheetPeek` and expands over the map. Deep links
+select a panel and expand or collapse the sheet accordingly.
+
 ### Firestore schema
 
 ```
@@ -152,6 +158,47 @@ nearby snapshots are grouped by `clusterSnapshots(threshold 30m)`.
 `FamilyRadarApplication` configures the osmdroid user agent and cache directories — tiles fail to load
 without it.
 
+Two things about `OsmMapView` that are easy to get wrong:
+
+- **Dark mode is a colour matrix on the tile overlay**, applied in the `update` block (not `factory`)
+  so it can be added and removed when the theme flips. `isDark` reads `RadarTheme.palette.isDark`.
+- **Re-centring on the same coordinates needs `focusToken`.** The recenter `LaunchedEffect` is keyed
+  on `(targetFocusPoint, focusToken)`; a `Pair` with unchanged coordinates is structurally equal, so
+  without bumping the token, pressing "centre on me" twice would do nothing the second time.
+  `MainRadarScreen.focusMapOn()` is the only thing that should set both.
+
+Because the map is an `AndroidView`, its pixels are drawn by the Android view system and are **not**
+in Compose's graphics layer. Backdrop-blur libraries (haze and friends) cannot capture it — that is
+why overlays use `GlassSurface` (translucent tint + border + scrim gradient) rather than real blur.
+
+### Design system
+
+`ui/theme/` is a token layer, and screens are expected to consume it rather than hardcode values:
+
+- `Color.kt` — raw palette (private) → semantic light/dark roles + `RadarSemantic` (presence,
+  battery, place categories — things Material 3 has no slot for) + `RadarGradients`.
+- `Dimens.kt` — `Spacing` / `Radius` / `Elevation` / `Sizes` scales, plus `RadarShapes`.
+- `Type.kt` — `RadarTypography`, tighter and heavier than the M3 default, plus `MetricTextStyle`
+  and `BadgeTextStyle`.
+- `Theme.kt` — `MyApplicationTheme(themeMode, dynamicColor)`. Material You dynamic colour is **on by
+  default** on API 31+, falling back to the brand palette. Non-Material tokens travel through
+  `LocalRadarPalette`, read as `RadarTheme.palette`.
+
+Shared components live in `ui/components/Foundation.kt` (`GlassSurface`, `RadarAvatar`, `PillChip`,
+`PresenceDot`, `BatteryBadge`, `EmptyState`, `InfoBanner`, `SectionHeader`, `SheetHandle`…),
+with `Skeletons.kt` for shimmer loading states and `LottieBox.kt` for animations.
+
+**Lottie assets are optional by design.** `LottieBox` resolves `res/raw/<name>` via
+`resources.getIdentifier` at runtime instead of a compile-time `R.raw.*` reference, and renders a
+Compose fallback when the file is absent. So the project builds with no animation files at all, and
+each animation lights up the moment its `.json` is dropped in. Currently referenced names:
+`empty_members`, `empty_chat`, `empty_places`, `empty_groups`. Android resource names must be
+lowercase alphanumeric + underscore — never put a `README.md` or any dotted filename in `res/raw`,
+it breaks the resource compiler.
+
+`RadarPulseAnimation` is deliberately hand-drawn Compose rather than Lottie: it has to take the theme
+colour (including dynamic Material You), which a baked `.json` cannot.
+
 ### Persisted settings (SharedPreferences, no DataStore)
 
 - `family_radar_settings_prefs` — `tracking_freq_sec`, `bg_tracking_enabled`, `global_ghost_mode`
@@ -164,6 +211,9 @@ without it.
 
 - **UI copy is Italian and hardcoded in Composables.** `strings.xml` holds only `app_name`. Match the
   surrounding language when adding UI text.
+- **Pull spacing, radii and sizes from the token objects**, not literal `dp` values — `Spacing.lg`,
+  not `16.dp`. Colours come from `MaterialTheme.colorScheme` or `RadarSemantic`; a raw `Color(0xFF…)`
+  in a screen is a bug, because it will not survive the light/dark or dynamic-colour switch.
 - **Defensive-degradation style.** `FirebaseAuth` / `FirebaseFirestore` are nullable and every
   Firebase/Android call is wrapped in `try/catch` that logs and continues. Combined with
   `googleServices.missing.passthrough=true` and `MissingGoogleServicesStrategy.WARN`, this is what lets

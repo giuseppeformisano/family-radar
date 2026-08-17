@@ -2077,9 +2077,16 @@ private fun SettingsPanel(
         ),
         verticalArrangement = Arrangement.spacedBy(Spacing.md)
     ) {
+        // Ordine: prima ciò che si tocca spesso e definisce il comportamento
+        // dell'app (privacy, tracciamento), poi il contesto del gruppo, infine
+        // cosmetica e azioni di uscita. Ogni scheda ha un'intestazione: senza,
+        // il pannello era un muro di interruttori senza capire cosa raggruppa cosa.
+
         // ---- Profilo ----
         item {
             SettingsCard {
+                SectionHeader(title = "Profilo", icon = Icons.Default.Person)
+                Spacer(Modifier.height(Spacing.md))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Spacing.md)
@@ -2124,6 +2131,12 @@ private fun SettingsPanel(
         // ---- Privacy ----
         item {
             SettingsCard {
+                SectionHeader(
+                    title = "Privacy",
+                    subtitle = "Chi vede la tua posizione",
+                    icon = if (isGlobalGhostMode) Icons.Default.VisibilityOff else Icons.Default.Visibility
+                )
+                Spacer(Modifier.height(Spacing.xs))
                 SettingsToggleRow(
                     title = "Modalità fantasma",
                     description = "Nasconde la tua posizione in tutti i gruppi contemporaneamente",
@@ -2146,35 +2159,18 @@ private fun SettingsPanel(
             }
         }
 
-        // ---- Tema ----
+        // ---- Tracciamento ----
+        // Sta subito sotto Privacy perche' e' lo stesso argomento visto
+        // dall'altro lato: la' si decide CHI ti vede, qui COME vieni rilevato.
+        // Prima erano separati dalla scheda Aspetto, che non c'entra nulla.
         item {
             SettingsCard {
-                SectionHeader(title = "Aspetto", icon = Icons.Default.Palette)
-                Spacer(Modifier.height(Spacing.sm))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
-                ) {
-                    listOf(
-                        Triple(ThemeMode.SYSTEM, "Sistema", Icons.Default.BrightnessAuto),
-                        Triple(ThemeMode.LIGHT, "Chiaro", Icons.Default.LightMode),
-                        Triple(ThemeMode.DARK, "Scuro", Icons.Default.DarkMode)
-                    ).forEach { (mode, label, icon) ->
-                        PillChip(
-                            label = label,
-                            icon = icon,
-                            selected = currentThemeMode == mode,
-                            onClick = { ThemePreferences.setThemeMode(context, mode) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-        }
-
-        // ---- GPS ----
-        item {
-            SettingsCard {
+                SectionHeader(
+                    title = "Tracciamento",
+                    subtitle = "Come viene rilevata la tua posizione",
+                    icon = Icons.Default.GpsFixed
+                )
+                Spacer(Modifier.height(Spacing.xs))
                 SettingsToggleRow(
                     title = "Tracciamento in background",
                     description = "Mantiene attivo il radar anche ad app chiusa, con notifica persistente",
@@ -2196,9 +2192,9 @@ private fun SettingsPanel(
                     testTag = "power_saving_switch"
                 )
                 HairlineDivider()
-                Spacer(Modifier.height(Spacing.sm))
+                Spacer(Modifier.height(Spacing.md))
                 Text(
-                    text = "Frequenza aggiornamento posizione",
+                    text = "Frequenza aggiornamento",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -2326,23 +2322,50 @@ private fun SettingsPanel(
             }
         }
 
-        // ---- Strumenti sviluppo ----
+        // ---- Aspetto ----
+        // Cosmetica: si imposta una volta e non si tocca piu', quindi sta in
+        // fondo e non piu' in mezzo alle impostazioni di posizione.
         item {
             SettingsCard {
-                SettingsToggleRow(
-                    title = "Simula movimento",
-                    description = "Muove i membri di prova sulla mappa. Utile su emulatore",
-                    icon = if (isSimulationRunning) Icons.Default.DirectionsRun else Icons.Default.PlayCircle,
-                    checked = isSimulationRunning,
-                    onCheckedChange = onToggleSimulation,
-                    testTag = "simulation_toggle_button"
+                SectionHeader(
+                    title = "Aspetto",
+                    subtitle = "Tema dell'applicazione",
+                    icon = Icons.Default.Palette
                 )
+                Spacer(Modifier.height(Spacing.md))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
+                    listOf(
+                        Triple(ThemeMode.SYSTEM, "Sistema", Icons.Default.BrightnessAuto),
+                        Triple(ThemeMode.LIGHT, "Chiaro", Icons.Default.LightMode),
+                        Triple(ThemeMode.DARK, "Scuro", Icons.Default.DarkMode)
+                    ).forEach { (mode, label, icon) ->
+                        PillChip(
+                            label = label,
+                            icon = icon,
+                            selected = currentThemeMode == mode,
+                            onClick = { ThemePreferences.setThemeMode(context, mode) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
             }
         }
 
-        // ---- Azioni distruttive ----
+        // ---- Account ----
+        // Un solo pulsante pieno e rosso: prima lo erano entrambi e gridavano
+        // allo stesso modo, mentre uscire da un gruppo e disconnettere l'account
+        // hanno conseguenze molto diverse.
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            SettingsCard {
+                SectionHeader(
+                    title = "Account",
+                    subtitle = "Uscita dal gruppo e disconnessione",
+                    icon = Icons.Default.ManageAccounts
+                )
+                Spacer(Modifier.height(Spacing.md))
                 OutlinedButton(
                     onClick = onRequestLeaveGroup,
                     shape = RoundedCornerShape(Radius.sm),
@@ -2357,6 +2380,7 @@ private fun SettingsPanel(
                     Spacer(Modifier.width(Spacing.sm))
                     Text("Abbandona il gruppo")
                 }
+                Spacer(Modifier.height(Spacing.sm))
                 Button(
                     onClick = onLogout,
                     shape = RoundedCornerShape(Radius.sm),
@@ -2372,6 +2396,29 @@ private fun SettingsPanel(
                     Spacer(Modifier.width(Spacing.sm))
                     Text("Disconnetti account")
                 }
+            }
+        }
+
+        // ---- Sviluppo ----
+        // Ultimo di tutti e qualificato: e' uno strumento di test, non una
+        // funzionalita'. Prima stava in mezzo alle impostazioni vere senza
+        // nemmeno un titolo che lo distinguesse.
+        item {
+            SettingsCard {
+                SectionHeader(
+                    title = "Sviluppo",
+                    subtitle = "Strumenti di test, non servono all'uso normale",
+                    icon = Icons.Default.Code
+                )
+                Spacer(Modifier.height(Spacing.xs))
+                SettingsToggleRow(
+                    title = "Simula movimento",
+                    description = "Muove membri di prova sulla mappa. Utile solo su emulatore",
+                    icon = if (isSimulationRunning) Icons.Default.DirectionsRun else Icons.Default.PlayCircle,
+                    checked = isSimulationRunning,
+                    onCheckedChange = onToggleSimulation,
+                    testTag = "simulation_toggle_button"
+                )
             }
         }
     }

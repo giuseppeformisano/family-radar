@@ -193,12 +193,11 @@ class FirebaseRepository private constructor(private val context: Context) {
         val clamped = seconds.coerceIn(5, 86400)
         _trackingFrequencySeconds.value = clamped
         settingsPrefs.edit().putInt("tracking_freq_sec", clamped).apply()
-        if (_isBackgroundTrackingEnabled.value) {
-            com.example.service.LocationTrackingService.updateInterval(context, clamped)
-        }
-        if (silentLocationCallback != null) {
-            startSilentLocationTracking()
-        }
+        // Passa dall'intervallo effettivo: se e' in corso un viaggio la sua
+        // cadenza fitta ha la precedenza, e il nuovo valore entra in vigore
+        // quando la registrazione finisce. Spingere qui il valore dell'utente
+        // avrebbe azzoppato la traccia a meta' registrazione.
+        applyEffectiveTrackingInterval()
     }
 
     fun setBackgroundTrackingEnabled(enabled: Boolean) {
@@ -1804,7 +1803,7 @@ class FirebaseRepository private constructor(private val context: Context) {
 
             stopSilentLocationTracking()
 
-            val interval = (_trackingFrequencySeconds.value * 1000L).coerceAtLeast(5000L)
+            val interval = (effectiveTrackingIntervalSec() * 1000L).coerceAtLeast(5000L)
             val request = LocationRequest.Builder(locationPriority(), interval).apply {
                 setMinUpdateIntervalMillis(interval / 2)
                 setWaitForAccurateLocation(false)
@@ -2025,6 +2024,16 @@ class FirebaseRepository private constructor(private val context: Context) {
             return
         }
 
+        // Il viaggio registra su OGNI fix, prima del gate. Il gate decide cosa
+        // vale la pena scrivere su Firestore, non cosa vale la pena tracciare: i
+        // punti del viaggio stanno in memoria e non costano scritture. Stando
+        // dopo il gate, la traccia ereditava le sue soglie e finiva ridotta a
+        // pochissimi punti -- su una strada dritta, a due.
+        // Il filtro dei 15 m dentro recordTripPoint basta a togliere il rumore.
+        if (_activeTrip.value != null) {
+            recordTripPoint(location.latitude, location.longitude)
+        }
+
         // La valutazione geofence gira su OGNI fix, anche su quelli che non
         // trasmettiamo: un ingresso o un'uscita da un luogo non va perso solo
         // perché lo spostamento era piccolo.
@@ -2037,11 +2046,6 @@ class FirebaseRepository private constructor(private val context: Context) {
             return
         }
         Log.d(TAG, "Fix trasmesso: ${gate.reason}")
-
-        // Registra punto se viaggio attivo
-        if (_activeTrip.value != null) {
-            recordTripPoint(location.latitude, location.longitude)
-        }
 
         lastSentLatitude = location.latitude
         lastSentLongitude = location.longitude
@@ -2640,8 +2644,34 @@ class FirebaseRepository private constructor(private val context: Context) {
 
     // ================== TRIP RECORDING ==================
 
+    /**
+     * Intervallo di campionamento realmente in uso: quello fitto del viaggio se
+     * ce n'e' uno in registrazione, altrimenti quello scelto dall'utente.
+     */
+    private fun effectiveTrackingIntervalSec(): Int =
+        if (_activeTrip.value != null) TRIP_TRACKING_INTERVAL_SEC
+        else _trackingFrequencySeconds.value
+
+    /**
+     * Riallinea i due produttori di posizione all'intervallo effettivo. Va
+     * chiamata all'avvio e alla fine di un viaggio: senza, la registrazione
+     * continuerebbe a ricevere fix alla cadenza del radar (90 secondi di
+     * default) e la traccia resterebbe fatta di due o tre punti.
+     */
+    private fun applyEffectiveTrackingInterval() {
+        if (silentLocationCallback != null) {
+            startSilentLocationTracking()
+        }
+        if (_isBackgroundTrackingEnabled.value) {
+            com.example.service.LocationTrackingService.updateInterval(
+                context, effectiveTrackingIntervalSec()
+            )
+        }
+    }
+
     fun startTrip() {
         _activeTrip.value = ActiveTripState(startTime = System.currentTimeMillis())
+        applyEffectiveTrackingInterval()
     }
 
     private fun recordTripPoint(lat: Double, lon: Double) {
@@ -2674,10 +2704,16 @@ class FirebaseRepository private constructor(private val context: Context) {
 
     suspend fun stopAndSaveTrip(): Result<Unit> {
         val trip = _activeTrip.value ?: return Result.failure(Exception("Nessun viaggio attivo"))
+
+        // La registrazione va chiusa e la cadenza ripristinata SUBITO, prima di
+        // qualunque controllo che possa uscire con un errore: altrimenti un
+        // salvataggio fallito lascerebbe il campionamento fitto attivo a tempo
+        // indeterminato, con il GPS a 5 secondi che divora la batteria.
+        _activeTrip.value = null
+        applyEffectiveTrackingInterval()
+
         val user = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
         val groupId = user.currentGroupId ?: return Result.failure(Exception("Nessun gruppo"))
-
-        _activeTrip.value = null
 
         if (trip.points.size < 2) return Result.success(Unit)
 
@@ -2770,6 +2806,17 @@ class FirebaseRepository private constructor(private val context: Context) {
          * non si scrive nulla e il chip GPS lavora molto meno.
          */
         const val DEFAULT_TRACKING_INTERVAL_SEC = 90
+
+        /**
+         * Cadenza dei fix mentre un viaggio e' in registrazione.
+         *
+         * L'intervallo scelto dall'utente e' pensato per il radar (di default 90
+         * secondi: a 50 km/h sono oltre un chilometro fra un punto e l'altro), ma
+         * una traccia campionata cosi' non e' una traccia, e' un segmento fra due
+         * punti lontanissimi. Durante un viaggio si campiona fitto e si torna
+         * all'intervallo dell'utente appena si ferma la registrazione.
+         */
+        const val TRIP_TRACKING_INTERVAL_SEC = 5
 
         /** Variazione minima di batteria che giustifica una scrittura su members/{uid}. */
         const val BATTERY_WRITE_DELTA = 5

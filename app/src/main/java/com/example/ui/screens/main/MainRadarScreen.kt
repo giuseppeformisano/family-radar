@@ -2240,6 +2240,14 @@ private fun SettingsPanel(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
+                Spacer(Modifier.height(Spacing.xs))
+                Text(
+                    text = "Non riguarda i viaggi: durante una registrazione la " +
+                        "posizione viene rilevata ogni pochi secondi, per avere una " +
+                        "traccia fedele al percorso.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 

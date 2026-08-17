@@ -2,7 +2,10 @@ name: Build APK
 
 on:
   push:
-    branches: [main]
+    # Il branch di default di questo repo e' master: con il solo "main" il
+    # workflow non e' mai scattato su push. Entrambi elencati cosi' regge anche
+    # a un'eventuale rinomina del branch.
+    branches: [master, main]
     paths:
       - "app/**"
       - "*.gradle.kts"

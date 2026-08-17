@@ -2254,23 +2254,59 @@ private fun SettingsPanel(
         // ---- Gruppo ----
         item {
             SettingsCard {
-                SectionHeader(
-                    title = currentGroup?.name ?: "Gruppo",
-                    subtitle = "$activeMemberCount membri attivi" +
-                        if (pendingMemberCount > 0) " · $pendingMemberCount in attesa" else "",
-                    icon = Icons.Default.Group,
-                    action = {
-                        OutlinedButton(
-                            onClick = onSwitchGroup,
-                            shape = RoundedCornerShape(Radius.sm),
-                            contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)
+                // Intestazione dedicata invece di SectionHeader: quello rende il
+                // titolo in titleMedium, lo stesso stile di "Privacy" o "Aspetto",
+                // e cosi' il NOME del gruppo si confondeva con le etichette delle
+                // sezioni. Qui l'etichetta fissa fa da soprattitolo e il nome
+                // prende un peso tipografico suo, da nome proprio.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "GRUPPO ATTIVO",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.height(Spacing.xxs))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
                         ) {
-                            Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
-                            Spacer(Modifier.width(Spacing.xs))
-                            Text("Cambia")
+                            Icon(
+                                Icons.Default.Group,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(Sizes.iconMd)
+                            )
+                            Text(
+                                text = currentGroup?.name ?: "Nessun gruppo",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
+                        Spacer(Modifier.height(Spacing.xxs))
+                        Text(
+                            text = "$activeMemberCount membri attivi" +
+                                if (pendingMemberCount > 0) " · $pendingMemberCount in attesa" else "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                )
+                    OutlinedButton(
+                        onClick = onSwitchGroup,
+                        shape = RoundedCornerShape(Radius.sm),
+                        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)
+                    ) {
+                        Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                        Spacer(Modifier.width(Spacing.xs))
+                        Text("Cambia")
+                    }
+                }
 
                 Spacer(Modifier.height(Spacing.md))
 

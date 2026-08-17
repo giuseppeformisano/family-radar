@@ -70,11 +70,12 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.random.Random
 
-/** I quattro pannelli del bottom sheet sopra la mappa. */
+/** I cinque pannelli del bottom sheet sopra la mappa. */
 private enum class RadarPanel(val label: String) {
     MEMBERS("Membri"),
     CHAT("Chat"),
     PLACES("Luoghi"),
+    TRIPS("Viaggi"),
     SETTINGS("Impostazioni")
 }
 
@@ -161,6 +162,9 @@ fun MainRadarScreen(
     val followPoint = followedLocation?.let { Pair(it.latitude, it.longitude) }
 
     val unreadChatCount by repository.unreadChatCount.collectAsState()
+    val groupTrips by repository.groupTrips.collectAsState()
+    val activeTrip by repository.activeTrip.collectAsState()
+    var selectedTripId by remember { mutableStateOf<String?>(null) }
 
     /** Centra la mappa su un punto e, di norma, chiude il pannello per lasciarla in vista. */
     fun focusMapOn(latitude: Double, longitude: Double, collapse: Boolean = true) {
@@ -302,6 +306,7 @@ fun MainRadarScreen(
                     pendingCount = if (isOwnerOrAdmin) pendingMembers.size else 0,
                     memberCount = activeMembers.size,
                     placeCount = places.size,
+                    tripCount = groupTrips.size,
                     onSelect = { openPanel(it) }
                 )
 
@@ -376,6 +381,27 @@ fun MainRadarScreen(
                                 }
                             )
 
+                            RadarPanel.TRIPS -> TripsPanel(
+                                trips = groupTrips,
+                                activeTrip = activeTrip,
+                                currentUserId = currentUserId,
+                                selectedTripId = selectedTripId,
+                                onTripSelected = { tripId ->
+                                    selectedTripId = if (selectedTripId == tripId) null else tripId
+                                    collapseSheet()
+                                },
+                                onDeleteTrip = { tripId ->
+                                    coroutineScope.launch { repository.deleteTrip(tripId) }
+                                },
+                                onStartTrip = { repository.startTrip() },
+                                onStopTrip = {
+                                    coroutineScope.launch {
+                                        repository.stopAndSaveTrip()
+                                        Toast.makeText(context, "Viaggio salvato", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            )
+
                             RadarPanel.SETTINGS -> SettingsPanel(
                                 currentUser = currentUser,
                                 currentGroup = currentGroup,
@@ -440,6 +466,9 @@ fun MainRadarScreen(
                 locations = locations,
                 places = places,
                 snapshots = snapshots,
+                trips = groupTrips,
+                activeTripPoints = activeTrip?.points ?: emptyList(),
+                selectedTripId = selectedTripId,
                 currentUserId = currentUserId,
                 targetFocusPoint = targetMapFocus,
                 focusToken = focusToken,
@@ -516,6 +545,18 @@ fun MainRadarScreen(
                         Toast.makeText(context, "Posizione non ancora disponibile", Toast.LENGTH_SHORT).show()
                     }
                 },
+                isRecording = activeTrip != null,
+                onToggleTrip = {
+                    if (activeTrip != null) {
+                        coroutineScope.launch {
+                            repository.stopAndSaveTrip()
+                            Toast.makeText(context, "Viaggio salvato", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        repository.startTrip()
+                        openPanel(RadarPanel.TRIPS)
+                    }
+                },
                 onAddPlace = { showAddPlaceDialog = true },
                 onTakeSnapshot = { showSnapshotSourceDialog = true },
                 // A sinistra e in basso: la colonna a destra e' gia' occupata dai
@@ -526,6 +567,67 @@ fun MainRadarScreen(
                     .navigationBarsPadding()
                     .padding(start = Spacing.lg, bottom = Sizes.sheetPeek + Spacing.lg)
             )
+
+            // Chip di registrazione viaggio attivo
+            AnimatedVisibility(
+                visible = activeTrip != null,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = Spacing.sm)
+            ) {
+                activeTrip?.let { trip ->
+                    val elapsedMs = System.currentTimeMillis() - trip.startTime
+                    val elapsedMin = (elapsedMs / 60000).toInt()
+                    val elapsedSec = ((elapsedMs / 1000) % 60).toInt()
+                    val km = trip.distanceMeters / 1000.0
+
+                    var tick by remember { mutableIntStateOf(0) }
+                    LaunchedEffect(Unit) {
+                        while (true) { delay(1000); tick++ }
+                    }
+
+                    GlassSurface(
+                        shape = RoundedCornerShape(Radius.pill),
+                        contentPadding = Spacing.xs
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs)
+                        ) {
+                            RadarPulseAnimation(
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = "REC  %02d:%02d  •  %.2f km".format(elapsedMin, elapsedSec, km),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Surface(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        repository.stopAndSaveTrip()
+                                        Toast.makeText(context, "Viaggio salvato", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(Radius.sm),
+                                color = MaterialTheme.colorScheme.error
+                            ) {
+                                Text(
+                                    text = "Stop",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             // Carosello membri: visibile solo con il pannello chiuso, così a sheet
             // aperto lo schermo non mostra due volte la stessa informazione.
@@ -842,6 +944,8 @@ private fun MapActionRail(
     followTargetName: String?,
     onToggleFollow: () -> Unit,
     onLocateSelf: () -> Unit,
+    isRecording: Boolean,
+    onToggleTrip: () -> Unit,
     onAddPlace: () -> Unit,
     onTakeSnapshot: () -> Unit,
     modifier: Modifier = Modifier
@@ -894,6 +998,14 @@ private fun MapActionRail(
             contentDescription = "Centra sulla mia posizione",
             onClick = onLocateSelf,
             testTag = "locate_self_fab"
+        )
+        RailButton(
+            icon = if (isRecording) Icons.Default.Stop else Icons.Default.DirectionsCar,
+            contentDescription = if (isRecording) "Stop viaggio" else "Registra viaggio",
+            onClick = onToggleTrip,
+            container = if (isRecording) MaterialTheme.colorScheme.error else RadarTheme.palette.gradients.glassTint,
+            content = if (isRecording) Color.White else MaterialTheme.colorScheme.onSurface,
+            testTag = "trip_record_fab"
         )
         RailButton(
             icon = Icons.Default.AddLocationAlt,
@@ -1017,6 +1129,7 @@ private fun PanelSelector(
     pendingCount: Int,
     memberCount: Int,
     placeCount: Int,
+    tripCount: Int,
     onSelect: (RadarPanel) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1048,6 +1161,13 @@ private fun PanelSelector(
             onClick = { onSelect(RadarPanel.PLACES) },
             icon = Icons.Default.Place,
             modifier = Modifier.testTag("nav_places_tab")
+        )
+        PillChip(
+            label = if (tripCount > 0) "${RadarPanel.TRIPS.label} ($tripCount)" else RadarPanel.TRIPS.label,
+            selected = selected == RadarPanel.TRIPS,
+            onClick = { onSelect(RadarPanel.TRIPS) },
+            icon = Icons.Default.Route,
+            modifier = Modifier.testTag("nav_trips_tab")
         )
         PillChip(
             label = RadarPanel.SETTINGS.label,
@@ -2450,5 +2570,157 @@ private fun formatShortTime(timestamp: Long): String {
         diff < 60_000 -> "adesso"
         diff < 3_600_000 -> "${diff / 60_000} min fa"
         else -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
+    }
+}
+
+// ============================================================================
+// PANNELLO: VIAGGI
+// ============================================================================
+
+@Composable
+private fun TripsPanel(
+    trips: List<Trip>,
+    activeTrip: ActiveTripState?,
+    currentUserId: String,
+    selectedTripId: String?,
+    onTripSelected: (String) -> Unit,
+    onDeleteTrip: (String) -> Unit,
+    onStartTrip: () -> Unit,
+    onStopTrip: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dateFormat = remember { java.text.SimpleDateFormat("dd MMM, HH:mm", java.util.Locale.ITALY) }
+
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = Spacing.lg, end = Spacing.lg,
+            top = Spacing.sm, bottom = Spacing.xxxl
+        ),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+    ) {
+        if (activeTrip != null) {
+            item {
+                val elapsedMs = System.currentTimeMillis() - activeTrip.startTime
+                val km = activeTrip.distanceMeters / 1000.0
+                var tick by remember { mutableIntStateOf(0) }
+                LaunchedEffect(Unit) { while (true) { delay(1000); tick++ } }
+
+                GlassSurface(shape = RoundedCornerShape(Radius.lg)) {
+                    Column(
+                        modifier = Modifier.padding(Spacing.md),
+                        verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+                        ) {
+                            RadarPulseAnimation(
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Text(
+                                "Registrazione in corso",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        Text(
+                            "%.2f km  •  %d punti  •  %d min".format(
+                                km, activeTrip.points.size, elapsedMs / 60000
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(
+                            onClick = onStopTrip,
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                            Spacer(Modifier.width(Spacing.xs))
+                            Text("Termina e salva")
+                        }
+                    }
+                }
+            }
+        } else {
+            item {
+                Button(
+                    onClick = onStartTrip,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.DirectionsCar, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                    Spacer(Modifier.width(Spacing.xs))
+                    Text("Inizia viaggio")
+                }
+            }
+        }
+
+        if (trips.isEmpty() && activeTrip == null) {
+            item {
+                EmptyState(
+                    icon = Icons.Default.Route,
+                    title = "Nessun viaggio",
+                    description = "I viaggi registrati appariranno qui"
+                )
+            }
+        }
+
+        items(trips, key = { it.id }) { trip ->
+            val isSelected = trip.id == selectedTripId
+            val isMine = trip.userId == currentUserId
+            val km = trip.distanceMeters / 1000.0
+            val durationMin = (trip.durationMs / 60000).toInt()
+
+            Surface(
+                onClick = { onTripSelected(trip.id) },
+                shape = RoundedCornerShape(Radius.lg),
+                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(Spacing.md),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
+                    Icon(
+                        Icons.Default.Route,
+                        contentDescription = null,
+                        tint = if (isSelected) MaterialTheme.colorScheme.primary
+                               else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(Sizes.iconMd)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            trip.userName,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            dateFormat.format(java.util.Date(trip.startTime)),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "%.1f km  •  %d min  •  %d punti".format(km, durationMin, trip.points.size),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (isMine) {
+                        IconButton(onClick = { onDeleteTrip(trip.id) }) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Elimina viaggio",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(Sizes.iconSm)
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

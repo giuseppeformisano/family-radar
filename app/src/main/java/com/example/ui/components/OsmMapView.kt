@@ -40,7 +40,10 @@ import com.example.model.PlaceCategory
 import com.example.model.PlaceSnapshot
 import com.example.model.PlaceSnapshotCluster
 import com.example.model.SavedPlace
+import com.example.model.Trip
+import com.example.model.TripPoint
 import com.example.model.UserLocation
+import org.osmdroid.views.overlay.Polyline
 import com.example.util.ImageUtils
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -82,6 +85,9 @@ fun OsmMapView(
     onMapTap: () -> Unit = {},
     /** Trascinamento manuale: chi chiama lo usa per interrompere il Follow Mode. */
     onUserPan: () -> Unit = {},
+    trips: List<Trip> = emptyList(),
+    activeTripPoints: List<TripPoint> = emptyList(),
+    selectedTripId: String? = null,
     onMemberSelected: (UserLocation) -> Unit,
     onPlaceSelected: (SavedPlace) -> Unit,
     onSnapshotClusterSelected: (PlaceSnapshotCluster) -> Unit = {},
@@ -110,6 +116,7 @@ fun OsmMapView(
     val memberOverlays = remember { mutableListOf<Overlay>() }
     val placeOverlays = remember { mutableListOf<Overlay>() }
     val snapshotOverlays = remember { mutableListOf<Overlay>() }
+    val tripOverlays = remember { mutableListOf<Overlay>() }
 
     // Compute snapshot clusters
     val snapshotClusters = remember(snapshots) {
@@ -120,6 +127,7 @@ fun OsmMapView(
     fun refreshMapOverlays(mapView: MapView) {
         try {
             mapView.overlays.clear()
+            mapView.overlays.addAll(tripOverlays)
             if (showPlaces) {
                 mapView.overlays.addAll(placeOverlays)
             }
@@ -169,6 +177,10 @@ fun OsmMapView(
         mapViewInstance?.let { mapView ->
             refreshMapOverlays(mapView)
         }
+    }
+
+    LaunchedEffect(trips, activeTripPoints, selectedTripId) {
+        mapViewInstance?.let { refreshMapOverlays(it) }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -366,6 +378,40 @@ fun OsmMapView(
                     } catch (me: Throwable) {
                         Log.w("OsmMapView", "Error building member marker: ${me.message}")
                     }
+                }
+
+                // 4. Trip overlays
+                tripOverlays.clear()
+                val tripColors = listOf(
+                    AndroidColor.rgb(99, 102, 241),
+                    AndroidColor.rgb(16, 185, 129),
+                    AndroidColor.rgb(239, 68, 68),
+                    AndroidColor.rgb(245, 158, 11),
+                    AndroidColor.rgb(59, 130, 246)
+                )
+                trips.forEachIndexed { idx, trip ->
+                    if (trip.points.size < 2) return@forEachIndexed
+                    val color = tripColors[idx % tripColors.size]
+                    val polyline = Polyline(mapView).apply {
+                        setPoints(trip.points.map { GeoPoint(it.latitude, it.longitude) })
+                        outlinePaint.color = if (trip.id == selectedTripId) color
+                            else AndroidColor.argb(160, AndroidColor.red(color), AndroidColor.green(color), AndroidColor.blue(color))
+                        outlinePaint.strokeWidth = if (trip.id == selectedTripId) 8f else 5f
+                        outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                        outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                    }
+                    tripOverlays.add(polyline)
+                }
+                if (activeTripPoints.size >= 2) {
+                    val activePoly = Polyline(mapView).apply {
+                        setPoints(activeTripPoints.map { GeoPoint(it.latitude, it.longitude) })
+                        outlinePaint.color = AndroidColor.rgb(239, 68, 68)
+                        outlinePaint.strokeWidth = 7f
+                        outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                        outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                        outlinePaint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(20f, 10f), 0f)
+                    }
+                    tripOverlays.add(activePoly)
                 }
 
                 // Apply active overlays

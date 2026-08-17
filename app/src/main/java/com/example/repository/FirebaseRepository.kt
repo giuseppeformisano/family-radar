@@ -24,6 +24,9 @@ import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.example.geofence.GeofenceHelper
 import com.example.model.*
+import com.example.model.Trip
+import com.example.model.TripPoint
+import com.example.model.ActiveTripState
 import com.example.util.ImageUtils
 import com.google.android.gms.location.*
 import com.google.firebase.FirebaseException
@@ -65,6 +68,7 @@ class FirebaseRepository private constructor(private val context: Context) {
     private var membersListener: ListenerRegistration? = null
     private var eventsListener: ListenerRegistration? = null
     private var snapshotsListener: ListenerRegistration? = null
+    private var tripsListener: ListenerRegistration? = null
     private var userDocListener: ListenerRegistration? = null
     private var groupsCollectionListener: ListenerRegistration? = null
     private val memberStatusListeners = java.util.concurrent.ConcurrentHashMap<String, ListenerRegistration>()
@@ -96,6 +100,12 @@ class FirebaseRepository private constructor(private val context: Context) {
 
     private val _activeGeofenceAlerts = MutableStateFlow<List<GeofenceEvent>>(emptyList())
     val activeGeofenceAlerts = _activeGeofenceAlerts.asStateFlow()
+
+    private val _groupTrips = MutableStateFlow<List<Trip>>(emptyList())
+    val groupTrips = _groupTrips.asStateFlow()
+
+    private val _activeTrip = MutableStateFlow<ActiveTripState?>(null)
+    val activeTrip = _activeTrip.asStateFlow()
 
     private val settingsPrefs = context.getSharedPreferences("family_radar_settings_prefs", Context.MODE_PRIVATE)
 
@@ -1295,6 +1305,9 @@ class FirebaseRepository private constructor(private val context: Context) {
         membersListener = null
         eventsListener = null
         snapshotsListener = null
+        tripsListener?.remove()
+        tripsListener = null
+        _groupTrips.value = emptyList()
     }
 
     private fun listenToGroupData(groupId: String) {
@@ -1630,6 +1643,41 @@ class FirebaseRepository private constructor(private val context: Context) {
                     }
                 }
 
+            // 7. Real-time trips listener
+            tripsListener = firestore.collection("groups").document(groupId)
+                .collection("trips")
+                .orderBy("startTime", Query.Direction.DESCENDING)
+                .limit(50)
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null) return@addSnapshotListener
+                    if (snapshot != null) {
+                        val list = snapshot.documents.mapNotNull { doc ->
+                            try {
+                                @Suppress("UNCHECKED_CAST")
+                                val rawPoints = doc.get("points") as? List<Map<String, Any>> ?: emptyList()
+                                val points = rawPoints.mapNotNull { p ->
+                                    val lat = (p["latitude"] as? Double) ?: return@mapNotNull null
+                                    val lon = (p["longitude"] as? Double) ?: return@mapNotNull null
+                                    val ts = (p["timestamp"] as? Long) ?: 0L
+                                    TripPoint(lat, lon, ts)
+                                }
+                                Trip(
+                                    id = doc.id,
+                                    groupId = groupId,
+                                    userId = doc.getString("userId") ?: "",
+                                    userName = doc.getString("userName") ?: "Membro",
+                                    startTime = doc.getLong("startTime") ?: 0L,
+                                    endTime = doc.getLong("endTime") ?: 0L,
+                                    durationMs = doc.getLong("durationMs") ?: 0L,
+                                    distanceMeters = doc.getDouble("distanceMeters") ?: 0.0,
+                                    points = points
+                                )
+                            } catch (ex: Exception) { null }
+                        }
+                        _groupTrips.value = list
+                    }
+                }
+
         } catch (e: Exception) {
             Log.w(TAG, "Error attaching Firestore listeners: ${e.message}")
         }
@@ -1800,6 +1848,11 @@ class FirebaseRepository private constructor(private val context: Context) {
             return
         }
         Log.d(TAG, "Fix trasmesso: ${gate.reason}")
+
+        // Registra punto se viaggio attivo
+        if (_activeTrip.value != null) {
+            recordTripPoint(location.latitude, location.longitude)
+        }
 
         lastSentLatitude = location.latitude
         lastSentLongitude = location.longitude
@@ -2384,6 +2437,122 @@ class FirebaseRepository private constructor(private val context: Context) {
     private fun generateJoinCode(): String {
         val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
         return (1..6).map { chars.random() }.joinToString("")
+    }
+
+    // ================== TRIP RECORDING ==================
+
+    fun startTrip() {
+        _activeTrip.value = ActiveTripState(startTime = System.currentTimeMillis())
+    }
+
+    private fun recordTripPoint(lat: Double, lon: Double) {
+        val current = _activeTrip.value ?: return
+        val lastLat = current.lastLat
+        val lastLon = current.lastLon
+
+        if (lastLat == 0.0 && lastLon == 0.0) {
+            _activeTrip.value = current.copy(
+                points = current.points + TripPoint(lat, lon, System.currentTimeMillis()),
+                lastLat = lat,
+                lastLon = lon
+            )
+            return
+        }
+
+        val results = FloatArray(1)
+        android.location.Location.distanceBetween(lastLat, lastLon, lat, lon, results)
+        val distFromLast = results[0].toDouble()
+
+        if (distFromLast < 15.0) return
+
+        _activeTrip.value = current.copy(
+            points = current.points + TripPoint(lat, lon, System.currentTimeMillis()),
+            lastLat = lat,
+            lastLon = lon,
+            distanceMeters = current.distanceMeters + distFromLast
+        )
+    }
+
+    suspend fun stopAndSaveTrip(): Result<Unit> {
+        val trip = _activeTrip.value ?: return Result.failure(Exception("Nessun viaggio attivo"))
+        val user = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
+        val groupId = user.currentGroupId ?: return Result.failure(Exception("Nessun gruppo"))
+
+        _activeTrip.value = null
+
+        if (trip.points.size < 2) return Result.success(Unit)
+
+        val simplified = rdpSimplify(trip.points, epsilon = 10.0)
+        val endTime = System.currentTimeMillis()
+
+        return try {
+            val pointMaps = simplified.map { p ->
+                hashMapOf("latitude" to p.latitude, "longitude" to p.longitude, "timestamp" to p.timestamp)
+            }
+            val data = hashMapOf(
+                "userId" to user.uid,
+                "userName" to user.displayName,
+                "groupId" to groupId,
+                "startTime" to trip.startTime,
+                "endTime" to endTime,
+                "durationMs" to (endTime - trip.startTime),
+                "distanceMeters" to trip.distanceMeters,
+                "points" to pointMaps
+            )
+            firestore?.collection("groups")?.document(groupId)
+                ?.collection("trips")?.add(data)?.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "stopAndSaveTrip failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteTrip(tripId: String): Result<Unit> {
+        val user = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
+        val groupId = user.currentGroupId ?: return Result.failure(Exception("Nessun gruppo"))
+        return try {
+            firestore?.collection("groups")?.document(groupId)
+                ?.collection("trips")?.document(tripId)?.delete()?.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private fun rdpSimplify(points: List<TripPoint>, epsilon: Double): List<TripPoint> {
+        if (points.size < 3) return points
+        val first = points.first()
+        val last = points.last()
+        var maxDist = 0.0
+        var maxIdx = 0
+        for (i in 1 until points.size - 1) {
+            val d = crossTrackDistance(points[i], first, last)
+            if (d > maxDist) { maxDist = d; maxIdx = i }
+        }
+        return if (maxDist > epsilon) {
+            val left = rdpSimplify(points.subList(0, maxIdx + 1), epsilon)
+            val right = rdpSimplify(points.subList(maxIdx, points.size), epsilon)
+            left.dropLast(1) + right
+        } else {
+            listOf(first, last)
+        }
+    }
+
+    private fun crossTrackDistance(point: TripPoint, start: TripPoint, end: TripPoint): Double {
+        val r = FloatArray(2)
+        android.location.Location.distanceBetween(start.latitude, start.longitude, end.latitude, end.longitude, r)
+        val lineLen = r[0].toDouble()
+        if (lineLen < 0.001) {
+            android.location.Location.distanceBetween(point.latitude, point.longitude, start.latitude, start.longitude, r)
+            return r[0].toDouble()
+        }
+        android.location.Location.distanceBetween(start.latitude, start.longitude, point.latitude, point.longitude, r)
+        val d = r[0].toDouble()
+        val brg12 = r[1].toDouble()
+        android.location.Location.distanceBetween(start.latitude, start.longitude, point.latitude, point.longitude, r)
+        val brg13 = r[1].toDouble()
+        return kotlin.math.abs(d * kotlin.math.sin(Math.toRadians(brg13 - brg12)))
     }
 
     companion object {

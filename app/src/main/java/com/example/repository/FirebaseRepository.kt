@@ -99,8 +99,31 @@ class FirebaseRepository private constructor(private val context: Context) {
 
     private val settingsPrefs = context.getSharedPreferences("family_radar_settings_prefs", Context.MODE_PRIVATE)
 
-    // Tracking frequency in seconds (default 30s) persisted
-    private val _trackingFrequencySeconds = MutableStateFlow(settingsPrefs.getInt("tracking_freq_sec", 30))
+    /**
+     * Porta il default da 30 a [DEFAULT_TRACKING_INTERVAL_SEC] secondi.
+     *
+     * Cambiare la costante non basterebbe: chi ha gia' usato l'app ha il 30
+     * scritto nelle preferenze e se lo terrebbe per sempre. La migrazione tocca
+     * solo chi non ha mai personalizzato il valore, cioe' chi ha esattamente il
+     * vecchio default; qualsiasi altra scelta esplicita viene rispettata.
+     */
+    private fun migrateTrackingIntervalDefault() {
+        if (settingsPrefs.getBoolean("tracking_freq_migrated_v2", false)) return
+        val stored = settingsPrefs.getInt("tracking_freq_sec", DEFAULT_TRACKING_INTERVAL_SEC)
+        val editor = settingsPrefs.edit().putBoolean("tracking_freq_migrated_v2", true)
+        if (stored == 30) {
+            editor.putInt("tracking_freq_sec", DEFAULT_TRACKING_INTERVAL_SEC)
+        }
+        editor.apply()
+    }
+
+    // Tracking frequency in seconds, persisted
+    private val _trackingFrequencySeconds = MutableStateFlow(
+        run {
+            migrateTrackingIntervalDefault()
+            settingsPrefs.getInt("tracking_freq_sec", DEFAULT_TRACKING_INTERVAL_SEC)
+        }
+    )
     val trackingFrequencySeconds = _trackingFrequencySeconds.asStateFlow()
 
     // Background sticky notification tracking (enabled by default) persisted
@@ -1351,9 +1374,16 @@ class FirebaseRepository private constructor(private val context: Context) {
                 }
 
             // 3. Real-time chat messages listener (Notifies for Type 2: Chat & Type 3: SOS)
+            //
+            // Limitato agli ultimi CHAT_HISTORY_LIMIT messaggi. Le immagini sono
+            // Base64 dentro i documenti, fino a 1 MB l'una: senza limite, aprire un
+            // gruppo con cronologia lunga significava scaricarla tutta a ogni
+            // riconnessione del listener. Si ordina DESCENDING per prendere i piu'
+            // recenti e si riporta la lista in ordine cronologico piu' sotto.
             messagesListener = firestore.collection("groups").document(groupId)
                 .collection("messages")
-                .orderBy("timestamp", Query.Direction.ASCENDING)
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .limit(CHAT_HISTORY_LIMIT)
                 .addSnapshotListener { snapshot, e ->
                     if (e != null) return@addSnapshotListener
                     if (snapshot != null) {
@@ -1433,8 +1463,11 @@ class FirebaseRepository private constructor(private val context: Context) {
                                 lastObservedMessageTimestamp = maxTime
                             }
                         }
-                        _currentGroupMessages.value = list
-                        recomputeUnreadChat(groupId, list)
+                        // La query e' DESCENDING: la UI vuole i messaggi dal piu'
+                        // vecchio al piu' recente, altrimenti la chat appare capovolta.
+                        val chronological = list.sortedBy { it.timestamp }
+                        _currentGroupMessages.value = chronological
+                        recomputeUnreadChat(groupId, chronological)
                     }
                 }
 
@@ -1696,22 +1729,27 @@ class FirebaseRepository private constructor(private val context: Context) {
     private var lastSentLatitude: Double? = null
     private var lastSentLongitude: Double? = null
     private var lastSentAtMillis: Long = 0L
+    private var lastSentBatteryLevel: Int? = null
 
     /** Esito della valutazione, tenuto esplicito per poterlo loggare in chiaro. */
-    private data class LocationGate(val shouldSend: Boolean, val reason: String)
+    private data class LocationGate(
+        val shouldSend: Boolean,
+        val reason: String,
+        val isHeartbeat: Boolean = false
+    )
 
     private fun evaluateLocationGate(location: UserLocation): LocationGate {
         val prevLat = lastSentLatitude
         val prevLon = lastSentLongitude
         if (prevLat == null || prevLon == null) {
-            return LocationGate(true, "primo fix")
+            return LocationGate(true, "primo fix", isHeartbeat = true)
         }
 
         val elapsed = System.currentTimeMillis() - lastSentAtMillis
         if (elapsed >= HEARTBEAT_INTERVAL_MS) {
             // Heartbeat: anche da fermi bisogna rinfrescare stato online, orario
             // e livello batteria, altrimenti agli altri risultiamo scomparsi.
-            return LocationGate(true, "heartbeat")
+            return LocationGate(true, "heartbeat", isHeartbeat = true)
         }
 
         if (location.speed > MOVING_SPEED_THRESHOLD_MS) {
@@ -1807,10 +1845,19 @@ class FirebaseRepository private constructor(private val context: Context) {
                 firestore.collection("groups").document(currentGroup)
                     .collection("locations").document(user.uid).set(locMap).await()
 
-                // Also update battery in members collection
-                firestore.collection("groups").document(currentGroup)
-                    .collection("members").document(user.uid)
-                    .update("batteryLevel", enrichedLocation.batteryLevel)
+                // La batteria vive anche in members/{uid} perche' la lista membri la
+                // mostra senza leggere le posizioni. Aggiornarla a ogni fix pero'
+                // raddoppiava le scritture per nulla: cambia di un punto ogni diversi
+                // minuti. Si scrive solo a variazione significativa o sull'heartbeat.
+                val previousBattery = lastSentBatteryLevel
+                val batteryChanged = previousBattery == null ||
+                    kotlin.math.abs(previousBattery - enrichedLocation.batteryLevel) >= BATTERY_WRITE_DELTA
+                if (batteryChanged || gate.isHeartbeat) {
+                    lastSentBatteryLevel = enrichedLocation.batteryLevel
+                    firestore.collection("groups").document(currentGroup)
+                        .collection("members").document(user.uid)
+                        .update("batteryLevel", enrichedLocation.batteryLevel)
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "updateLocation firestore error: ${e.message}")
@@ -2348,6 +2395,19 @@ class FirebaseRepository private constructor(private val context: Context) {
 
         /** Aggiornamento forzato anche da fermi, per tenere vivi stato online e batteria. */
         const val HEARTBEAT_INTERVAL_MS = 5 * 60_000L
+
+        /**
+         * Intervallo GPS di partenza. Novanta secondi: con il filtro anti-jitter
+         * la posizione a schermo resta reattiva quando ci si muove, ma da fermi
+         * non si scrive nulla e il chip GPS lavora molto meno.
+         */
+        const val DEFAULT_TRACKING_INTERVAL_SEC = 90
+
+        /** Variazione minima di batteria che giustifica una scrittura su members/{uid}. */
+        const val BATTERY_WRITE_DELTA = 5
+
+        /** Messaggi caricati dalla chat. Oltre, la cronologia costa piu' di quanto valga. */
+        const val CHAT_HISTORY_LIMIT = 50L
 
         private const val TAG = "FirebaseRepository"
         const val GOOGLE_SERVER_CLIENT_ID = "782024869586-as3i6548kt6l7t8nst4a5pr2ntfkca9v.apps.googleusercontent.com"

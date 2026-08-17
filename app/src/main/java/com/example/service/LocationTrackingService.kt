@@ -48,6 +48,10 @@ import java.util.Locale
  * Il servizio richiede quindi fix a cadenza piena e lascia filtrare al repository:
  * chiedere meno fix (`setMinUpdateDistanceMeters`) risparmierebbe poco e romperebbe
  * l'heartbeat, che serve proprio quando il dispositivo è immobile.
+ *
+ * Sulla batteria agisce invece cambiando la *precisione* richiesta: alta quando ci
+ * si muove, bilanciata dopo qualche minuto di immobilità (vedi [adjustPriorityFor]).
+ * È lì che sta il risparmio vero, non nel numero di fix.
  */
 class LocationTrackingService : Service() {
 
@@ -56,9 +60,15 @@ class LocationTrackingService : Service() {
     private lateinit var locationCallback: LocationCallback
     private lateinit var repository: FirebaseRepository
 
-    private var currentIntervalMs: Long = 30_000L
+    private var currentIntervalMs: Long = FirebaseRepository.DEFAULT_TRACKING_INTERVAL_SEC * 1000L
     private var lastFixAtMillis: Long = 0L
     private var lastKnownLocation: Location? = null
+
+    // Precisione adattiva: il GPS ad alta precisione e' la voce piu' pesante sulla
+    // batteria e da fermi non serve a nulla. Si scala a BALANCED dopo qualche
+    // minuto di immobilita' e si risale appena il dispositivo riparte.
+    private var currentPriority: Int = Priority.PRIORITY_HIGH_ACCURACY
+    private var stationarySinceMillis: Long = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -111,7 +121,8 @@ class LocationTrackingService : Service() {
     }
 
     private fun intervalMsFrom(intent: Intent?): Long {
-        val seconds = intent?.getIntExtra(EXTRA_INTERVAL_SEC, 30) ?: 30
+        val seconds = intent?.getIntExtra(EXTRA_INTERVAL_SEC, FirebaseRepository.DEFAULT_TRACKING_INTERVAL_SEC)
+            ?: FirebaseRepository.DEFAULT_TRACKING_INTERVAL_SEC
         return (seconds.coerceIn(5, 86_400) * 1000).toLong()
     }
 
@@ -134,7 +145,7 @@ class LocationTrackingService : Service() {
         try {
             fusedLocationClient.removeLocationUpdates(locationCallback)
 
-            val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, currentIntervalMs)
+            val request = LocationRequest.Builder(currentPriority, currentIntervalMs)
                 .setMinUpdateIntervalMillis(currentIntervalMs / 2)
                 .setWaitForAccurateLocation(false)
                 .setMaxUpdateDelayMillis(currentIntervalMs)
@@ -164,6 +175,8 @@ class LocationTrackingService : Service() {
         lastKnownLocation = location
         lastFixAtMillis = System.currentTimeMillis()
 
+        adjustPriorityFor(location)
+
         val (batteryLevel, isCharging) = getBatteryStatus()
 
         val userLocation = UserLocation(
@@ -179,6 +192,39 @@ class LocationTrackingService : Service() {
         )
 
         serviceScope.launch { repository.updateLocation(userLocation) }
+    }
+
+    /**
+     * Sceglie la precisione in base al movimento e riavvia la richiesta solo se
+     * cambia davvero: `requestLocationUpdates` stacca e riattacca il listener,
+     * farlo a ogni fix costerebbe piu' di quanto si risparmia.
+     */
+    private fun adjustPriorityFor(location: Location) {
+        val speed = if (location.hasSpeed()) location.speed else 0f
+        val now = System.currentTimeMillis()
+
+        val target = if (speed > FirebaseRepository.MOVING_SPEED_THRESHOLD_MS) {
+            stationarySinceMillis = 0L
+            Priority.PRIORITY_HIGH_ACCURACY
+        } else {
+            if (stationarySinceMillis == 0L) stationarySinceMillis = now
+            if (now - stationarySinceMillis >= STATIONARY_GRACE_MS) {
+                Priority.PRIORITY_BALANCED_POWER_ACCURACY
+            } else {
+                currentPriority
+            }
+        }
+
+        if (target != currentPriority) {
+            currentPriority = target
+            Log.d(
+                TAG,
+                "Precisione GPS: " +
+                    if (target == Priority.PRIORITY_HIGH_ACCURACY) "alta (in movimento)"
+                    else "bilanciata (fermo)"
+            )
+            requestLocationUpdates()
+        }
     }
 
     /**
@@ -200,7 +246,7 @@ class LocationTrackingService : Service() {
     private fun startNotificationRefreshLoop() {
         serviceScope.launch {
             while (isActive) {
-                delay(60_000L)
+                delay(NOTIFICATION_REFRESH_MS)
                 try {
                     val silentFor = System.currentTimeMillis() - lastFixAtMillis
                     if (lastKnownLocation != null && silentFor >= HEARTBEAT_SAFETY_MS) {
@@ -297,7 +343,13 @@ class LocationTrackingService : Service() {
         /** Oltre questo silenzio dal GPS ripresentiamo l'ultima posizione nota. */
         private const val HEARTBEAT_SAFETY_MS = 4 * 60_000L
 
-        fun start(context: Context, intervalSec: Int = 30) {
+        /** Quanto restare fermi prima di scalare la precisione del GPS. */
+        private const val STATIONARY_GRACE_MS = 3 * 60_000L
+
+        /** Cadenza di aggiornamento del testo della notifica persistente. */
+        private const val NOTIFICATION_REFRESH_MS = 5 * 60_000L
+
+        fun start(context: Context, intervalSec: Int = FirebaseRepository.DEFAULT_TRACKING_INTERVAL_SEC) {
             try {
                 val fine = ContextCompat.checkSelfPermission(
                     context, Manifest.permission.ACCESS_FINE_LOCATION

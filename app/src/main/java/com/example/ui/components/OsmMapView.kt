@@ -13,11 +13,8 @@ import android.graphics.drawable.Drawable
 import android.location.Location
 import android.util.Log
 import android.util.LruCache
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -31,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -431,43 +429,34 @@ fun OsmMapView(
         Column(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .padding(end = 16.dp)
-                // animateContentSize anima la variazione di altezza della Column
-                // senza applicare alcun clip → zero artefatti sul layer AndroidView.
-                .animateContentSize(animationSpec = tween(200)),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(end = 16.dp),
+            horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Layer toggle FAB
-            FloatingActionButton(
-                onClick = { isLayerMenuExpanded = !isLayerMenuExpanded },
-                modifier = Modifier
-                    .size(48.dp)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
-                    .testTag("expandable_layer_button"),
-                containerColor = if (isLayerMenuExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                contentColor = if (isLayerMenuExpanded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
-                shape = CircleShape
-            ) {
-                Icon(Icons.Default.Layers, contentDescription = "Gestione Layer Mappa", modifier = Modifier.size(24.dp))
-            }
+            // Espansione ORIZZONTALE senza alcun clip.
+            //
+            // Ogni modificatore che clippa (AnimatedVisibility con expand/shrink,
+            // animateContentSize, clipToBounds) crea un hardware layer che sopra
+            // l'AndroidView della mappa si compone male, lasciando il rettangolo
+            // trasparente. Qui: nessun clip, larghezza della Row SEMPRE costante,
+            // e quando il menu e' chiuso i pulsanti sono rimpiazzati da uno Spacer
+            // inerte -- che non intercetta i tocchi, quindi la mappa resta usabile.
+            val subAlpha by animateFloatAsState(
+                targetValue = if (isLayerMenuExpanded) 1f else 0f,
+                animationSpec = tween(200),
+                label = "layerSubAlpha"
+            )
 
-            // Solo fadeIn/fadeOut: nessun clip sul layer, nessun rettangolo
-            // trasparente sopra la mappa. animateContentSize sull'esterno
-            // anima l'altezza senza clipToBounds.
-            AnimatedVisibility(
-                visible = isLayerMenuExpanded,
-                enter = fadeIn(tween(200)),
-                exit = fadeOut(tween(200))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                if (subAlpha > 0.01f) {
                     IconButton(
                         onClick = { showMembers = !showMembers },
                         modifier = Modifier
                             .size(40.dp)
+                            .graphicsLayer { alpha = subAlpha }
                             .clip(CircleShape)
                             .background(if (showMembers) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
                             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
@@ -479,6 +468,7 @@ fun OsmMapView(
                         onClick = { showSnapshots = !showSnapshots },
                         modifier = Modifier
                             .size(40.dp)
+                            .graphicsLayer { alpha = subAlpha }
                             .clip(CircleShape)
                             .background(if (showSnapshots) Color(0xFFFFEDD5) else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
                             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
@@ -490,6 +480,7 @@ fun OsmMapView(
                         onClick = { showPlaces = !showPlaces },
                         modifier = Modifier
                             .size(40.dp)
+                            .graphicsLayer { alpha = subAlpha }
                             .clip(CircleShape)
                             .background(if (showPlaces) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
                             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
@@ -497,6 +488,24 @@ fun OsmMapView(
                     ) {
                         Icon(Icons.Default.Place, contentDescription = "Mostra Luoghi", tint = if (showPlaces) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                     }
+                } else {
+                    // 3 * 40dp + 2 * 8dp di gap: stessa larghezza dei pulsanti,
+                    // cosi' il FAB non si sposta mai. Lo Spacer lascia passare i tocchi.
+                    Spacer(Modifier.size(width = 136.dp, height = 40.dp))
+                }
+
+                // Layer toggle FAB
+                FloatingActionButton(
+                    onClick = { isLayerMenuExpanded = !isLayerMenuExpanded },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
+                        .testTag("expandable_layer_button"),
+                    containerColor = if (isLayerMenuExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                    contentColor = if (isLayerMenuExpanded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                    shape = CircleShape
+                ) {
+                    Icon(Icons.Default.Layers, contentDescription = "Gestione Layer Mappa", modifier = Modifier.size(24.dp))
                 }
             }
 

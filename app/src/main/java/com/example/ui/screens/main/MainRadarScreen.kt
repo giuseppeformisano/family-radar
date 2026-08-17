@@ -554,7 +554,6 @@ fun MainRadarScreen(
                         }
                     } else {
                         repository.startTrip()
-                        openPanel(RadarPanel.TRIPS)
                     }
                 },
                 onAddPlace = { showAddPlaceDialog = true },
@@ -568,26 +567,34 @@ fun MainRadarScreen(
                     .padding(start = Spacing.lg, bottom = Sizes.sheetPeek + Spacing.lg)
             )
 
-            // Chip di registrazione viaggio attivo
+            // Pill di registrazione: in basso a destra, sopra il bottom sheet.
+            // Solo pallino rosso pulsante + tempo + km; lo stop si fa dal pulsante
+            // rosso nel rail a sinistra, per non avere due comandi identici.
             AnimatedVisibility(
                 visible = activeTrip != null,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(top = Spacing.sm)
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = Spacing.lg, bottom = Sizes.sheetPeek + Spacing.lg)
             ) {
                 activeTrip?.let { trip ->
-                    val elapsedMs = System.currentTimeMillis() - trip.startTime
+                    // Il tempo trascorso deve derivare da uno *stato* letto in
+                    // composizione, altrimenti resta congelato al primo valore:
+                    // un contatore che incrementa senza essere letto non provoca
+                    // ricomposizione.
+                    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                    LaunchedEffect(trip.startTime) {
+                        while (true) {
+                            nowMs = System.currentTimeMillis()
+                            delay(1000)
+                        }
+                    }
+                    val elapsedMs = nowMs - trip.startTime
                     val elapsedMin = (elapsedMs / 60000).toInt()
                     val elapsedSec = ((elapsedMs / 1000) % 60).toInt()
                     val km = trip.distanceMeters / 1000.0
-
-                    var tick by remember { mutableIntStateOf(0) }
-                    LaunchedEffect(Unit) {
-                        while (true) { delay(1000); tick++ }
-                    }
 
                     GlassSurface(
                         shape = RoundedCornerShape(Radius.pill),
@@ -600,30 +607,13 @@ fun MainRadarScreen(
                         ) {
                             RadarPulseAnimation(
                                 color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(12.dp)
+                                modifier = Modifier.size(10.dp)
                             )
                             Text(
-                                text = "REC  %02d:%02d  •  %.2f km".format(elapsedMin, elapsedSec, km),
+                                text = "%02d:%02d  •  %.2f km".format(elapsedMin, elapsedSec, km),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            Surface(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        repository.stopAndSaveTrip()
-                                        Toast.makeText(context, "Viaggio salvato", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                shape = RoundedCornerShape(Radius.sm),
-                                color = MaterialTheme.colorScheme.error
-                            ) {
-                                Text(
-                                    text = "Stop",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs)
-                                )
-                            }
                         }
                     }
                 }
@@ -2601,10 +2591,17 @@ private fun TripsPanel(
     ) {
         if (activeTrip != null) {
             item {
-                val elapsedMs = System.currentTimeMillis() - activeTrip.startTime
+                var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                LaunchedEffect(activeTrip.startTime) {
+                    while (true) {
+                        nowMs = System.currentTimeMillis()
+                        delay(1000)
+                    }
+                }
+                val elapsedMs = nowMs - activeTrip.startTime
+                val elapsedMin = (elapsedMs / 60000).toInt()
+                val elapsedSec = ((elapsedMs / 1000) % 60).toInt()
                 val km = activeTrip.distanceMeters / 1000.0
-                var tick by remember { mutableIntStateOf(0) }
-                LaunchedEffect(Unit) { while (true) { delay(1000); tick++ } }
 
                 GlassSurface(shape = RoundedCornerShape(Radius.lg)) {
                     Column(
@@ -2626,8 +2623,8 @@ private fun TripsPanel(
                             )
                         }
                         Text(
-                            "%.2f km  •  %d punti  •  %d min".format(
-                                km, activeTrip.points.size, elapsedMs / 60000
+                            "%02d:%02d  •  %.2f km  •  %d punti".format(
+                                elapsedMin, elapsedSec, km, activeTrip.points.size
                             ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -108,6 +108,10 @@ dependencies {
   implementation(libs.play.services.location)
   implementation(libs.osmdroid.android)
 
+  // UI / motion layer
+  implementation(libs.lottie.compose)
+  implementation(libs.compose.shimmer)
+
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
   implementation(libs.googleid)

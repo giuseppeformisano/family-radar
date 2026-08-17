@@ -117,14 +117,13 @@ object RadarNotifier {
         ensureChannels(context)
 
         val childId = childNotificationId(groupId, senderId, timestamp)
+        val groupKey = chatGroupKey(groupId)
         val state = pendingChats.getOrPut(groupId) { PendingChat(mutableListOf(), mutableListOf()) }
         synchronized(state) {
             state.ids.add(childId)
             state.lines.add("$senderName: $body")
             while (state.lines.size > INBOX_MAX_LINES) state.lines.removeAt(0)
         }
-
-        val groupKey = chatGroupKey(groupId)
         val intent = contentIntent(
             context = context,
             destination = "CHAT",
@@ -144,10 +143,17 @@ object RadarNotifier {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setGroup(groupKey)
+            // Solo il riepilogo suona e mostra il banner. Senza questa riga
+            // alertano anche i figli: due avvisi per messaggio, che e' esattamente
+            // l'effetto "non sono raggruppate".
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
             .setContentIntent(intent)
             .build()
 
-        val count = state.ids.size
+        // Il conteggio non puo' basarsi solo sulla mappa in memoria: una push FCM
+        // puo' risvegliare un processo nuovo, azzerandola, mentre in status bar le
+        // notifiche precedenti ci sono ancora. Si prende il massimo fra i due.
+        val count = maxOf(state.ids.size, activeChildCount(context, groupKey) + 1)
         val summaryTitle = groupName?.takeIf { it.isNotBlank() } ?: "Chat del gruppo"
 
         // Niente `.apply { }` su NotificationCompat.Style: la classe espone un
@@ -173,6 +179,7 @@ object RadarNotifier {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setGroup(groupKey)
             .setGroupSummary(true)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
             .setContentIntent(
                 contentIntent(context, "CHAT", groupId, null, summaryNotificationId(groupId))
             )
@@ -190,10 +197,44 @@ object RadarNotifier {
         if (groupId.isBlank()) return
         val manager = NotificationManagerCompat.from(context)
         val state = pendingChats.remove(groupId)
+        val groupKey = chatGroupKey(groupId)
+
         runCatching {
             state?.ids?.forEach { manager.cancel(it) }
             manager.cancel(summaryNotificationId(groupId))
+
+            // Gli ID tracciati coprono solo le notifiche create da questo processo.
+            // Quelle rimaste da un processo precedente si ritrovano solo chiedendo
+            // al sistema cosa c'e' davvero in status bar.
+            forEachActiveInGroup(context, groupKey, includeSummary = true) { id ->
+                manager.cancel(id)
+            }
         }.onFailure { Log.w(TAG, "clearChatNotifications: ${it.message}") }
+    }
+
+    /** Quanti messaggi di questo gruppo sono ancora visibili in status bar (esclusa la riepilogativa). */
+    private fun activeChildCount(context: Context, groupKey: String): Int {
+        var count = 0
+        forEachActiveInGroup(context, groupKey, includeSummary = false) { count++ }
+        return count
+    }
+
+    private inline fun forEachActiveInGroup(
+        context: Context,
+        groupKey: String,
+        includeSummary: Boolean,
+        action: (Int) -> Unit
+    ) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        runCatching {
+            manager.activeNotifications.forEach { sbn ->
+                val notification = sbn.notification ?: return@forEach
+                if (notification.group != groupKey) return@forEach
+                val isSummary = (notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0
+                if (isSummary && !includeSummary) return@forEach
+                action(sbn.id)
+            }
+        }.onFailure { Log.w(TAG, "Lettura notifiche attive fallita: ${it.message}") }
     }
 
     // ------------------------------------------------------------------

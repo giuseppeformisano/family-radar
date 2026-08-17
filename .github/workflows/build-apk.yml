@@ -20,6 +20,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -61,9 +63,15 @@ jobs:
             gradle :app:assembleDebug
           fi
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: family-radar-apk
-          path: app/build/outputs/apk/**/*.apk
-          if-no-files-found: error
+      - name: Pubblica APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_TYPE: ${{ inputs.build_type || 'debug' }}
+        run: |
+          TAG="latest-${BUILD_TYPE}"
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          gh release create "$TAG" \
+            --prerelease \
+            --title "Latest ${BUILD_TYPE} build" \
+            --notes "Commit: ${{ github.sha }}" \
+            app/build/outputs/apk/**/*.apk

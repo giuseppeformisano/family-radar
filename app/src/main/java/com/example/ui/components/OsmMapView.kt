@@ -17,8 +17,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -396,18 +394,16 @@ fun OsmMapView(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Animated Sub-buttons (Membri, Istantanee, Luoghi)
+                // Solo dissolvenza, niente slide.
+                //
+                // AnimatedVisibility ritaglia il contenuto ai propri limiti quando
+                // la transizione comprende uno scorrimento: i pulsanti sembravano
+                // uscire da dietro un bordo rettangolare invisibile. Con la sola
+                // opacita' non c'e' nulla da ritagliare e l'apertura resta pulita.
                 AnimatedVisibility(
                     visible = isLayerMenuExpanded,
-                    enter = fadeIn(animationSpec = tween(180)) +
-                            slideInHorizontally(
-                                initialOffsetX = { fullWidth -> fullWidth / 3 },
-                                animationSpec = tween(180)
-                            ),
-                    exit = fadeOut(animationSpec = tween(140)) +
-                            slideOutHorizontally(
-                                targetOffsetX = { fullWidth -> fullWidth / 3 },
-                                animationSpec = tween(140)
-                            )
+                    enter = fadeIn(animationSpec = tween(220)),
+                    exit = fadeOut(animationSpec = tween(160))
                 ) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),

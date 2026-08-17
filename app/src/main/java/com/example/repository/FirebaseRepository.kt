@@ -169,8 +169,31 @@ class FirebaseRepository private constructor(private val context: Context) {
     fun setGlobalGhostMode(enabled: Boolean) {
         _isGlobalGhostMode.value = enabled
         settingsPrefs.edit().putBoolean("global_ghost_mode", enabled).apply()
+
         val currentUser = _currentUserState.value
         val currentGroup = currentUser?.currentGroupId
+
+        // Aggiornamento ottimistico del flow locale PRIMA di ripubblicare:
+        // updateLocation legge isTrackingActive da qui, e la scrittura su
+        // Firestore col rimbalzo del listener e' piu' lenta del fix che stiamo
+        // per spingere. Senza questa riga il fix verrebbe scartato dal controllo
+        // sul tracking di gruppo, ancora fermo al valore precedente.
+        if (currentUser != null) {
+            _currentGroupMembers.value = _currentGroupMembers.value.map {
+                if (it.userId == currentUser.uid) it.copy(isTrackingActive = !enabled) else it
+            }
+        }
+
+        // Spegnendo il ghost mode il documento di posizione e' stato cancellato,
+        // ma il gate ricorda ancora l'ultimo fix inviato prima dell'accensione:
+        // da fermi lo scarterebbe come "sotto soglia" e si resterebbe invisibili
+        // fino all'heartbeat. Azzerare il gate e ripubblicare subito l'ultima
+        // posizione nota fa ricomparire l'utente all'istante.
+        if (!enabled) {
+            resetLocationGate()
+            pushLastKnownLocationNow()
+        }
+
         if (currentUser != null && !currentGroup.isNullOrBlank() && firestore != null) {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
@@ -209,6 +232,16 @@ class FirebaseRepository private constructor(private val context: Context) {
             _currentGroupMembers.value = _currentGroupMembers.value.map {
                 if (it.userId == currentUser.uid) it.copy(isTrackingActive = isTrackingActive) else it
             }
+
+            // Stesso problema del ghost mode: disattivando si cancella il
+            // documento di posizione, e riattivando da fermi il gate scarterebbe
+            // il fix come "sotto soglia" lasciando il membro invisibile fino
+            // all'heartbeat.
+            if (isTrackingActive) {
+                resetLocationGate()
+                pushLastKnownLocationNow()
+            }
+
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "updateMemberGroupTracking failed: ${e.message}")
@@ -1757,6 +1790,64 @@ class FirebaseRepository private constructor(private val context: Context) {
             Log.d(TAG, "Silent in-app location tracking active (no notification)")
         } catch (e: Exception) {
             Log.w(TAG, "Failed to start silent location updates: ${e.message}")
+        }
+    }
+
+    /**
+     * Azzera il gate anti-drift: il fix successivo verra' trattato come "primo
+     * fix" e scritto senza filtri.
+     *
+     * Serve ogni volta che la posizione viene RIMOSSA da Firestore pur restando
+     * il dispositivo fermo (uscita dal ghost mode, riattivazione del tracking di
+     * gruppo). Senza questo azzeramento il gate confronta il nuovo fix con
+     * l'ultimo inviato *prima* dello spegnimento: da fermi lo spostamento e'
+     * sotto i 18 m e il fix viene scartato, quindi il documento cancellato non
+     * viene mai riscritto e si resta invisibili sulla mappa fino all'heartbeat
+     * dei 5 minuti.
+     */
+    private fun resetLocationGate() {
+        lastSentLatitude = null
+        lastSentLongitude = null
+        lastSentAtMillis = 0L
+        lastSentBatteryLevel = null
+    }
+
+    /**
+     * Ripubblica subito l'ultima posizione nota, senza aspettare il prossimo
+     * tick del tracking (che con intervalli lunghi puo' essere parecchi secondi).
+     * Va usata dopo [resetLocationGate], altrimenti il gate scarta comunque il fix.
+     */
+    private fun pushLastKnownLocationNow() {
+        try {
+            val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (!hasFine && !hasCoarse) return
+
+            if (fusedLocationClient == null) {
+                fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+            }
+
+            fusedLocationClient?.lastLocation?.addOnSuccessListener { loc ->
+                if (loc != null && loc.latitude != 0.0 && loc.longitude != 0.0) {
+                    val (battery, isCharging) = getBatteryStatus()
+                    val uLoc = UserLocation(
+                        latitude = loc.latitude,
+                        longitude = loc.longitude,
+                        accuracy = loc.accuracy,
+                        speed = if (loc.hasSpeed()) loc.speed else 0.0f,
+                        altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
+                        batteryLevel = battery,
+                        isCharging = isCharging,
+                        timestamp = System.currentTimeMillis(),
+                        isOnline = true
+                    )
+                    CoroutineScope(Dispatchers.IO).launch {
+                        updateLocation(uLoc)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "pushLastKnownLocationNow failed: ${e.message}")
         }
     }
 

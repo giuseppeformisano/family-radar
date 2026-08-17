@@ -232,7 +232,13 @@ fun MainRadarScreen(
         when (target.destination.uppercase()) {
             "CHAT" -> { panel = RadarPanel.CHAT; sheetState.expand() }
             "ALERT" -> { panel = RadarPanel.MEMBERS; sheetState.expand() }
-            "MEMBERS", "SETTINGS" -> { panel = RadarPanel.SETTINGS; sheetState.expand() }
+            // MEMBERS e SETTINGS sono destinazioni diverse e vanno tenute
+            // separate: le notifiche join_request e low_battery hanno
+            // destination MEMBERS, e le azioni Approva/Rifiuta vivono nel
+            // pannello Membri. Mandandole a SETTINGS l'admin apriva un pannello
+            // dove la richiesta non e' nemmeno mostrata.
+            "MEMBERS" -> { panel = RadarPanel.MEMBERS; sheetState.expand() }
+            "SETTINGS" -> { panel = RadarPanel.SETTINGS; sheetState.expand() }
             "MAP" -> {
                 sheetState.partialExpand()
                 if (target.latitude != null && target.longitude != null &&
@@ -1135,6 +1141,10 @@ private fun PanelSelector(
             selected = selected == RadarPanel.MEMBERS,
             onClick = { onSelect(RadarPanel.MEMBERS) },
             icon = Icons.Default.Group,
+            // Il badge delle richieste in attesa sta qui e non su Impostazioni:
+            // Approva/Rifiuta sono in questo pannello. Sull'altro chip indicava
+            // un pannello dove non c'e' niente da approvare.
+            badgeCount = pendingCount,
             modifier = Modifier.testTag("nav_members_tab")
         )
         PillChip(
@@ -1164,7 +1174,6 @@ private fun PanelSelector(
             selected = selected == RadarPanel.SETTINGS,
             onClick = { onSelect(RadarPanel.SETTINGS) },
             icon = Icons.Default.Settings,
-            badgeCount = pendingCount,
             modifier = Modifier.testTag("nav_settings_tab")
         )
     }

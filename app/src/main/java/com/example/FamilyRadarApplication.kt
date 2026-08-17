@@ -3,6 +3,7 @@ package com.example
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import com.example.util.ErrorLogger
 import com.google.firebase.FirebaseApp
 import org.osmdroid.config.Configuration
 import java.io.File
@@ -18,6 +19,12 @@ class FamilyRadarApplication : Application() {
             }
         } catch (t: Throwable) {
             Log.w("FamilyRadarApp", "FirebaseApp init warning: ${t.message}")
+        }
+
+        try {
+            ErrorLogger.install(this)
+        } catch (t: Throwable) {
+            Log.w("FamilyRadarApp", "ErrorLogger init warning: ${t.message}")
         }
 
         try {

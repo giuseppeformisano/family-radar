@@ -1,0 +1,2153 @@
+package com.example.repository
+
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.location.Location
+import android.net.Uri
+import android.os.BatteryManager
+import android.os.Looper
+import android.util.Log
+import androidx.core.content.ContextCompat
+import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.example.geofence.GeofenceHelper
+import com.example.model.*
+import com.example.util.ImageUtils
+import com.google.android.gms.location.*
+import com.google.firebase.FirebaseException
+import com.google.firebase.auth.*
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.Query
+import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import java.util.UUID
+import java.util.concurrent.TimeUnit
+import kotlin.random.Random
+
+class FirebaseRepository private constructor(private val context: Context) {
+
+    private val auth: FirebaseAuth? = try {
+        FirebaseAuth.getInstance()
+    } catch (e: Exception) {
+        Log.w(TAG, "FirebaseAuth not initialized: ${e.message}")
+        null
+    }
+
+    private val firestore: FirebaseFirestore? = try {
+        FirebaseFirestore.getInstance()
+    } catch (e: Exception) {
+        Log.w(TAG, "FirebaseFirestore not initialized: ${e.message}")
+        null
+    }
+
+    // Active Firestore listener registrations for cleanup
+    private var locationsListener: ListenerRegistration? = null
+    private var placesListener: ListenerRegistration? = null
+    private var messagesListener: ListenerRegistration? = null
+    private var membersListener: ListenerRegistration? = null
+    private var eventsListener: ListenerRegistration? = null
+    private var snapshotsListener: ListenerRegistration? = null
+    private var userDocListener: ListenerRegistration? = null
+    private var groupsCollectionListener: ListenerRegistration? = null
+    private val memberStatusListeners = java.util.concurrent.ConcurrentHashMap<String, ListenerRegistration>()
+    private val memberGroupsMap = java.util.concurrent.ConcurrentHashMap<String, GroupData>()
+    private var lastObservedEventTimestamp: Long = System.currentTimeMillis()
+    private var lastObservedMessageTimestamp: Long = System.currentTimeMillis()
+
+    // Reactive states
+    private val _currentUserState = MutableStateFlow<UserData?>(null)
+    val currentUserState = _currentUserState.asStateFlow()
+
+    private val _userGroupsState = MutableStateFlow<List<GroupData>>(emptyList())
+    val userGroupsState = _userGroupsState.asStateFlow()
+
+    private val _currentGroupLocations = MutableStateFlow<List<UserLocation>>(emptyList())
+    val currentGroupLocations = _currentGroupLocations.asStateFlow()
+
+    private val _currentGroupPlaces = MutableStateFlow<List<SavedPlace>>(emptyList())
+    val currentGroupPlaces = _currentGroupPlaces.asStateFlow()
+
+    private val _currentGroupSnapshots = MutableStateFlow<List<PlaceSnapshot>>(emptyList())
+    val currentGroupSnapshots = _currentGroupSnapshots.asStateFlow()
+
+    private val _currentGroupMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
+    val currentGroupMessages = _currentGroupMessages.asStateFlow()
+
+    private val _currentGroupMembers = MutableStateFlow<List<GroupMember>>(emptyList())
+    val currentGroupMembers = _currentGroupMembers.asStateFlow()
+
+    private val _activeGeofenceAlerts = MutableStateFlow<List<GeofenceEvent>>(emptyList())
+    val activeGeofenceAlerts = _activeGeofenceAlerts.asStateFlow()
+
+    private val settingsPrefs = context.getSharedPreferences("family_radar_settings_prefs", Context.MODE_PRIVATE)
+
+    // Tracking frequency in seconds (default 30s) persisted
+    private val _trackingFrequencySeconds = MutableStateFlow(settingsPrefs.getInt("tracking_freq_sec", 30))
+    val trackingFrequencySeconds = _trackingFrequencySeconds.asStateFlow()
+
+    // Background sticky notification tracking (enabled by default) persisted
+    private val _isBackgroundTrackingEnabled = MutableStateFlow(settingsPrefs.getBoolean("bg_tracking_enabled", true))
+    val isBackgroundTrackingEnabled = _isBackgroundTrackingEnabled.asStateFlow()
+
+    // Global Ghost mode (default false) persisted
+    private val _isGlobalGhostMode = MutableStateFlow(settingsPrefs.getBoolean("global_ghost_mode", false))
+    val isGlobalGhostMode = _isGlobalGhostMode.asStateFlow()
+
+    fun setTrackingFrequencySeconds(seconds: Int) {
+        val clamped = seconds.coerceIn(5, 86400)
+        _trackingFrequencySeconds.value = clamped
+        settingsPrefs.edit().putInt("tracking_freq_sec", clamped).apply()
+        if (_isBackgroundTrackingEnabled.value) {
+            com.example.service.LocationTrackingService.updateInterval(context, clamped)
+        }
+        if (silentLocationCallback != null) {
+            startSilentLocationTracking()
+        }
+    }
+
+    fun setBackgroundTrackingEnabled(enabled: Boolean) {
+        _isBackgroundTrackingEnabled.value = enabled
+        settingsPrefs.edit().putBoolean("bg_tracking_enabled", enabled).apply()
+        if (enabled) {
+            com.example.service.LocationTrackingService.start(context, _trackingFrequencySeconds.value)
+        } else {
+            com.example.service.LocationTrackingService.stop(context)
+        }
+    }
+
+    fun setGlobalGhostMode(enabled: Boolean) {
+        _isGlobalGhostMode.value = enabled
+        settingsPrefs.edit().putBoolean("global_ghost_mode", enabled).apply()
+        val currentUser = _currentUserState.value
+        val currentGroup = currentUser?.currentGroupId
+        if (currentUser != null && !currentGroup.isNullOrBlank() && firestore != null) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    firestore.collection("groups").document(currentGroup)
+                        .collection("members").document(currentUser.uid)
+                        .update("isTrackingActive", !enabled)
+                        .await()
+                    if (enabled) {
+                        firestore.collection("groups").document(currentGroup)
+                            .collection("locations").document(currentUser.uid)
+                            .delete()
+                            .await()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "setGlobalGhostMode update error: ${e.message}")
+                }
+            }
+        }
+    }
+
+    suspend fun updateMemberGroupTracking(groupId: String, isTrackingActive: Boolean): Result<Unit> {
+        val currentUser = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
+        return try {
+            if (firestore != null) {
+                firestore.collection("groups").document(groupId)
+                    .collection("members").document(currentUser.uid)
+                    .update("isTrackingActive", isTrackingActive)
+                    .await()
+                if (!isTrackingActive) {
+                    firestore.collection("groups").document(groupId)
+                        .collection("locations").document(currentUser.uid)
+                        .delete()
+                        .await()
+                }
+            }
+            _currentGroupMembers.value = _currentGroupMembers.value.map {
+                if (it.userId == currentUser.uid) it.copy(isTrackingActive = isTrackingActive) else it
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "updateMemberGroupTracking failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateGroupAccessPolicy(groupId: String, requiresApproval: Boolean): Result<Unit> {
+        return try {
+            if (firestore != null) {
+                firestore.collection("groups").document(groupId)
+                    .update("requiresApproval", requiresApproval)
+                    .await()
+            }
+            _userGroupsState.value = _userGroupsState.value.map {
+                if (it.id == groupId) it.copy(requiresApproval = requiresApproval) else it
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "updateGroupAccessPolicy failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    fun clearCurrentGroupSelection() {
+        val current = _currentUserState.value
+        if (current != null) {
+            _currentUserState.value = current.copy(currentGroupId = null)
+        }
+        cleanupGroupListeners()
+    }
+
+    // Deep link navigation target from notifications
+    private val _deepLinkTarget = MutableStateFlow<DeepLinkTarget?>(null)
+    val deepLinkTarget = _deepLinkTarget.asStateFlow()
+
+    fun setDeepLinkTarget(target: DeepLinkTarget?) {
+        _deepLinkTarget.value = target
+    }
+
+    fun consumeDeepLinkTarget() {
+        _deepLinkTarget.value = null
+    }
+
+    private var fusedLocationClient: FusedLocationProviderClient? = null
+    private var silentLocationCallback: LocationCallback? = null
+
+    init {
+        // Check if there is an existing signed-in Firebase user
+        val fbUser = auth?.currentUser
+        if (fbUser != null) {
+            val userData = UserData(
+                uid = fbUser.uid,
+                displayName = fbUser.displayName ?: fbUser.email?.substringBefore("@") ?: "Utente Radar",
+                email = fbUser.email,
+                photoUrl = fbUser.photoUrl?.toString(),
+                isAnonymous = fbUser.isAnonymous,
+                fcmToken = getStoredFcmToken()
+            )
+            _currentUserState.value = userData
+            startUserRealtimeSync(userData.uid)
+        } else {
+            _currentUserState.value = null
+            _userGroupsState.value = emptyList()
+        }
+
+        // Fetch current FCM token if available
+        fetchAndSyncFcmToken()
+    }
+
+    fun getStoredFcmToken(): String? {
+        return try {
+            val prefs = context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+            prefs.getString("fcm_token", null)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun fetchAndSyncFcmToken() {
+        try {
+            FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+                if (!token.isNullOrBlank()) {
+                    Log.d(TAG, "Fetched FCM token: $token")
+                    updateFcmToken(token)
+                }
+            }.addOnFailureListener { e ->
+                Log.w(TAG, "Failed to get FCM token: ${e.message}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "FirebaseMessaging not available: ${e.message}")
+        }
+    }
+
+    fun updateFcmToken(token: String) {
+        try {
+            val prefs = context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+            prefs.edit().putString("fcm_token", token).apply()
+
+            val currentUser = _currentUserState.value
+            if (currentUser != null) {
+                _currentUserState.value = currentUser.copy(fcmToken = token)
+                if (firestore != null) {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            firestore.collection("users").document(currentUser.uid)
+                                .update("fcmToken", token)
+                                .await()
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to update FCM token in Firestore: ${e.message}")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating FCM token: ${e.message}")
+        }
+    }
+
+    fun setTrackingFrequency(seconds: Int) {
+        _trackingFrequencySeconds.value = seconds
+    }
+
+    fun setBackgroundTracking(enabled: Boolean) {
+        _isBackgroundTrackingEnabled.value = enabled
+    }
+
+    // ================== AUTHENTICATION ==================
+
+    suspend fun signInWithGoogle(activityContext: Context): Result<UserData> {
+        return try {
+            val credentialManager = CredentialManager.create(activityContext)
+            
+            val signInWithGoogleOption = GetSignInWithGoogleOption.Builder(GOOGLE_SERVER_CLIENT_ID)
+                .build()
+
+            val request = GetCredentialRequest.Builder()
+                .addCredentialOption(signInWithGoogleOption)
+                .build()
+
+            val response = credentialManager.getCredential(activityContext, request)
+            val credential = response.credential
+
+            if (credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                val idToken = googleIdTokenCredential.idToken
+
+                if (auth != null) {
+                    val authCredential = GoogleAuthProvider.getCredential(idToken, null)
+                    val authResult = auth.signInWithCredential(authCredential).await()
+                    val fbUser = authResult.user
+                    val user = UserData(
+                        uid = fbUser?.uid ?: UUID.randomUUID().toString(),
+                        displayName = fbUser?.displayName ?: googleIdTokenCredential.displayName ?: "Utente Google",
+                        email = fbUser?.email,
+                        phoneNumber = fbUser?.phoneNumber,
+                        photoUrl = fbUser?.photoUrl?.toString() ?: googleIdTokenCredential.profilePictureUri?.toString(),
+                        isAnonymous = false
+                    )
+                    _currentUserState.value = user
+                    syncUserWithFirestore(user)
+                    loadUserGroupsFromFirestore(user.uid)
+                    Result.success(user)
+                } else {
+                    val user = UserData(
+                        uid = googleIdTokenCredential.id,
+                        displayName = googleIdTokenCredential.displayName ?: "Utente Google",
+                        email = googleIdTokenCredential.id,
+                        photoUrl = googleIdTokenCredential.profilePictureUri?.toString(),
+                        isAnonymous = false
+                    )
+                    _currentUserState.value = user
+                    syncUserWithFirestore(user)
+                    Result.success(user)
+                }
+            } else {
+                Result.failure(IllegalStateException("Tipo di credenziale Google non riconosciuto"))
+            }
+        } catch (e: GetCredentialCancellationException) {
+            Log.d(TAG, "Google Sign-In cancelled by user")
+            Result.failure(Exception("Accesso Google annullato"))
+        } catch (e: NoCredentialException) {
+            Log.w(TAG, "No Google accounts available on this device: ${e.message}")
+            Result.failure(Exception("Nessun account Google trovato sul dispositivo/emulatore. Aggiungi un account Google nelle impostazioni di Android o usa l'accesso con Numero di Telefono o Email."))
+        } catch (e: Exception) {
+            Log.e(TAG, "signInWithGoogle failed: ${e.message}", e)
+            val message = when {
+                e.message?.contains("16:") == true -> "Configurazione Google Sign-In non completata. Verifica che l'account Google o l'impronta SHA-1 siano configurati nella console Firebase, oppure accedi con Telefono/Email."
+                e.message?.contains("10:") == true -> "Errore di configurazione Google Play Services (Developer Error)."
+                e.localizedMessage.isNullOrBlank() -> "Errore durante l'accesso Google: ${e.javaClass.simpleName}"
+                else -> e.localizedMessage
+            }
+            Result.failure(Exception(message))
+        }
+    }
+
+    fun sendPhoneVerificationCode(
+        activity: Activity,
+        phoneNumber: String,
+        onCodeSent: (verificationId: String) -> Unit,
+        onVerificationCompleted: (UserData) -> Unit,
+        onVerificationFailed: (Exception) -> Unit
+    ) {
+        if (auth == null) {
+            onVerificationFailed(IllegalStateException("FirebaseAuth non inizializzato"))
+            return
+        }
+
+        val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+            override fun onVerificationCompleted(credential: PhoneAuthCredential) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val authResult = auth.signInWithCredential(credential).await()
+                        val fbUser = authResult.user
+                        val user = UserData(
+                            uid = fbUser?.uid ?: UUID.randomUUID().toString(),
+                            displayName = fbUser?.displayName ?: "Utente ($phoneNumber)",
+                            phoneNumber = phoneNumber,
+                            isAnonymous = false
+                        )
+                        _currentUserState.value = user
+                        syncUserWithFirestore(user)
+                        loadUserGroupsFromFirestore(user.uid)
+                        onVerificationCompleted(user)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Auto-verification sign in failed: ${e.message}")
+                        onVerificationFailed(e)
+                    }
+                }
+            }
+
+            override fun onVerificationFailed(e: FirebaseException) {
+                Log.e(TAG, "Phone verification failed: ${e.message}", e)
+                onVerificationFailed(e)
+            }
+
+            override fun onCodeSent(
+                verificationId: String,
+                token: PhoneAuthProvider.ForceResendingToken
+            ) {
+                Log.d(TAG, "Phone code sent. verificationId: $verificationId")
+                onCodeSent(verificationId)
+            }
+        }
+
+        val options = PhoneAuthOptions.newBuilder(auth)
+            .setPhoneNumber(phoneNumber)
+            .setTimeout(60L, TimeUnit.SECONDS)
+            .setActivity(activity)
+            .setCallbacks(callbacks)
+            .build()
+
+        PhoneAuthProvider.verifyPhoneNumber(options)
+    }
+
+    suspend fun verifyPhoneCodeAndSignIn(
+        verificationId: String,
+        smsCode: String,
+        displayName: String = "",
+        phoneNumber: String = ""
+    ): Result<UserData> {
+        return try {
+            if (auth != null) {
+                val credential = PhoneAuthProvider.getCredential(verificationId, smsCode)
+                val authResult = auth.signInWithCredential(credential).await()
+                val fbUser = authResult.user
+                val finalName = displayName.ifBlank {
+                    fbUser?.displayName ?: if (phoneNumber.isNotBlank()) "Utente ($phoneNumber)" else "Utente Telefono"
+                }
+                val user = UserData(
+                    uid = fbUser?.uid ?: UUID.randomUUID().toString(),
+                    displayName = finalName,
+                    phoneNumber = fbUser?.phoneNumber ?: phoneNumber,
+                    isAnonymous = false
+                )
+                _currentUserState.value = user
+                syncUserWithFirestore(user)
+                loadUserGroupsFromFirestore(user.uid)
+                Result.success(user)
+            } else {
+                Result.failure(IllegalStateException("FirebaseAuth non inizializzato"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "verifyPhoneCodeAndSignIn failed: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun signInWithEmail(email: String, pass: String): Result<UserData> {
+        return try {
+            if (auth != null) {
+                val authResult = auth.signInWithEmailAndPassword(email, pass).await()
+                val fbUser = authResult.user
+                val user = UserData(
+                    uid = fbUser?.uid ?: UUID.randomUUID().toString(),
+                    displayName = fbUser?.displayName ?: email.substringBefore("@"),
+                    email = email,
+                    isAnonymous = false
+                )
+                _currentUserState.value = user
+                syncUserWithFirestore(user)
+                loadUserGroupsFromFirestore(user.uid)
+                Result.success(user)
+            } else {
+                val user = UserData(
+                    uid = "uid_${email.hashCode()}",
+                    displayName = email.substringBefore("@"),
+                    email = email,
+                    isAnonymous = false
+                )
+                _currentUserState.value = user
+                Result.success(user)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "signInWithEmail failed: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun signUpWithEmail(email: String, pass: String, displayName: String): Result<UserData> {
+        return try {
+            if (auth != null) {
+                val authResult = auth.createUserWithEmailAndPassword(email, pass).await()
+                val fbUser = authResult.user
+                val finalName = displayName.ifBlank { email.substringBefore("@") }
+                val user = UserData(
+                    uid = fbUser?.uid ?: UUID.randomUUID().toString(),
+                    displayName = finalName,
+                    email = email,
+                    isAnonymous = false
+                )
+                _currentUserState.value = user
+                syncUserWithFirestore(user)
+                loadUserGroupsFromFirestore(user.uid)
+                Result.success(user)
+            } else {
+                val user = UserData(
+                    uid = "uid_${email.hashCode()}",
+                    displayName = displayName.ifBlank { email.substringBefore("@") },
+                    email = email,
+                    isAnonymous = false
+                )
+                _currentUserState.value = user
+                Result.success(user)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "signUpWithEmail failed: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun signInAnonymously(nickname: String): Result<UserData> {
+        return try {
+            val validName = nickname.ifBlank { "Membro ${Random.nextInt(100, 999)}" }
+            if (auth != null) {
+                val authResult = auth.signInAnonymously().await()
+                val user = UserData(
+                    uid = authResult.user?.uid ?: UUID.randomUUID().toString(),
+                    displayName = validName,
+                    isAnonymous = true
+                )
+                _currentUserState.value = user
+                syncUserWithFirestore(user)
+                loadUserGroupsFromFirestore(user.uid)
+                Result.success(user)
+            } else {
+                val user = UserData(
+                    uid = "anon_${UUID.randomUUID().toString().take(8)}",
+                    displayName = validName,
+                    isAnonymous = true
+                )
+                _currentUserState.value = user
+                Result.success(user)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "signInAnonymously failed: ${e.message}", e)
+            val user = UserData(
+                uid = "anon_${UUID.randomUUID().toString().take(8)}",
+                displayName = nickname.ifBlank { "Ospite Radar" },
+                isAnonymous = true
+            )
+            _currentUserState.value = user
+            Result.success(user)
+        }
+    }
+
+    fun signOut() {
+        try {
+            val currentGroup = _currentUserState.value?.currentGroupId
+            if (!currentGroup.isNullOrBlank()) {
+                unsubscribeFromGroupTopic(currentGroup)
+            }
+            cleanupUserRealtimeListeners()
+            cleanupGroupListeners()
+            auth?.signOut()
+        } catch (e: Exception) {
+            Log.e(TAG, "signOut failed: ${e.message}")
+        }
+        _currentUserState.value = null
+        _userGroupsState.value = emptyList()
+        _currentGroupLocations.value = emptyList()
+        _currentGroupPlaces.value = emptyList()
+        _currentGroupMessages.value = emptyList()
+        _currentGroupMembers.value = emptyList()
+    }
+
+    private suspend fun syncUserWithFirestore(user: UserData) {
+        if (firestore == null) return
+        try {
+            val userMap = hashMapOf(
+                "uid" to user.uid,
+                "displayName" to user.displayName,
+                "email" to (user.email ?: ""),
+                "phoneNumber" to (user.phoneNumber ?: ""),
+                "photoUrl" to (user.photoUrl ?: ""),
+                "photoBase64" to (user.photoBase64 ?: ""),
+                "fcmToken" to (user.fcmToken ?: getStoredFcmToken() ?: ""),
+                "lastSeen" to System.currentTimeMillis(),
+                "isAnonymous" to user.isAnonymous
+            )
+            firestore.collection("users").document(user.uid).set(userMap).await()
+        } catch (e: Exception) {
+            Log.w(TAG, "syncUserWithFirestore warning: ${e.message}")
+        }
+    }
+
+    private fun cleanupUserRealtimeListeners() {
+        userDocListener?.remove()
+        userDocListener = null
+        groupsCollectionListener?.remove()
+        groupsCollectionListener = null
+        memberStatusListeners.values.forEach { it.remove() }
+        memberStatusListeners.clear()
+        memberGroupsMap.clear()
+    }
+
+    // ================== GROUP MANAGEMENT & REAL-TIME REPO ==================
+
+    /**
+     * Continuous real-time listener on user profile, group directory, and membership documents.
+     * Guarantees that when an admin approves a member, the member's device instantly intercepts
+     * the change, unlocks the UI, and automatically subscribes to FCM topics in real-time.
+     */
+    fun startUserRealtimeSync(userId: String) {
+        if (firestore == null || userId.isBlank()) return
+        cleanupUserRealtimeListeners()
+
+        // 1. Continuous listener on user document users/{userId}
+        userDocListener = firestore.collection("users").document(userId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+                val lastApproved = snapshot.getString("lastApprovedGroupId")
+                val currentGroupId = snapshot.getString("currentGroupId")
+                val targetGroupId = lastApproved ?: currentGroupId
+                if (!targetGroupId.isNullOrBlank()) {
+                    val existing = _userGroupsState.value.find { it.id == targetGroupId }
+                    if (existing != null) {
+                        if (_currentUserState.value?.currentGroupId != targetGroupId) {
+                            selectGroup(targetGroupId)
+                        }
+                    } else {
+                        // Retrieve group data and activate
+                        firestore.collection("groups").document(targetGroupId).get()
+                            .addOnSuccessListener { gDoc ->
+                                if (gDoc.exists()) {
+                                    val gData = GroupData(
+                                        id = gDoc.getString("id") ?: gDoc.id,
+                                        name = gDoc.getString("name") ?: "Gruppo",
+                                        joinCode = gDoc.getString("joinCode") ?: "---",
+                                        ownerId = gDoc.getString("ownerId") ?: "",
+                                        description = gDoc.getString("description") ?: "",
+                                        createdAt = gDoc.getLong("createdAt") ?: System.currentTimeMillis()
+                                    )
+                                    val updated = (_userGroupsState.value + gData).distinctBy { it.id }
+                                    _userGroupsState.value = updated
+                                    selectGroup(targetGroupId)
+                                }
+                            }
+                    }
+                }
+            }
+
+        // 2. Continuous real-time listener on all groups in Firestore
+        groupsCollectionListener = firestore.collection("groups")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) {
+                    Log.w(TAG, "Groups collection listener error: ${error?.message}")
+                    return@addSnapshotListener
+                }
+
+                val currentGroupDocs = snapshot.documents
+                val updatedGroups = mutableListOf<GroupData>()
+
+                for (doc in currentGroupDocs) {
+                    val gId = doc.getString("id") ?: doc.id
+                    val ownerId = doc.getString("ownerId") ?: ""
+                    val reqApproval = doc.getBoolean("requiresApproval") ?: true
+                    val existingInState = _userGroupsState.value.find { it.id == gId }
+                    val currentStatus = if (ownerId == userId) "ACTIVE" else (existingInState?.userMembershipStatus ?: "PENDING")
+
+                    val group = GroupData(
+                        id = gId,
+                        name = doc.getString("name") ?: "Gruppo",
+                        joinCode = doc.getString("joinCode") ?: "---",
+                        ownerId = ownerId,
+                        description = doc.getString("description") ?: "",
+                        createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
+                        requiresApproval = reqApproval,
+                        userMembershipStatus = currentStatus
+                    )
+
+                    memberGroupsMap[gId] = group
+
+                    if (ownerId == userId) {
+                        updatedGroups.add(group.copy(userMembershipStatus = "ACTIVE"))
+                    } else {
+                        attachMemberDocListener(gId, group, userId)
+                    }
+                }
+
+                // Keep owner groups plus existing confirmed member groups that are still valid in Firestore
+                val currentActiveMemberGroups = _userGroupsState.value.filter { g ->
+                    g.ownerId != userId && currentGroupDocs.any { it.id == g.id }
+                }
+                val merged = (updatedGroups + currentActiveMemberGroups).distinctBy { it.id }
+                _userGroupsState.value = merged
+
+                val activeGroups = merged.filter { it.userMembershipStatus == "ACTIVE" }
+                if (_currentUserState.value?.currentGroupId.isNullOrBlank() && activeGroups.isNotEmpty()) {
+                    selectGroup(activeGroups.first().id)
+                }
+            }
+    }
+
+    /**
+     * Attaches an individual real-time listener to groups/{groupId}/members/{userId}.
+     * When the admin changes status from PENDING to ACTIVE, this listener fires instantly.
+     */
+    private fun attachMemberDocListener(groupId: String, groupData: GroupData, userId: String) {
+        if (firestore == null || userId.isBlank() || groupId.isBlank()) return
+        if (memberStatusListeners.containsKey(groupId)) return
+
+        val reg = firestore.collection("groups").document(groupId)
+            .collection("members").document(userId)
+            .addSnapshotListener { memberDoc, error ->
+                if (error != null) {
+                    Log.w(TAG, "Member listener error for group $groupId: ${error.message}")
+                    return@addSnapshotListener
+                }
+
+                if (memberDoc != null && memberDoc.exists()) {
+                    val status = memberDoc.getString("status") ?: "ACTIVE"
+                    val groupWithStatus = groupData.copy(userMembershipStatus = status)
+
+                    val currentList = _userGroupsState.value.toMutableList()
+                    val idx = currentList.indexOfFirst { it.id == groupId }
+                    if (idx >= 0) {
+                        currentList[idx] = groupWithStatus
+                    } else {
+                        currentList.add(groupWithStatus)
+                    }
+                    _userGroupsState.value = currentList
+
+                    if (status.equals("ACTIVE", ignoreCase = true)) {
+                        Log.d(TAG, "Real-time activation detected: user $userId is now ACTIVE in group $groupId")
+
+                        // Mandatory immediate FCM topic subscription for the activated group
+                        try {
+                            FirebaseMessaging.getInstance().subscribeToTopic("group_$groupId")
+                                .addOnSuccessListener { Log.d(TAG, "Subscribed to FCM topic group_$groupId") }
+                            val safeTopic = "group_${groupId.replace("-", "_")}"
+                            if (safeTopic != "group_$groupId") {
+                                FirebaseMessaging.getInstance().subscribeToTopic(safeTopic)
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "FCM subscription error: ${e.message}")
+                        }
+
+                        // Auto-select group to immediately transition UI to Main Radar Screen
+                        if (_currentUserState.value?.currentGroupId.isNullOrBlank() || _currentUserState.value?.currentGroupId == groupId) {
+                            selectGroup(groupId)
+                        }
+                    }
+                } else {
+                    // Document was deleted (rejected by admin or expelled)
+                    val remaining = _userGroupsState.value.filterNot { it.id == groupId }
+                    _userGroupsState.value = remaining
+                    if (_currentUserState.value?.currentGroupId == groupId) {
+                        val nextActive = remaining.firstOrNull { it.userMembershipStatus == "ACTIVE" }
+                        if (nextActive != null) {
+                            selectGroup(nextActive.id)
+                        } else {
+                            cleanupGroupListeners()
+                            _currentUserState.value = _currentUserState.value?.copy(currentGroupId = null)
+                        }
+                    }
+                }
+            }
+        memberStatusListeners[groupId] = reg
+    }
+
+    fun loadUserGroupsFromFirestore(userId: String) {
+        startUserRealtimeSync(userId)
+    }
+
+    suspend fun createGroup(
+        name: String,
+        description: String = "",
+        requiresApproval: Boolean = true
+    ): Result<GroupData> {
+        val currentUser = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
+        val groupId = "grp_${UUID.randomUUID().toString().take(8)}"
+        val joinCode = generateJoinCode()
+
+        val newGroup = GroupData(
+            id = groupId,
+            name = name.ifBlank { "Nuovo Gruppo Famiglia" },
+            joinCode = joinCode,
+            ownerId = currentUser.uid,
+            description = description,
+            createdAt = System.currentTimeMillis(),
+            requiresApproval = requiresApproval,
+            userMembershipStatus = "ACTIVE"
+        )
+
+        try {
+            if (firestore != null) {
+                val groupMap = hashMapOf(
+                    "id" to newGroup.id,
+                    "name" to newGroup.name,
+                    "joinCode" to newGroup.joinCode,
+                    "ownerId" to newGroup.ownerId,
+                    "description" to newGroup.description,
+                    "createdAt" to newGroup.createdAt,
+                    "requiresApproval" to requiresApproval
+                )
+                firestore.collection("groups").document(groupId).set(groupMap).await()
+
+                // Add current user as owner with ACTIVE status
+                val memberMap = hashMapOf(
+                    "userId" to currentUser.uid,
+                    "displayName" to currentUser.displayName,
+                    "email" to (currentUser.email ?: ""),
+                    "photoBase64" to (currentUser.photoBase64 ?: ""),
+                    "role" to "owner",
+                    "status" to "ACTIVE",
+                    "joinedAt" to System.currentTimeMillis(),
+                    "batteryLevel" to 100,
+                    "isTrackingActive" to true,
+                    "isOnline" to true
+                )
+                firestore.collection("groups").document(groupId)
+                    .collection("members").document(currentUser.uid).set(memberMap).await()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "createGroup on Firestore error: ${e.message}")
+        }
+
+        val updatedGroups = (_userGroupsState.value + newGroup).distinctBy { it.id }
+        _userGroupsState.value = updatedGroups
+        selectGroup(groupId)
+        return Result.success(newGroup)
+    }
+
+    /**
+     * Join group with access policy check (Direct access vs Pending approval).
+     */
+    suspend fun joinGroupByCode(joinCode: String): Result<String> {
+        val currentUser = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
+        val cleanCode = joinCode.trim().uppercase()
+
+        try {
+            if (firestore != null) {
+                val snapshot = firestore.collection("groups")
+                    .whereEqualTo("joinCode", cleanCode)
+                    .limit(1)
+                    .get()
+                    .await()
+
+                if (!snapshot.isEmpty) {
+                    val doc = snapshot.documents[0]
+                    val reqApproval = doc.getBoolean("requiresApproval") ?: true
+                    val group = GroupData(
+                        id = doc.getString("id") ?: doc.id,
+                        name = doc.getString("name") ?: "Gruppo",
+                        joinCode = doc.getString("joinCode") ?: cleanCode,
+                        ownerId = doc.getString("ownerId") ?: "",
+                        description = doc.getString("description") ?: "",
+                        createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
+                        requiresApproval = reqApproval,
+                        userMembershipStatus = "ACTIVE"
+                    )
+
+                    val isOwner = group.ownerId == currentUser.uid
+                    if (isOwner) {
+                        val activeGroup = group.copy(userMembershipStatus = "ACTIVE")
+                        _userGroupsState.value = (_userGroupsState.value + activeGroup).distinctBy { it.id }
+                        selectGroup(group.id)
+                        return Result.success("Accesso al tuo gruppo '${group.name}' confermato")
+                    }
+
+                    // Check if member record already exists
+                    val memberDoc = doc.reference.collection("members").document(currentUser.uid).get().await()
+                    if (memberDoc.exists()) {
+                        val status = memberDoc.getString("status") ?: "ACTIVE"
+                        val groupWithStatus = group.copy(userMembershipStatus = status)
+                        _userGroupsState.value = (_userGroupsState.value + groupWithStatus).distinctBy { it.id }
+
+                        if (status == "ACTIVE") {
+                            selectGroup(group.id)
+                            return Result.success("Accesso al gruppo '${group.name}' confermato")
+                        } else {
+                            attachMemberDocListener(group.id, group, currentUser.uid)
+                            return Result.success("Richiesta inviata! In attesa di approvazione dell'amministratore di '${group.name}'.")
+                        }
+                    }
+
+                    // New applicant
+                    if (!reqApproval) {
+                        // Direct instant access
+                        val memberMap = hashMapOf(
+                            "userId" to currentUser.uid,
+                            "displayName" to currentUser.displayName,
+                            "email" to (currentUser.email ?: ""),
+                            "photoBase64" to (currentUser.photoBase64 ?: ""),
+                            "role" to "member",
+                            "status" to "ACTIVE",
+                            "joinedAt" to System.currentTimeMillis(),
+                            "batteryLevel" to 100,
+                            "isTrackingActive" to true,
+                            "isOnline" to true
+                        )
+                        firestore.collection("groups").document(group.id)
+                            .collection("members").document(currentUser.uid).set(memberMap).await()
+
+                        val activeGroup = group.copy(userMembershipStatus = "ACTIVE")
+                        _userGroupsState.value = (_userGroupsState.value + activeGroup).distinctBy { it.id }
+                        selectGroup(group.id)
+                        return Result.success("Accesso immediato al gruppo '${group.name}' completato!")
+                    } else {
+                        // Approval required
+                        val memberMap = hashMapOf(
+                            "userId" to currentUser.uid,
+                            "displayName" to currentUser.displayName,
+                            "email" to (currentUser.email ?: ""),
+                            "photoBase64" to (currentUser.photoBase64 ?: ""),
+                            "role" to "member",
+                            "status" to "PENDING",
+                            "joinedAt" to System.currentTimeMillis(),
+                            "batteryLevel" to 100,
+                            "isTrackingActive" to true,
+                            "isOnline" to true
+                        )
+                        firestore.collection("groups").document(group.id)
+                            .collection("members").document(currentUser.uid).set(memberMap).await()
+
+                        val pendingGroup = group.copy(userMembershipStatus = "PENDING")
+                        _userGroupsState.value = (_userGroupsState.value + pendingGroup).distinctBy { it.id }
+
+                        // Immediately attach real-time listener so the UI will unlock automatically as soon as admin approves
+                        attachMemberDocListener(group.id, group, currentUser.uid)
+
+                        // Send join_request event for Group Admin
+                        val eventId = "req_${UUID.randomUUID().toString().take(8)}"
+                        val eventMap = hashMapOf(
+                            "id" to eventId,
+                            "groupId" to group.id,
+                            "type" to "join_request",
+                            "userId" to currentUser.uid,
+                            "userName" to currentUser.displayName,
+                            "placeName" to group.name,
+                            "message" to "${currentUser.displayName} ha richiesto di unirsi a ${group.name}",
+                            "timestamp" to System.currentTimeMillis(),
+                            "targetAdminId" to group.ownerId
+                        )
+                        firestore.collection("groups").document(group.id)
+                            .collection("events").document(eventId).set(eventMap).await()
+
+                        return Result.success("Richiesta inviata! In attesa di approvazione da parte dell'amministratore di '${group.name}'.")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "joinGroupByCode firestore failed: ${e.message}")
+            return Result.failure(e)
+        }
+
+        // Fallback: check local groups
+        val existing = _userGroupsState.value.find { it.joinCode.equals(cleanCode, ignoreCase = true) }
+        if (existing != null) {
+            selectGroup(existing.id)
+            return Result.success("Accesso al gruppo '${existing.name}' confermato")
+        }
+
+        return Result.failure(Exception("Codice invito non valido o gruppo inesistente"))
+    }
+
+    /**
+     * Admin approves a pending join request. Sets status to "ACTIVE".
+     * Also updates user document to guarantee real-time push/sync trigger.
+     */
+    suspend fun approveJoinRequest(groupId: String, memberId: String): Result<Unit> {
+        return try {
+            if (firestore != null) {
+                // 1. Update member document to ACTIVE
+                firestore.collection("groups").document(groupId)
+                    .collection("members").document(memberId)
+                    .update("status", "ACTIVE")
+                    .await()
+
+                // 2. Update user profile to ensure snapshot listener trigger
+                firestore.collection("users").document(memberId).set(
+                    hashMapOf(
+                        "lastApprovedGroupId" to groupId,
+                        "currentGroupId" to groupId,
+                        "lastUpdated" to System.currentTimeMillis()
+                    ),
+                    com.google.firebase.firestore.SetOptions.merge()
+                ).await()
+
+                // 3. Post approved event in group
+                val eventId = "appr_${UUID.randomUUID().toString().take(8)}"
+                val eventMap = hashMapOf(
+                    "id" to eventId,
+                    "groupId" to groupId,
+                    "type" to "member_approved",
+                    "userId" to memberId,
+                    "timestamp" to System.currentTimeMillis()
+                )
+                firestore.collection("groups").document(groupId)
+                    .collection("events").document(eventId).set(eventMap).await()
+            }
+            _currentGroupMembers.value = _currentGroupMembers.value.map {
+                if (it.userId == memberId) it.copy(status = "ACTIVE") else it
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "approveJoinRequest failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Admin rejects a pending join request. Deletes member record.
+     */
+    suspend fun rejectJoinRequest(groupId: String, memberId: String): Result<Unit> {
+        return try {
+            if (firestore != null) {
+                firestore.collection("groups").document(groupId)
+                    .collection("members").document(memberId)
+                    .delete()
+                    .await()
+            }
+            _currentGroupMembers.value = _currentGroupMembers.value.filterNot { it.userId == memberId }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "rejectJoinRequest failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Admin expels/removes a member from the group.
+     */
+    suspend fun removeMemberFromGroup(groupId: String, memberId: String): Result<Unit> {
+        return try {
+            if (firestore != null) {
+                firestore.collection("groups").document(groupId)
+                    .collection("members").document(memberId)
+                    .delete()
+                    .await()
+                firestore.collection("groups").document(groupId)
+                    .collection("locations").document(memberId)
+                    .delete()
+                    .await()
+            }
+            _currentGroupMembers.value = _currentGroupMembers.value.filterNot { it.userId == memberId }
+            _currentGroupLocations.value = _currentGroupLocations.value.filterNot { it.userId == memberId }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "removeMemberFromGroup failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Member leaves group: deletes member and location records, unsubscribes from FCM topic.
+     */
+    suspend fun leaveGroup(groupId: String): Result<Unit> {
+        val user = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
+        return try {
+            if (firestore != null) {
+                firestore.collection("groups").document(groupId)
+                    .collection("members").document(user.uid)
+                    .delete()
+                    .await()
+                firestore.collection("groups").document(groupId)
+                    .collection("locations").document(user.uid)
+                    .delete()
+                    .await()
+            }
+            unsubscribeFromGroupTopic(groupId)
+
+            val remainingGroups = _userGroupsState.value.filterNot { it.id == groupId }
+            _userGroupsState.value = remainingGroups
+
+            if (_currentUserState.value?.currentGroupId == groupId) {
+                val nextGroup = remainingGroups.firstOrNull()
+                if (nextGroup != null) {
+                    selectGroup(nextGroup.id)
+                } else {
+                    cleanupGroupListeners()
+                    _currentUserState.value = _currentUserState.value?.copy(currentGroupId = null)
+                    _currentGroupLocations.value = emptyList()
+                    _currentGroupPlaces.value = emptyList()
+                    _currentGroupSnapshots.value = emptyList()
+                    _currentGroupMessages.value = emptyList()
+                    _currentGroupMembers.value = emptyList()
+                }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "leaveGroup failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    fun selectGroup(groupId: String) {
+        val previousGroupId = _currentUserState.value?.currentGroupId
+        if (!previousGroupId.isNullOrBlank() && previousGroupId != groupId) {
+            unsubscribeFromGroupTopic(previousGroupId)
+        }
+        _currentUserState.value = _currentUserState.value?.copy(currentGroupId = groupId)
+        subscribeToGroupTopic(groupId)
+        listenToGroupData(groupId)
+    }
+
+    fun subscribeToGroupTopic(groupId: String) {
+        if (groupId.isBlank()) return
+        try {
+            val primaryTopic = "group_$groupId"
+            FirebaseMessaging.getInstance().subscribeToTopic(primaryTopic)
+                .addOnSuccessListener {
+                    Log.d(TAG, "Subscribed to FCM topic: $primaryTopic")
+                }
+                .addOnFailureListener { e ->
+                    Log.w(TAG, "Failed to subscribe to FCM topic $primaryTopic: ${e.message}")
+                }
+
+            val sanitizedTopic = "group_${groupId.replace("-", "_")}"
+            if (sanitizedTopic != primaryTopic) {
+                FirebaseMessaging.getInstance().subscribeToTopic(sanitizedTopic)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "subscribeToGroupTopic exception: ${e.message}")
+        }
+    }
+
+    fun unsubscribeFromGroupTopic(groupId: String) {
+        if (groupId.isBlank()) return
+        try {
+            val primaryTopic = "group_$groupId"
+            FirebaseMessaging.getInstance().unsubscribeFromTopic(primaryTopic)
+                .addOnSuccessListener {
+                    Log.d(TAG, "Unsubscribed from FCM topic: $primaryTopic")
+                }
+                .addOnFailureListener { e ->
+                    Log.w(TAG, "Failed to unsubscribe from FCM topic $primaryTopic: ${e.message}")
+                }
+
+            val sanitizedTopic = "group_${groupId.replace("-", "_")}"
+            if (sanitizedTopic != primaryTopic) {
+                FirebaseMessaging.getInstance().unsubscribeFromTopic(sanitizedTopic)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "unsubscribeFromGroupTopic exception: ${e.message}")
+        }
+    }
+
+    private fun cleanupGroupListeners() {
+        locationsListener?.remove()
+        placesListener?.remove()
+        messagesListener?.remove()
+        membersListener?.remove()
+        eventsListener?.remove()
+        snapshotsListener?.remove()
+        locationsListener = null
+        placesListener = null
+        messagesListener = null
+        membersListener = null
+        eventsListener = null
+        snapshotsListener = null
+    }
+
+    private fun listenToGroupData(groupId: String) {
+        if (firestore == null) return
+        cleanupGroupListeners()
+
+        val joinTime = System.currentTimeMillis()
+        lastObservedEventTimestamp = joinTime
+        lastObservedMessageTimestamp = joinTime
+
+        try {
+            // 1. Real-time locations listener
+            locationsListener = firestore.collection("groups").document(groupId)
+                .collection("locations")
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null) {
+                        Log.w(TAG, "Listen locations failed: ${e.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null && !snapshot.isEmpty) {
+                        val list = snapshot.documents.mapNotNull { doc ->
+                            try {
+                                val lat = doc.getDouble("latitude") ?: 0.0
+                                val lon = doc.getDouble("longitude") ?: 0.0
+                                UserLocation(
+                                    userId = doc.getString("userId") ?: doc.id,
+                                    userName = doc.getString("userName") ?: "Membro",
+                                    nickname = doc.getString("nickname"),
+                                    photoBase64 = doc.getString("photoBase64"),
+                                    latitude = lat,
+                                    longitude = lon,
+                                    accuracy = (doc.getDouble("accuracy") ?: 0.0).toFloat(),
+                                    speed = (doc.getDouble("speed") ?: 0.0).toFloat(),
+                                    altitude = doc.getDouble("altitude") ?: 0.0,
+                                    batteryLevel = (doc.getLong("batteryLevel") ?: 100L).toInt(),
+                                    timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
+                                    isOnline = doc.getBoolean("isOnline") ?: true,
+                                    currentPlaceName = doc.getString("currentPlaceName")
+                                )
+                            } catch (ex: Exception) {
+                                null
+                            }
+                        }
+                        _currentGroupLocations.value = list
+                    }
+                }
+
+            // 2. Real-time geofence places listener
+            placesListener = firestore.collection("groups").document(groupId)
+                .collection("places")
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null) return@addSnapshotListener
+                    if (snapshot != null) {
+                        val list = snapshot.documents.mapNotNull { doc ->
+                            try {
+                                val catStr = doc.getString("category") ?: "HOME"
+                                val category = try { PlaceCategory.valueOf(catStr) } catch (ex: Exception) { PlaceCategory.HOME }
+                                val lat = doc.getDouble("latitude") ?: 0.0
+                                val lon = doc.getDouble("longitude") ?: 0.0
+                                if (lat == 0.0 && lon == 0.0) return@mapNotNull null
+                                SavedPlace(
+                                    id = doc.getString("id") ?: doc.id,
+                                    name = doc.getString("name") ?: "Luogo",
+                                    category = category,
+                                    latitude = lat,
+                                    longitude = lon,
+                                    radiusMeters = doc.getDouble("radiusMeters") ?: 100.0,
+                                    createdBy = doc.getString("createdBy") ?: "",
+                                    createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
+                                )
+                            } catch (ex: Exception) {
+                                null
+                            }
+                        }
+                        _currentGroupPlaces.value = list
+                    }
+                }
+
+            // 3. Real-time chat messages listener (Notifies for Type 2: Chat & Type 3: SOS)
+            messagesListener = firestore.collection("groups").document(groupId)
+                .collection("messages")
+                .orderBy("timestamp", Query.Direction.ASCENDING)
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null) return@addSnapshotListener
+                    if (snapshot != null) {
+                        val currentUid = _currentUserState.value?.uid
+                        val list = snapshot.documents.mapNotNull { doc ->
+                            try {
+                                val typeStr = doc.getString("type") ?: "TEXT"
+                                val type = try { MessageType.valueOf(typeStr) } catch (ex: Exception) { MessageType.TEXT }
+                                val imageBase64 = doc.getString("imageBase64")
+                                val imageUrl = doc.getString("imageUrl")
+                                val senderId = doc.getString("senderId") ?: ""
+                                val senderName = doc.getString("senderName") ?: "Membro"
+                                val text = doc.getString("text") ?: ""
+                                val timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
+
+                                val msg = ChatMessage(
+                                    id = doc.getString("id") ?: doc.id,
+                                    senderId = senderId,
+                                    senderName = senderName,
+                                    senderPhoto = doc.getString("senderPhoto"),
+                                    text = text,
+                                    imageBase64 = if (!imageBase64.isNullOrBlank()) imageBase64 else null,
+                                    imageUrl = if (!imageUrl.isNullOrBlank()) imageUrl else null,
+                                    timestamp = timestamp,
+                                    type = type,
+                                    latitude = doc.getDouble("latitude"),
+                                    longitude = doc.getDouble("longitude")
+                                )
+
+                                // Check if this is a new message from another member
+                                if (timestamp > lastObservedMessageTimestamp && senderId.isNotBlank() && senderId != currentUid) {
+                                    when (type) {
+                                        // TYPE 3: SOS Alert Message
+                                        MessageType.SOS_ALERT -> {
+                                            showLocalNotification(
+                                                title = "Allerta SOS",
+                                                body = "Richiesta di soccorso immediata inviata da $senderName",
+                                                isHighPriority = true,
+                                                notificationId = 999,
+                                                destination = "ALERT",
+                                                groupId = groupId,
+                                                latitude = doc.getDouble("latitude"),
+                                                longitude = doc.getDouble("longitude"),
+                                                senderId = senderId
+                                            )
+                                        }
+                                        // TYPE 2: Normal Group Chat Message
+                                        MessageType.TEXT, MessageType.IMAGE, MessageType.LOCATION_SHARE -> {
+                                            val bodyText = when (type) {
+                                                MessageType.IMAGE -> "Ha inviato un'immagine"
+                                                MessageType.LOCATION_SHARE -> "Ha condiviso la posizione"
+                                                else -> text
+                                            }
+                                            showLocalNotification(
+                                                title = senderName,
+                                                body = bodyText,
+                                                isHighPriority = false,
+                                                notificationId = (timestamp % 100000).toInt(),
+                                                destination = "CHAT",
+                                                groupId = groupId,
+                                                senderId = senderId
+                                            )
+                                        }
+                                        else -> {
+                                            // GEOFENCE_ALERT handled by events listener
+                                        }
+                                    }
+                                }
+                                msg
+                            } catch (ex: Exception) {
+                                null
+                            }
+                        }
+                        if (list.isNotEmpty()) {
+                            val maxTime = list.maxOf { it.timestamp }
+                            if (maxTime > lastObservedMessageTimestamp) {
+                                lastObservedMessageTimestamp = maxTime
+                            }
+                        }
+                        _currentGroupMessages.value = list
+                    }
+                }
+
+            // 4. Real-time geofence & group events listener (TYPE 1: Places Entry/Exit & TYPE 3: SOS & Admin Join Requests)
+            eventsListener = firestore.collection("groups").document(groupId)
+                .collection("events")
+                .whereGreaterThan("timestamp", joinTime)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null) {
+                        Log.w(TAG, "Listen group events error: ${error.message}")
+                        return@addSnapshotListener
+                    }
+                    val currentUid = _currentUserState.value?.uid
+                    snapshot?.documentChanges?.forEach { change ->
+                        if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                            val data = change.document.data
+                            val senderId = data["userId"] as? String
+                            val timestamp = (data["timestamp"] as? Long) ?: System.currentTimeMillis()
+                            if (timestamp > lastObservedEventTimestamp) {
+                                lastObservedEventTimestamp = timestamp
+                            }
+
+                            val type = data["type"] as? String ?: "geofence_entry"
+                            val userName = data["userName"] as? String ?: "Un membro"
+                            val placeName = data["placeName"] as? String ?: "un luogo"
+                            val customMsg = data["message"] as? String
+                            val eventLat = (data["latitude"] as? Double)
+                            val eventLon = (data["longitude"] as? Double)
+
+                            // Handle join request specifically for admin
+                            if (type == "join_request") {
+                                val targetAdminId = data["targetAdminId"] as? String
+                                val activeGroup = _userGroupsState.value.find { it.id == groupId }
+                                val isAdmin = activeGroup?.ownerId == currentUid || targetAdminId == currentUid
+                                if (isAdmin && senderId != currentUid) {
+                                    showLocalNotification(
+                                        title = "Nuova richiesta di adesione",
+                                        body = customMsg ?: "$userName ha richiesto di entrare nel gruppo",
+                                        isHighPriority = false,
+                                        notificationId = (timestamp % 100000).toInt(),
+                                        destination = "MEMBERS",
+                                        groupId = groupId,
+                                        senderId = senderId
+                                    )
+                                }
+                            } else if (!senderId.isNullOrBlank() && senderId != currentUid) {
+                                // Only notify other members (exclude self)
+                                when (type) {
+                                    // TYPE 1: Geofence Entry
+                                    "geofence_entry" -> {
+                                        showLocalNotification(
+                                            title = "Arrivo a destinazione",
+                                            body = customMsg ?: "$userName è arrivato a $placeName",
+                                            isHighPriority = false,
+                                            notificationId = (timestamp % 100000).toInt(),
+                                            destination = "MAP",
+                                            groupId = groupId,
+                                            latitude = eventLat,
+                                            longitude = eventLon,
+                                            senderId = senderId
+                                        )
+                                    }
+                                    // TYPE 1: Geofence Exit
+                                    "geofence_exit" -> {
+                                        showLocalNotification(
+                                            title = "Partenza registrata",
+                                            body = customMsg ?: "$userName ha lasciato $placeName",
+                                            isHighPriority = false,
+                                            notificationId = (timestamp % 100000).toInt(),
+                                            destination = "MAP",
+                                            groupId = groupId,
+                                            latitude = eventLat,
+                                            longitude = eventLon,
+                                            senderId = senderId
+                                        )
+                                    }
+                                    // TYPE 3: SOS Alert Event
+                                    "sos_alert" -> {
+                                        showLocalNotification(
+                                            title = "Allerta di emergenza SOS",
+                                            body = customMsg ?: "$userName ha inviato una richiesta di soccorso",
+                                            isHighPriority = true,
+                                            notificationId = 999,
+                                            destination = "ALERT",
+                                            groupId = groupId,
+                                            latitude = eventLat,
+                                            longitude = eventLon,
+                                            senderId = senderId
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            // 5. Real-time members listener
+            membersListener = firestore.collection("groups").document(groupId)
+                .collection("members")
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null) return@addSnapshotListener
+                    if (snapshot != null) {
+                        val list = snapshot.documents.mapNotNull { doc ->
+                            try {
+                                GroupMember(
+                                    userId = doc.getString("userId") ?: doc.id,
+                                    displayName = doc.getString("displayName") ?: "Membro",
+                                    nickname = doc.getString("nickname"),
+                                    email = doc.getString("email"),
+                                    photoUrl = doc.getString("photoUrl"),
+                                    photoBase64 = doc.getString("photoBase64"),
+                                    role = doc.getString("role") ?: "member",
+                                    status = doc.getString("status") ?: "ACTIVE",
+                                    joinedAt = doc.getLong("joinedAt") ?: System.currentTimeMillis(),
+                                    batteryLevel = (doc.getLong("batteryLevel") ?: 100L).toInt(),
+                                    isTrackingActive = doc.getBoolean("isTrackingActive") ?: true,
+                                    isOnline = doc.getBoolean("isOnline") ?: true
+                                )
+                            } catch (ex: Exception) {
+                                null
+                            }
+                        }
+                        _currentGroupMembers.value = list
+                    }
+                }
+
+            // 6. Real-time geolocated snapshots listener
+            snapshotsListener = firestore.collection("groups").document(groupId)
+                .collection("snapshots")
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null) {
+                        Log.w(TAG, "Listen snapshots failed: ${e.message}")
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null) {
+                        val list = snapshot.documents.mapNotNull { doc ->
+                            try {
+                                val lat = doc.getDouble("latitude") ?: 0.0
+                                val lon = doc.getDouble("longitude") ?: 0.0
+                                val photoBase64 = doc.getString("photoBase64") ?: ""
+                                if (photoBase64.isBlank() || (lat == 0.0 && lon == 0.0)) return@mapNotNull null
+                                PlaceSnapshot(
+                                    id = doc.getString("id") ?: doc.id,
+                                    groupId = doc.getString("groupId") ?: groupId,
+                                    userId = doc.getString("userId") ?: "",
+                                    userName = doc.getString("userName") ?: "Membro",
+                                    userPhotoBase64 = doc.getString("userPhotoBase64"),
+                                    photoBase64 = photoBase64,
+                                    latitude = lat,
+                                    longitude = lon,
+                                    timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
+                                    caption = doc.getString("caption") ?: ""
+                                )
+                            } catch (ex: Exception) {
+                                null
+                            }
+                        }
+                        _currentGroupSnapshots.value = list
+                    }
+                }
+
+        } catch (e: Exception) {
+            Log.w(TAG, "Error attaching Firestore listeners: ${e.message}")
+        }
+    }
+
+    // ================== SILENT IN-APP LOCATION TRACKING ==================
+
+    fun startSilentLocationTracking() {
+        try {
+            val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (!hasFine && !hasCoarse) return
+
+            if (fusedLocationClient == null) {
+                fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+            }
+
+            stopSilentLocationTracking()
+
+            val interval = (_trackingFrequencySeconds.value * 1000L).coerceAtLeast(5000L)
+            val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, interval).apply {
+                setMinUpdateIntervalMillis(interval / 2)
+                setWaitForAccurateLocation(false)
+            }.build()
+
+            silentLocationCallback = object : LocationCallback() {
+                override fun onLocationResult(result: LocationResult) {
+                    val loc: Location? = result.lastLocation
+                    if (loc != null && loc.latitude != 0.0 && loc.longitude != 0.0) {
+                        val (battery, isCharging) = getBatteryStatus()
+                        val uLoc = UserLocation(
+                            latitude = loc.latitude,
+                            longitude = loc.longitude,
+                            accuracy = loc.accuracy,
+                            speed = if (loc.hasSpeed()) loc.speed else 0.0f,
+                            altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
+                            batteryLevel = battery,
+                            isCharging = isCharging,
+                            timestamp = System.currentTimeMillis(),
+                            isOnline = true
+                        )
+                        CoroutineScope(Dispatchers.IO).launch {
+                            updateLocation(uLoc)
+                        }
+                    }
+                }
+            }
+
+            fusedLocationClient?.requestLocationUpdates(
+                request,
+                silentLocationCallback!!,
+                Looper.getMainLooper()
+            )
+            Log.d(TAG, "Silent in-app location tracking active (no notification)")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to start silent location updates: ${e.message}")
+        }
+    }
+
+    fun stopSilentLocationTracking() {
+        try {
+            silentLocationCallback?.let {
+                fusedLocationClient?.removeLocationUpdates(it)
+            }
+            silentLocationCallback = null
+        } catch (e: Exception) {
+            Log.w(TAG, "Error stopping silent location tracking: ${e.message}")
+        }
+    }
+
+    private fun getBatteryStatus(): Pair<Int, Boolean> {
+        return try {
+            val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            val batteryStatus: Intent? = context.registerReceiver(null, filter)
+            val level: Int = batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+            val scale: Int = batteryStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+            val batteryPct = if (level >= 0 && scale > 0) ((level / scale.toFloat()) * 100).toInt() else 100
+            val status: Int = batteryStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+            val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+            Pair(batteryPct, isCharging)
+        } catch (e: Exception) {
+            Pair(100, false)
+        }
+    }
+
+    // ================== LOCATION UPDATES ==================
+
+    suspend fun updateLocation(location: UserLocation) {
+        val user = _currentUserState.value ?: return
+        val currentGroup = user.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id ?: return
+
+        // If Global Ghost Mode is enabled, do not upload location
+        if (_isGlobalGhostMode.value) {
+            return
+        }
+
+        // If user disabled tracking specifically for this group, do not upload location
+        val myMember = _currentGroupMembers.value.find { it.userId == user.uid }
+        if (myMember != null && !myMember.isTrackingActive) {
+            return
+        }
+
+        // Compute current place
+        val matchedPlace = GeofenceHelper.findCurrentPlace(location, _currentGroupPlaces.value)
+        val enrichedLocation = location.copy(
+            userId = user.uid,
+            userName = user.displayName,
+            photoBase64 = user.photoBase64 ?: location.photoBase64,
+            currentPlaceName = matchedPlace?.name
+        )
+
+        // Check if there is a geofence trigger event
+        checkGeofenceAlert(user.displayName, matchedPlace)
+
+        // Update local list
+        val currentList = _currentGroupLocations.value.toMutableList()
+        val index = currentList.indexOfFirst { it.userId == user.uid }
+        if (index >= 0) {
+            currentList[index] = enrichedLocation
+        } else {
+            currentList.add(enrichedLocation)
+        }
+        _currentGroupLocations.value = currentList
+
+        // Update Firestore
+        try {
+            if (firestore != null) {
+                val locMap = hashMapOf(
+                    "userId" to enrichedLocation.userId,
+                    "userName" to enrichedLocation.userName,
+                    "nickname" to (enrichedLocation.nickname ?: ""),
+                    "photoBase64" to (enrichedLocation.photoBase64 ?: ""),
+                    "latitude" to enrichedLocation.latitude,
+                    "longitude" to enrichedLocation.longitude,
+                    "accuracy" to enrichedLocation.accuracy,
+                    "speed" to enrichedLocation.speed,
+                    "altitude" to enrichedLocation.altitude,
+                    "batteryLevel" to enrichedLocation.batteryLevel,
+                    "timestamp" to enrichedLocation.timestamp,
+                    "isOnline" to true,
+                    "currentPlaceName" to (enrichedLocation.currentPlaceName ?: "")
+                )
+                firestore.collection("groups").document(currentGroup)
+                    .collection("locations").document(user.uid).set(locMap).await()
+
+                // Also update battery in members collection
+                firestore.collection("groups").document(currentGroup)
+                    .collection("members").document(user.uid)
+                    .update("batteryLevel", enrichedLocation.batteryLevel)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "updateLocation firestore error: ${e.message}")
+        }
+    }
+
+    private var lastNotifiedPlaceId: String? = null
+    private var lastNotifiedPlaceName: String? = null
+
+    private fun checkGeofenceAlert(userName: String, place: SavedPlace?) {
+        val user = _currentUserState.value ?: return
+        val groupId = user.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id ?: return
+
+        if (place != null) {
+            if (lastNotifiedPlaceId != place.id) {
+                lastNotifiedPlaceId = place.id
+                lastNotifiedPlaceName = place.name
+                val eventId = "evt_${UUID.randomUUID().toString().take(8)}"
+                val event = GeofenceEvent(
+                    id = eventId,
+                    placeName = place.name,
+                    userName = userName,
+                    isInside = true,
+                    timestamp = System.currentTimeMillis()
+                )
+                _activeGeofenceAlerts.value = listOf(event) + _activeGeofenceAlerts.value.take(9)
+
+                // 1. Record event in Firestore groups/{groupId}/events collection for Cloud Functions / push triggers
+                try {
+                    if (firestore != null) {
+                        val eventMap = hashMapOf(
+                            "id" to eventId,
+                            "groupId" to groupId,
+                            "type" to "geofence_entry",
+                            "userId" to user.uid,
+                            "userName" to userName,
+                            "placeId" to place.id,
+                            "placeName" to place.name,
+                            "message" to "$userName è arrivato a ${place.name}",
+                            "timestamp" to System.currentTimeMillis()
+                        )
+                        firestore.collection("groups").document(groupId)
+                            .collection("events").document(eventId).set(eventMap)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to write geofence_entry event to Firestore: ${e.message}")
+                }
+
+                // 2. Also send system message to chat in Firestore
+                val sysMsg = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    senderId = user.uid,
+                    senderName = "Radar Alert",
+                    text = "$userName è arrivato a ${place.name}",
+                    timestamp = System.currentTimeMillis(),
+                    type = MessageType.GEOFENCE_ALERT
+                )
+                sendMessage(groupId, sysMsg)
+            }
+        } else {
+            if (lastNotifiedPlaceId != null) {
+                val previousPlaceName = lastNotifiedPlaceName ?: "un luogo sicuro"
+                val previousPlaceId = lastNotifiedPlaceId ?: ""
+                val exitEventId = "evt_${UUID.randomUUID().toString().take(8)}"
+                val event = GeofenceEvent(
+                    id = exitEventId,
+                    placeName = previousPlaceName,
+                    userName = userName,
+                    isInside = false,
+                    timestamp = System.currentTimeMillis()
+                )
+                _activeGeofenceAlerts.value = listOf(event) + _activeGeofenceAlerts.value.take(9)
+
+                // Record exit event in Firestore groups/{groupId}/events
+                try {
+                    if (firestore != null) {
+                        val eventMap = hashMapOf(
+                            "id" to exitEventId,
+                            "groupId" to groupId,
+                            "type" to "geofence_exit",
+                            "userId" to user.uid,
+                            "userName" to userName,
+                            "placeId" to previousPlaceId,
+                            "placeName" to previousPlaceName,
+                            "message" to "$userName ha lasciato $previousPlaceName",
+                            "timestamp" to System.currentTimeMillis()
+                        )
+                        firestore.collection("groups").document(groupId)
+                            .collection("events").document(exitEventId).set(eventMap)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to write geofence_exit event to Firestore: ${e.message}")
+                }
+
+                // System message in chat
+                val sysMsg = ChatMessage(
+                    id = UUID.randomUUID().toString(),
+                    senderId = user.uid,
+                    senderName = "Radar Alert",
+                    text = "$userName ha lasciato $previousPlaceName",
+                    timestamp = System.currentTimeMillis(),
+                    type = MessageType.GEOFENCE_ALERT
+                )
+                sendMessage(groupId, sysMsg)
+
+                lastNotifiedPlaceId = null
+                lastNotifiedPlaceName = null
+            }
+        }
+    }
+
+    // ================== PLACES / GEOFENCE ==================
+
+    suspend fun addPlace(place: SavedPlace): Result<SavedPlace> {
+        val user = _currentUserState.value ?: return Result.failure(Exception("No user"))
+        val currentGroup = user.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id
+            ?: return Result.failure(Exception("Nessun gruppo selezionato"))
+
+        val newPlace = place.copy(
+            id = if (place.id.isBlank()) "plc_${UUID.randomUUID().toString().take(8)}" else place.id,
+            createdBy = user.uid
+        )
+
+        try {
+            if (firestore != null) {
+                val map = hashMapOf(
+                    "id" to newPlace.id,
+                    "name" to newPlace.name,
+                    "category" to newPlace.category.name,
+                    "latitude" to newPlace.latitude,
+                    "longitude" to newPlace.longitude,
+                    "radiusMeters" to newPlace.radiusMeters,
+                    "createdBy" to newPlace.createdBy,
+                    "createdAt" to newPlace.createdAt
+                )
+                firestore.collection("groups").document(currentGroup)
+                    .collection("places").document(newPlace.id).set(map).await()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "addPlace firestore failed: ${e.message}")
+        }
+
+        _currentGroupPlaces.value = _currentGroupPlaces.value + newPlace
+        return Result.success(newPlace)
+    }
+
+    suspend fun deletePlace(placeId: String): Result<Unit> {
+        val currentGroup = _currentUserState.value?.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id ?: ""
+        try {
+            if (firestore != null && currentGroup.isNotBlank()) {
+                firestore.collection("groups").document(currentGroup)
+                    .collection("places").document(placeId).delete().await()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "deletePlace firestore failed: ${e.message}")
+        }
+        _currentGroupPlaces.value = _currentGroupPlaces.value.filter { it.id != placeId }
+        return Result.success(Unit)
+    }
+
+    // ================== GROUP MEMBER CUSTOM PROFILE ==================
+
+    suspend fun updateGroupMemberProfile(
+        groupId: String,
+        memberId: String,
+        displayName: String,
+        nickname: String?,
+        photoBase64: String?
+    ): Result<Unit> {
+        val cleanName = displayName.trim().ifBlank { "Membro" }
+        val cleanNick = nickname?.trim()?.ifBlank { null }
+        val cleanPhoto = photoBase64?.trim()?.ifBlank { null }
+
+        try {
+            if (firestore != null && groupId.isNotBlank() && memberId.isNotBlank()) {
+                val updateMap = hashMapOf<String, Any?>(
+                    "displayName" to cleanName,
+                    "nickname" to cleanNick,
+                    "photoBase64" to cleanPhoto
+                )
+                firestore.collection("groups").document(groupId)
+                    .collection("members").document(memberId)
+                    .set(updateMap, com.google.firebase.firestore.SetOptions.merge())
+                    .await()
+
+                // If updating self, also update user's profile and current location entry
+                val currentUser = _currentUserState.value
+                if (currentUser != null && currentUser.uid == memberId) {
+                    val updatedUser = currentUser.copy(
+                        displayName = cleanName,
+                        photoBase64 = cleanPhoto
+                    )
+                    _currentUserState.value = updatedUser
+
+                    firestore.collection("users").document(memberId).set(
+                        hashMapOf(
+                            "displayName" to cleanName,
+                            "photoBase64" to cleanPhoto
+                        ),
+                        com.google.firebase.firestore.SetOptions.merge()
+                    )
+
+                    firestore.collection("groups").document(groupId)
+                        .collection("locations").document(memberId).set(
+                            hashMapOf(
+                                "userName" to cleanName,
+                                "nickname" to cleanNick,
+                                "photoBase64" to cleanPhoto
+                            ),
+                            com.google.firebase.firestore.SetOptions.merge()
+                        )
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "updateGroupMemberProfile error: ${e.message}")
+            return Result.failure(e)
+        }
+
+        // Update local members state
+        val updatedMembers = _currentGroupMembers.value.map { m ->
+            if (m.userId == memberId) {
+                m.copy(displayName = cleanName, nickname = cleanNick, photoBase64 = cleanPhoto)
+            } else m
+        }
+        _currentGroupMembers.value = updatedMembers
+
+        return Result.success(Unit)
+    }
+
+    // ================== MESSAGES & CHAT (BASE64 ON FIRESTORE) ==================
+
+    fun sendMessage(groupId: String, message: ChatMessage) {
+        val user = _currentUserState.value
+        val msg = if (message.id.isBlank()) {
+            message.copy(
+                id = "msg_${UUID.randomUUID().toString().take(8)}",
+                senderId = user?.uid ?: "anon",
+                senderName = user?.displayName ?: "Utente",
+                timestamp = System.currentTimeMillis()
+            )
+        } else message
+
+        _currentGroupMessages.value = _currentGroupMessages.value + msg
+
+        try {
+            if (firestore != null) {
+                val map = hashMapOf(
+                    "id" to msg.id,
+                    "senderId" to msg.senderId,
+                    "senderName" to msg.senderName,
+                    "senderPhoto" to (msg.senderPhoto ?: ""),
+                    "text" to msg.text,
+                    "imageBase64" to (msg.imageBase64 ?: ""),
+                    "imageUrl" to (msg.imageUrl ?: ""),
+                    "timestamp" to msg.timestamp,
+                    "type" to msg.type.name,
+                    "latitude" to (msg.latitude ?: 0.0),
+                    "longitude" to (msg.longitude ?: 0.0)
+                )
+                firestore.collection("groups").document(groupId)
+                    .collection("messages").document(msg.id).set(map)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "sendMessage firestore failed: ${e.message}")
+        }
+    }
+
+    /**
+     * Compresses an image URI (from camera or gallery) and converts to Base64 JPEG string
+     * with high resolution and fidelity for direct Firestore storage.
+     */
+    suspend fun compressImageToBase64(uri: Uri, maxDimension: Int = 1280, quality: Int = 85): Result<String> {
+        return try {
+            val base64 = ImageUtils.uriToBase64(context, uri, maxDimension = maxDimension, quality = quality)
+            if (!base64.isNullOrBlank()) {
+                Result.success(base64)
+            } else {
+                Result.failure(Exception("Impossibile elaborare l'immagine"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "compressImageToBase64 error: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Compresses a direct Bitmap to Base64 JPEG string with high resolution and fidelity.
+     */
+    fun compressBitmapToBase64(bitmap: Bitmap, maxDimension: Int = 1280, quality: Int = 85): Result<String> {
+        return try {
+            val base64 = ImageUtils.bitmapToBase64(bitmap, maxDimension = maxDimension, quality = quality)
+            if (!base64.isNullOrBlank()) {
+                Result.success(base64)
+            } else {
+                Result.failure(Exception("Impossibile elaborare lo scatto fotografico"))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "compressBitmapToBase64 error: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    // ================== PLACE SNAPSHOTS (GEOREFERENCED PHOTOS) ==================
+
+    suspend fun addPlaceSnapshot(snapshot: PlaceSnapshot): Result<PlaceSnapshot> {
+        val user = _currentUserState.value ?: return Result.failure(Exception("Utente non autenticato"))
+        val currentGroup = user.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id
+            ?: return Result.failure(Exception("Nessun gruppo selezionato"))
+
+        val newSnapshot = snapshot.copy(
+            id = if (snapshot.id.isBlank()) "snp_${UUID.randomUUID().toString().take(8)}" else snapshot.id,
+            groupId = currentGroup,
+            userId = user.uid,
+            userName = user.displayName,
+            userPhotoBase64 = user.photoBase64,
+            timestamp = System.currentTimeMillis()
+        )
+
+        try {
+            if (firestore != null) {
+                val map = hashMapOf(
+                    "id" to newSnapshot.id,
+                    "groupId" to newSnapshot.groupId,
+                    "userId" to newSnapshot.userId,
+                    "userName" to newSnapshot.userName,
+                    "userPhotoBase64" to (newSnapshot.userPhotoBase64 ?: ""),
+                    "photoBase64" to newSnapshot.photoBase64,
+                    "latitude" to newSnapshot.latitude,
+                    "longitude" to newSnapshot.longitude,
+                    "timestamp" to newSnapshot.timestamp,
+                    "caption" to newSnapshot.caption
+                )
+                firestore.collection("groups").document(currentGroup)
+                    .collection("snapshots").document(newSnapshot.id).set(map).await()
+
+                // Also notify group members with a feed message in chat
+                val snapMsg = ChatMessage(
+                    id = "msg_${UUID.randomUUID().toString().take(8)}",
+                    senderId = user.uid,
+                    senderName = user.displayName,
+                    senderPhoto = user.photoBase64,
+                    text = if (newSnapshot.caption.isNotBlank()) "Nuova istantanea: ${newSnapshot.caption}" else "Ha pubblicato una nuova istantanea geolocalizzata",
+                    imageBase64 = newSnapshot.photoBase64,
+                    timestamp = newSnapshot.timestamp,
+                    type = MessageType.IMAGE,
+                    latitude = newSnapshot.latitude,
+                    longitude = newSnapshot.longitude
+                )
+                sendMessage(currentGroup, snapMsg)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "addPlaceSnapshot firestore failed: ${e.message}")
+        }
+
+        _currentGroupSnapshots.value = listOf(newSnapshot) + _currentGroupSnapshots.value.filterNot { it.id == newSnapshot.id }
+        return Result.success(newSnapshot)
+    }
+
+    suspend fun deletePlaceSnapshot(snapshotId: String): Result<Unit> {
+        val currentGroup = _currentUserState.value?.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id ?: ""
+        try {
+            if (firestore != null && currentGroup.isNotBlank()) {
+                firestore.collection("groups").document(currentGroup)
+                    .collection("snapshots").document(snapshotId).delete().await()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "deletePlaceSnapshot firestore failed: ${e.message}")
+        }
+        _currentGroupSnapshots.value = _currentGroupSnapshots.value.filterNot { it.id == snapshotId }
+        return Result.success(Unit)
+    }
+
+    /**
+     * Sends an emergency SOS alert to the group.
+     * Records both a high-priority chat message and a real-time event in Firestore.
+     */
+    fun sendSosAlert(groupId: String) {
+        val user = _currentUserState.value ?: return
+        val eventId = "sos_${UUID.randomUUID().toString().take(8)}"
+        val timestamp = System.currentTimeMillis()
+
+        // 1. Send SOS message in chat
+        val sosMsg = ChatMessage(
+            id = eventId,
+            senderId = user.uid,
+            senderName = user.displayName,
+            text = "Richiesta di assistenza immediata inviata",
+            timestamp = timestamp,
+            type = MessageType.SOS_ALERT
+        )
+        sendMessage(groupId, sosMsg)
+
+        // 2. Record SOS event in groups/{groupId}/events
+        try {
+            if (firestore != null) {
+                val eventMap = hashMapOf(
+                    "id" to eventId,
+                    "groupId" to groupId,
+                    "type" to "sos_alert",
+                    "userId" to user.uid,
+                    "userName" to user.displayName,
+                    "placeName" to "Posizione attuale",
+                    "message" to "${user.displayName} ha inviato una richiesta di soccorso",
+                    "timestamp" to timestamp
+                )
+                firestore.collection("groups").document(groupId)
+                    .collection("events").document(eventId).set(eventMap)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "sendSosAlert firestore error: ${e.message}")
+        }
+    }
+
+    private fun showLocalNotification(
+        title: String,
+        body: String,
+        isHighPriority: Boolean = false,
+        notificationId: Int = (System.currentTimeMillis() % 100000).toInt(),
+        destination: String = "MAP",
+        groupId: String? = null,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        senderId: String? = null
+    ) {
+        try {
+            // Usiamo nuovi ID canale con importanza HIGH per forzare l'heads-up
+            val channelId = if (isHighPriority) "family_radar_sos_headsup_v2" else "family_radar_headsup_channel_v2"
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? android.app.NotificationManager ?: return
+            
+            val soundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                val audioAttributes = android.media.AudioAttributes.Builder()
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(if (isHighPriority) android.media.AudioAttributes.USAGE_ALARM else android.media.AudioAttributes.USAGE_NOTIFICATION)
+                    .build()
+
+                val channel = android.app.NotificationChannel(
+                    channelId,
+                    if (isHighPriority) "Allerte SOS Radar" else "Notifiche Radar Famiglia",
+                    android.app.NotificationManager.IMPORTANCE_HIGH // FONDAMENTALE per il banner a video
+                ).apply {
+                    description = if (isHighPriority) "Notifiche allarmi SOS immediati" else "Avvisi in tempo reale luoghi e chat"
+                    enableLights(true)
+                    enableVibration(true)
+                    setSound(soundUri, audioAttributes)
+                    lockscreenVisibility = androidx.core.app.NotificationCompat.VISIBILITY_PUBLIC
+                    if (isHighPriority) {
+                        vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 500)
+                    }
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            val intent = Intent(context, com.example.MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra("destination", destination)
+                if (!groupId.isNullOrBlank()) putExtra("groupId", groupId)
+                if (latitude != null && !latitude.isNaN()) putExtra("latitude", latitude)
+                if (longitude != null && !longitude.isNaN()) putExtra("longitude", longitude)
+                if (!senderId.isNullOrBlank()) putExtra("senderId", senderId)
+            }
+
+            val pendingIntent = android.app.PendingIntent.getActivity(
+                context,
+                notificationId,
+                intent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val notification = androidx.core.app.NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(if (isHighPriority) android.R.drawable.stat_notify_error else android.R.drawable.ic_dialog_map)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText(body))
+                .setAutoCancel(true)
+                .setSound(soundUri)
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MAX) // FONDAMENTALE per heads-up
+                .setDefaults(androidx.core.app.NotificationCompat.DEFAULT_ALL)
+                .setCategory(if (isHighPriority) androidx.core.app.NotificationCompat.CATEGORY_ALARM else androidx.core.app.NotificationCompat.CATEGORY_MESSAGE)
+                .setVisibility(androidx.core.app.NotificationCompat.VISIBILITY_PUBLIC)
+                .setFullScreenIntent(pendingIntent, false) // Forza il banner popup a video sopra le altre app
+                .setContentIntent(pendingIntent)
+                .build()
+
+            notificationManager.notify(notificationId, notification)
+        } catch (e: Exception) {
+            Log.w(TAG, "Error showing local notification: ${e.message}")
+        }
+    }
+
+    private fun generateJoinCode(): String {
+        val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        return (1..6).map { chars.random() }.joinToString("")
+    }
+
+    companion object {
+        private const val TAG = "FirebaseRepository"
+        const val GOOGLE_SERVER_CLIENT_ID = "782024869586-as3i6548kt6l7t8nst4a5pr2ntfkca9v.apps.googleusercontent.com"
+
+        @Volatile
+        private var instance: FirebaseRepository? = null
+
+        fun getInstance(context: Context): FirebaseRepository {
+            return instance ?: synchronized(this) {
+                instance ?: FirebaseRepository(context.applicationContext).also { instance = it }
+            }
+        }
+    }
+}

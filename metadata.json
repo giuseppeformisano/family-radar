@@ -1,0 +1,6 @@
+{
+  "name": "Family Radar",
+  "description": "Real-time family GPS radar, live interactive map, background location tracking, geofence alerts, group management and chat with media sharing powered by Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

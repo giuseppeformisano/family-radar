@@ -1,0 +1,260 @@
+package com.example.ui.components
+
+import android.graphics.Bitmap
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
+import com.example.model.PlaceSnapshot
+import com.example.repository.FirebaseRepository
+import com.example.util.ImageUtils
+import kotlinx.coroutines.launch
+import java.util.Locale
+
+@Composable
+fun AddPlaceSnapshotDialog(
+    imageUri: Uri? = null,
+    bitmap: Bitmap? = null,
+    latitude: Double,
+    longitude: Double,
+    repository: FirebaseRepository,
+    onDismiss: () -> Unit,
+    onPublished: () -> Unit
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var caption by remember { mutableStateOf("") }
+    var isPublishing by remember { mutableStateOf(false) }
+
+    val previewBitmap = remember(imageUri, bitmap) {
+        if (bitmap != null) bitmap
+        else if (imageUri != null) ImageUtils.uriToBitmap(context, imageUri)
+        else null
+    }
+
+    Dialog(
+        onDismissRequest = { if (!isPublishing) onDismiss() },
+        properties = DialogProperties(
+            dismissOnBackPress = !isPublishing,
+            dismissOnClickOutside = !isPublishing,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .padding(vertical = 24.dp)
+                .wrapContentHeight()
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.CameraAlt,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Nuova Istantanea",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onDismiss,
+                        enabled = !isPublishing,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Chiudi",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Image Preview
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (previewBitmap != null) {
+                        Image(
+                            bitmap = previewBitmap.asImageBitmap(),
+                            contentDescription = "Foto scattata",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else if (imageUri != null) {
+                        AsyncImage(
+                            model = imageUri,
+                            contentDescription = "Foto scattata",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+
+                // GPS Location Chip
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Geolocalizzazione rilevata",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                            Text(
+                                text = String.format(Locale.US, "Lat: %.5f, Lon: %.5f", latitude, longitude),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+
+                // Caption Field
+                OutlinedTextField(
+                    value = caption,
+                    onValueChange = { caption = it },
+                    label = { Text("Descrizione o nota (opzionale)") },
+                    placeholder = { Text("Es: Pausa caffè qui, Vista panoramica...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    maxLines = 3,
+                    enabled = !isPublishing
+                )
+
+                // Publish Button
+                Button(
+                    onClick = {
+                        if (isPublishing) return@Button
+                        coroutineScope.launch {
+                            isPublishing = true
+                            val base64Result = if (imageUri != null) {
+                                repository.compressImageToBase64(imageUri, maxDimension = 1280, quality = 85)
+                            } else if (previewBitmap != null) {
+                                repository.compressBitmapToBase64(previewBitmap, maxDimension = 1280, quality = 85)
+                            } else {
+                                Result.failure(Exception("Nessuna immagine disponibile"))
+                            }
+
+                            if (base64Result.isSuccess) {
+                                val base64Str = base64Result.getOrNull() ?: ""
+                                val snapshot = PlaceSnapshot(
+                                    photoBase64 = base64Str,
+                                    latitude = latitude,
+                                    longitude = longitude,
+                                    caption = caption.trim()
+                                )
+                                val result = repository.addPlaceSnapshot(snapshot)
+                                isPublishing = false
+                                if (result.isSuccess) {
+                                    Toast.makeText(context, "Istantanea pubblicata sulla mappa del gruppo!", Toast.LENGTH_SHORT).show()
+                                    onPublished()
+                                } else {
+                                    Toast.makeText(context, "Errore salvataggio istantanea: ${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                                }
+                            } else {
+                                isPublishing = false
+                                Toast.makeText(context, "Errore compressione immagine", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    enabled = !isPublishing,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    if (isPublishing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Pubblicazione in corso...")
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Send,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Condividi sulla Mappa", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+    }
+}

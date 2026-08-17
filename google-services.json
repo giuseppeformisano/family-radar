@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "782024869586",
+    "project_id": "family-tracker-social",
+    "storage_bucket": "family-tracker-social.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:782024869586:android:626f6e3d310f44558c8f0b",
+        "android_client_info": {
+          "package_name": "com.aistudio.familyradar.rkwvpm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDs-73JAUMN_XtbZkl0otUqYp5VzV2kzNo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

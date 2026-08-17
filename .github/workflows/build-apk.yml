@@ -1,0 +1,63 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "Tipo di build"
+        type: choice
+        options: [debug, release]
+        default: debug
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # Il build type "debug" e' firmato con ${rootDir}/debug.keystore, che e'
+      # gitignored. Lo rigeneriamo qui con le credenziali standard di Android.
+      - name: Genera debug.keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore debug.keystore \
+            -storepass android -keypass android \
+            -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      # Il repo non ha il Gradle wrapper: lo generiamo con la versione
+      # richiesta da AGP 9.1.1.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.1.0"
+
+      - name: Build APK
+        env:
+          BUILD_TYPE: ${{ inputs.build_type || 'debug' }}
+        run: |
+          if [ "$BUILD_TYPE" = "release" ]; then
+            gradle :app:assembleRelease --no-daemon --no-configuration-cache
+          else
+            gradle :app:assembleDebug --no-daemon --no-configuration-cache
+          fi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: family-radar-apk
+          path: app/build/outputs/apk/**/*.apk
+          if-no-files-found: error

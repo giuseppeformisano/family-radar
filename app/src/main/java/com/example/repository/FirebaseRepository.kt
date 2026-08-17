@@ -1307,7 +1307,23 @@ class FirebaseRepository private constructor(private val context: Context) {
         snapshotsListener = null
         tripsListener?.remove()
         tripsListener = null
+
+        // Staccare i listener non basta: i flow continuano a esporre i dati del
+        // gruppo che si sta lasciando finche' i listener del nuovo gruppo non
+        // emettono. Nel frattempo la UI del gruppo nuovo mostra membri, pill e
+        // marker di quello vecchio -- e se il gruppo nuovo e' vuoto (appena
+        // creato) alcune collection non emettono affatto, quindi i dati vecchi
+        // resterebbero li' per sempre. Lo stato di gruppo va azzerato qui, tutto.
+        _currentGroupLocations.value = emptyList()
+        _currentGroupPlaces.value = emptyList()
+        _currentGroupMessages.value = emptyList()
+        _currentGroupMembers.value = emptyList()
+        _currentGroupSnapshots.value = emptyList()
+        _activeGeofenceAlerts.value = emptyList()
         _groupTrips.value = emptyList()
+        // Anche il badge dei non letti e' per gruppo: senza reset mostrerebbe
+        // il conteggio del gruppo precedente fino alla prima emissione.
+        _unreadChatCount.value = 0
     }
 
     private fun listenToGroupData(groupId: String) {
@@ -1327,7 +1343,12 @@ class FirebaseRepository private constructor(private val context: Context) {
                         Log.w(TAG, "Listen locations failed: ${e.message}")
                         return@addSnapshotListener
                     }
-                    if (snapshot != null && !snapshot.isEmpty) {
+                    // Niente guardia su isEmpty: una collection vuota e' a tutti
+                    // gli effetti un dato ("qui non c'e' nessuno"). Ignorandola,
+                    // entrando in un gruppo appena creato le posizioni del gruppo
+                    // precedente non venivano mai sovrascritte e restavano sulla
+                    // mappa. Gli altri listener assegnano gia' incondizionatamente.
+                    if (snapshot != null) {
                         val list = snapshot.documents.mapNotNull { doc ->
                             try {
                                 val lat = doc.getDouble("latitude") ?: 0.0

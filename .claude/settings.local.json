@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python -c ' *)",
-      "Bash(python -)"
+      "Bash(python -)",
+      "Bash(cp \"/c/Users/giuseppe.a.formisano/Downloads/google-services.json\" app/google-services.json)"
     ]
   }
 }

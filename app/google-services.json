@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "782024869586-dl4li6ktd88l02ajokie6v4vsaq2ac9o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.familyradar.rkwvpm",
+            "certificate_hash": "017e2d8c418a8fd99c769c629ce1edc185c8b363"
+          }
+        },
+        {
           "client_id": "782024869586-as3i6548kt6l7t8nst4a5pr2ntfkca9v.apps.googleusercontent.com",
           "client_type": 3
         }

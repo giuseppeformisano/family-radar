@@ -35,16 +35,38 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # Il build type "debug" e' firmato con ${rootDir}/debug.keystore, che e'
-      # gitignored. Lo rigeneriamo qui con le credenziali standard di Android.
-      - name: Genera debug.keystore
+      # Il build type "debug" e' firmato con ${rootDir}/debug.keystore, che e' gitignored.
+      #
+      # IMPORTANTE: keytool genera una chiave nuova a ogni esecuzione, quindi rigenerarlo
+      # a ogni build significa una SHA-1 diversa ogni volta -> Google Sign-In e Phone Auth
+      # smettono di funzionare, perche' Firebase valida l'app su package + impronta.
+      # Percio' usiamo il keystore fisso salvato nel secret DEBUG_KEYSTORE_BASE64.
+      # Il fallback rigenerato serve solo a non bloccare la build: l'APK si installa
+      # ma l'autenticazione Google/telefono non funzionera'.
+      - name: Ripristina debug.keystore
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
         run: |
-          keytool -genkeypair -v \
-            -keystore debug.keystore \
-            -storepass android -keypass android \
-            -alias androiddebugkey \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
+          if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
+            echo "$DEBUG_KEYSTORE_BASE64" | base64 -d > debug.keystore
+            echo "Keystore ripristinato dal secret: impronta stabile."
+          else
+            echo "::warning::DEBUG_KEYSTORE_BASE64 non impostato. Genero un keystore usa-e-getta:"
+            echo "::warning::l'APK si installa ma Google Sign-In e Phone Auth falliranno."
+            keytool -genkeypair -v \
+              -keystore debug.keystore \
+              -storepass android -keypass android \
+              -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      # Le impronte da incollare in Firebase Console > Impostazioni progetto > App Android.
+      - name: Mostra impronte di firma
+        run: |
+          echo "Registra queste impronte nel progetto Firebase:"
+          keytool -list -v -keystore debug.keystore -storepass android -alias androiddebugkey \
+            | grep -E "SHA1:|SHA256:"
 
       # Il repo non ha il Gradle wrapper: lo generiamo con la versione
       # richiesta da AGP 9.1.1.

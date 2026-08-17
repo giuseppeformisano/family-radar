@@ -2089,8 +2089,7 @@ private fun SettingsPanel(
         // ---- Profilo ----
         item {
             SettingsCard {
-                SectionHeader(title = "Profilo", icon = Icons.Default.Person)
-                Spacer(Modifier.height(Spacing.md))
+                SettingsSectionHeader(title = "Profilo", icon = Icons.Default.Person)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Spacing.md)
@@ -2135,12 +2134,11 @@ private fun SettingsPanel(
         // ---- Privacy ----
         item {
             SettingsCard {
-                SectionHeader(
+                SettingsSectionHeader(
                     title = "Privacy",
                     subtitle = "Chi vede la tua posizione",
                     icon = if (isGlobalGhostMode) Icons.Default.VisibilityOff else Icons.Default.Visibility
                 )
-                Spacer(Modifier.height(Spacing.xs))
                 SettingsToggleRow(
                     title = "Modalità fantasma",
                     description = "Nasconde la tua posizione in tutti i gruppi contemporaneamente",
@@ -2169,12 +2167,11 @@ private fun SettingsPanel(
         // Prima erano separati dalla scheda Aspetto, che non c'entra nulla.
         item {
             SettingsCard {
-                SectionHeader(
+                SettingsSectionHeader(
                     title = "Tracciamento",
                     subtitle = "Come viene rilevata la tua posizione",
                     icon = Icons.Default.GpsFixed
                 )
-                Spacer(Modifier.height(Spacing.xs))
                 SettingsToggleRow(
                     title = "Tracciamento in background",
                     description = "Mantiene attivo il radar anche ad app chiusa, con notifica persistente",
@@ -2312,6 +2309,11 @@ private fun SettingsPanel(
                     }
                 }
 
+                // La riga sta QUI, fra il nome del gruppo e le sue impostazioni,
+                // non piu' in mezzo alle impostazioni stesse: e' il titolo che
+                // va staccato da cio' che governa.
+                Spacer(Modifier.height(Spacing.md))
+                HairlineDivider()
                 Spacer(Modifier.height(Spacing.md))
 
                 Surface(
@@ -2353,8 +2355,7 @@ private fun SettingsPanel(
                 }
 
                 if (isOwnerOrAdmin && currentGroup != null) {
-                    Spacer(Modifier.height(Spacing.md))
-                    HairlineDivider()
+                    Spacer(Modifier.height(Spacing.xs))
                     SettingsToggleRow(
                         title = "Approvazione nuovi membri",
                         description = if (currentGroup.requiresApproval)
@@ -2375,12 +2376,12 @@ private fun SettingsPanel(
         // fondo e non piu' in mezzo alle impostazioni di posizione.
         item {
             SettingsCard {
-                SectionHeader(
+                SettingsSectionHeader(
                     title = "Aspetto",
                     subtitle = "Tema dell'applicazione",
                     icon = Icons.Default.Palette
                 )
-                Spacer(Modifier.height(Spacing.md))
+                Spacer(Modifier.height(Spacing.xs))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
@@ -2408,12 +2409,12 @@ private fun SettingsPanel(
         // hanno conseguenze molto diverse.
         item {
             SettingsCard {
-                SectionHeader(
+                SettingsSectionHeader(
                     title = "Account",
                     subtitle = "Uscita dal gruppo e disconnessione",
                     icon = Icons.Default.ManageAccounts
                 )
-                Spacer(Modifier.height(Spacing.md))
+                Spacer(Modifier.height(Spacing.xs))
                 OutlinedButton(
                     onClick = onRequestLeaveGroup,
                     shape = RoundedCornerShape(Radius.sm),
@@ -2453,12 +2454,11 @@ private fun SettingsPanel(
         // nemmeno un titolo che lo distinguesse.
         item {
             SettingsCard {
-                SectionHeader(
+                SettingsSectionHeader(
                     title = "Sviluppo",
                     subtitle = "Strumenti di test, non servono all'uso normale",
                     icon = Icons.Default.Code
                 )
-                Spacer(Modifier.height(Spacing.xs))
                 SettingsToggleRow(
                     title = "Simula movimento",
                     description = "Muove membri di prova sulla mappa. Utile solo su emulatore",
@@ -2470,6 +2470,59 @@ private fun SettingsPanel(
             }
         }
     }
+}
+
+/**
+ * Intestazione delle schede di Impostazioni.
+ *
+ * Non riusa SectionHeader perche' li' il titolo e' in titleMedium, cioe' quasi
+ * lo stesso peso dei titoli degli interruttori sotto: il risultato era che
+ * titolo di sezione e voci sembravano un blocco unico. Qui il titolo sale a
+ * titleLarge e una riga sottile lo stacca dalle voci che governa.
+ */
+@Composable
+private fun SettingsSectionHeader(
+    title: String,
+    subtitle: String? = null,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    action: @Composable (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(Sizes.iconMd)
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        action?.invoke()
+    }
+    Spacer(Modifier.height(Spacing.md))
+    HairlineDivider()
+    Spacer(Modifier.height(Spacing.xs))
 }
 
 @Composable

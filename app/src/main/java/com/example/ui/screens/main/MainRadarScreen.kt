@@ -522,7 +522,11 @@ fun MainRadarScreen(
                 groupName = currentGroup?.name ?: "Radar",
                 joinCode = currentGroup?.joinCode,
                 memberCount = activeMembers.size,
-                onlineCount = locations.count { System.currentTimeMillis() - it.timestamp < 5 * 60_000L },
+                // Stessa soglia del PresenceDot: con due valori separati il
+                // conteggio in intestazione poteva contraddire i pallini sotto.
+                onlineCount = locations.count {
+                    System.currentTimeMillis() - it.timestamp < PRESENCE_ONLINE_MS
+                },
                 onSwitchGroup = onSwitchGroup,
                 onSos = { showSosConfirmDialog = true },
                 modifier = Modifier

@@ -29,8 +29,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +56,7 @@ import com.example.ui.theme.RadarTheme
 import com.example.ui.theme.Sizes
 import com.example.ui.theme.Spacing
 import com.example.util.ImageUtils
+import kotlinx.coroutines.delay
 
 // ============================================================================
 // SUPERFICI
@@ -184,17 +188,40 @@ fun RadarAvatar(
     }
 }
 
-/** Pallino di presenza. Verde = visto ora, giallo = qualche minuto fa, grigio = fermo da un'ora. */
+/**
+ * Soglia del verde. Deve restare COMODAMENTE piu' larga dell'heartbeat del
+ * repository (5 minuti), che e' la frequenza massima con cui una posizione
+ * viene riscritta stando fermi.
+ *
+ * Prima erano entrambi 5 minuti: significava diventare gialli nei secondi
+ * appena prima di ogni heartbeat, pur avendo l'app aperta e tutto funzionante.
+ * Con 12 minuti si resta verdi anche saltando un heartbeat.
+ */
+const val PRESENCE_ONLINE_MS = 12 * 60_000L
+private const val PRESENCE_IDLE_MS = 60 * 60_000L
+
+/** Pallino di presenza. Verde = visto di recente, giallo = qualche decina di minuti, grigio = da un'ora. */
 @Composable
 fun PresenceDot(
     lastSeenMillis: Long,
     modifier: Modifier = Modifier,
     size: Dp = 10.dp
 ) {
-    val elapsed = System.currentTimeMillis() - lastSeenMillis
+    // Senza questo battito, "adesso" verrebbe letto una volta sola in
+    // composizione: il pallino resterebbe fermo sul colore calcolato allora e
+    // cambierebbe solo per caso, quando qualcos'altro fa ricomporre la lista.
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(lastSeenMillis) {
+        while (true) {
+            nowMillis = System.currentTimeMillis()
+            delay(30_000)
+        }
+    }
+
+    val elapsed = nowMillis - lastSeenMillis
     val target = when {
-        elapsed < 5 * 60_000L -> RadarSemantic.Online
-        elapsed < 60 * 60_000L -> RadarSemantic.Idle
+        elapsed < PRESENCE_ONLINE_MS -> RadarSemantic.Online
+        elapsed < PRESENCE_IDLE_MS -> RadarSemantic.Idle
         else -> RadarSemantic.Offline
     }
     val color by animateColorAsState(targetValue = target, label = "presence_color")

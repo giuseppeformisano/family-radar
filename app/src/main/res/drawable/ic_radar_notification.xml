@@ -1,9 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Icona di notifica, usata da RadarNotifier e dal servizio di localizzazione.
+
+  Regola non negoziabile: da API 21 Android scarta i colori dell'icona di notifica
+  e ne usa solo il canale alfa, ridisegnandola bianca. Qualsiasi cosa con dei
+  riempimenti colorati diventa una macchia bianca informe. Quindi qui: silhouette
+  piatta, un solo colore, nessun gradiente, tratti spessi abbastanza da reggere
+  la riduzione a 24dp nella status bar.
+
+  Per un tocco di colore non modificare questo file: usa .setColor() sul builder,
+  che tinge lo sfondo del cerchietto attorno all'icona.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
-    android:viewportHeight="24">
-  <path
-      android:fillColor="#FFFFFFFF"
-      android:pathData="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z"/>
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+
+    <!-- Onda esterna -->
+    <path
+        android:pathData="M2.4,12 a9.6,9.6 0 1,0 19.2,0 a9.6,9.6 0 1,0 -19.2,0"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8" />
+
+    <!-- Onda interna -->
+    <path
+        android:pathData="M6.2,12 a5.8,5.8 0 1,0 11.6,0 a5.8,5.8 0 1,0 -11.6,0"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.8" />
+
+    <!-- Centro -->
+    <path
+        android:pathData="M9.4,12 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0"
+        android:fillColor="#FFFFFFFF" />
 </vector>

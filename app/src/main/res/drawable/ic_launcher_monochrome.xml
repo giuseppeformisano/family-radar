@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Livello monocromatico per le icone a tema di Android 13+.
+
+  Il sistema lo ricolora con la tinta del wallpaper e ne considera solo il canale
+  alfa: trasparenze parziali e colori diversi qui non servono a nulla, quindi le
+  onde sono a opacità piena e il disegno è leggermente più compatto rispetto al
+  foreground a colori, per reggere la ricolorazione senza impastarsi.
+
+  Prima l'adaptive icon puntava il livello monochrome sul foreground a colori:
+  funzionava per caso, ma il settore di scansione semitrasparente diventava una
+  macchia piatta appiccicata alle onde.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Onda esterna -->
+    <path
+        android:pathData="M26,54 a28,28 0 1,0 56,0 a28,28 0 1,0 -56,0"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3" />
+
+    <!-- Onda intermedia -->
+    <path
+        android:pathData="M34,54 a20,20 0 1,0 40,0 a20,20 0 1,0 -40,0"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3" />
+
+    <!-- Familiare 1 -->
+    <path
+        android:pathData="M31.5,61.2 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Familiare 2 -->
+    <path
+        android:pathData="M66,66.8 a4.6,4.6 0 1,0 9.2,0 a4.6,4.6 0 1,0 -9.2,0"
+        android:fillColor="#FFFFFF" />
+
+    <!-- Tu, al centro -->
+    <path
+        android:pathData="M47.5,54 a6.5,6.5 0 1,0 13,0 a6.5,6.5 0 1,0 -13,0"
+        android:fillColor="#FFFFFF" />
+</vector>

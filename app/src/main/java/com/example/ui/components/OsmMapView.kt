@@ -15,10 +15,9 @@ import android.util.Log
 import android.util.LruCache
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -432,7 +431,10 @@ fun OsmMapView(
         Column(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .padding(end = 16.dp),
+                .padding(end = 16.dp)
+                // animateContentSize anima la variazione di altezza della Column
+                // senza applicare alcun clip → zero artefatti sul layer AndroidView.
+                .animateContentSize(animationSpec = tween(200)),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -450,12 +452,13 @@ fun OsmMapView(
                 Icon(Icons.Default.Layers, contentDescription = "Gestione Layer Mappa", modifier = Modifier.size(24.dp))
             }
 
-            // Sub-pulsanti: espansione VERTICALE sotto il FAB layer.
-            // La larghezza della Column non cambia mai → nessun rettangolo laterale.
+            // Solo fadeIn/fadeOut: nessun clip sul layer, nessun rettangolo
+            // trasparente sopra la mappa. animateContentSize sull'esterno
+            // anima l'altezza senza clipToBounds.
             AnimatedVisibility(
                 visible = isLayerMenuExpanded,
-                enter = expandVertically(tween(220), expandFrom = Alignment.Top) + fadeIn(tween(220)),
-                exit = shrinkVertically(tween(160), shrinkTowards = Alignment.Top) + fadeOut(tween(160))
+                enter = fadeIn(tween(200)),
+                exit = fadeOut(tween(200))
             ) {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(10.dp),

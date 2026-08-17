@@ -518,9 +518,13 @@ fun MainRadarScreen(
                 },
                 onAddPlace = { showAddPlaceDialog = true },
                 onTakeSnapshot = { showSnapshotSourceDialog = true },
+                // A sinistra e in basso: la colonna a destra e' gia' occupata dai
+                // controlli interni della mappa (layer, zoom, inquadra gruppo).
+                // Il padding inferiore tiene i pulsanti sopra il bottom sheet.
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = Spacing.lg)
+                    .align(Alignment.BottomStart)
+                    .navigationBarsPadding()
+                    .padding(start = Spacing.lg, bottom = Sizes.sheetPeek + Spacing.lg)
             )
 
             // Carosello membri: visibile solo con il pannello chiuso, così a sheet
@@ -845,7 +849,7 @@ private fun MapActionRail(
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-        horizontalAlignment = Alignment.End
+        horizontalAlignment = Alignment.Start
     ) {
         // Etichetta di stato: senza, "inseguimento attivo" resterebbe un'icona
         // accesa senza dire su chi.

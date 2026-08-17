@@ -497,25 +497,10 @@ fun OsmMapView(
                 }
             }
 
-            // Center on Me
-            FloatingActionButton(
-                onClick = {
-                    val myLoc = locations.find { it.userId == currentUserId } ?: locations.firstOrNull()
-                    if (myLoc != null && myLoc.latitude != 0.0 && !myLoc.latitude.isNaN()) {
-                        mapViewInstance?.controller?.animateTo(GeoPoint(myLoc.latitude, myLoc.longitude))
-                        mapViewInstance?.controller?.setZoom(16.5)
-                    }
-                },
-                modifier = Modifier
-                    .size(48.dp)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
-                    .testTag("center_my_location_button"),
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary,
-                shape = CircleShape
-            ) {
-                Icon(Icons.Default.MyLocation, contentDescription = "Centra su di me")
-            }
+            // "Centra su di me" vive nella rail di MainRadarScreen: la' oltre a
+            // centrare imposta anche il bersaglio del Follow Mode, cosa che qui
+            // non sarebbe possibile. Averlo in due posti creava due pulsanti
+            // identici con comportamenti diversi.
 
             // Group Extent View
             FloatingActionButton(

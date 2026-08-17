@@ -148,19 +148,26 @@ object RadarNotifier {
             .build()
 
         val count = state.ids.size
+        val summaryTitle = groupName?.takeIf { it.isNotBlank() } ?: "Chat del gruppo"
+
+        // Niente `.apply { }` su NotificationCompat.Style: la classe espone un
+        // metodo Java pubblico che si chiama anch'esso `apply`, e in Kotlin il
+        // membro della classe ha la precedenza sull'extension function. Il blocco
+        // verrebbe interpretato come SAM di quel metodo, con un receiver diverso.
+        val inboxStyle = NotificationCompat.InboxStyle()
+        inboxStyle.setBigContentTitle(summaryTitle)
+        synchronized(state) { state.lines.forEach { line -> inboxStyle.addLine(line) } }
+        if (count > INBOX_MAX_LINES) {
+            inboxStyle.setSummaryText("+${count - INBOX_MAX_LINES} altri")
+        }
+
         val summary = NotificationCompat.Builder(context, CHANNEL_CHAT)
             .setSmallIcon(R.drawable.ic_radar_notification)
-            .setContentTitle(groupName?.takeIf { it.isNotBlank() } ?: "Chat del gruppo")
+            .setContentTitle(summaryTitle)
             .setContentText(
                 if (count == 1) "1 nuovo messaggio" else "$count nuovi messaggi"
             )
-            .setStyle(
-                NotificationCompat.InboxStyle().apply {
-                    synchronized(state) { state.lines.forEach { addLine(it) } }
-                    setBigContentTitle(groupName?.takeIf { it.isNotBlank() } ?: "Chat del gruppo")
-                    if (count > INBOX_MAX_LINES) setSummaryText("+${count - INBOX_MAX_LINES} altri")
-                }
-            )
+            .setStyle(inboxStyle)
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

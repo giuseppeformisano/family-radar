@@ -13,10 +13,8 @@ import android.graphics.drawable.Drawable
 import android.location.Location
 import android.util.Log
 import android.util.LruCache
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -29,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -388,26 +387,29 @@ fun OsmMapView(
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Expandable Layer Switcher Row (Semplice dissolvenza e scorrimento da/verso destra)
+            // Expandable Layer Switcher Row
+            // graphicsLayer { alpha } non crea nessun clip boundary, a differenza di
+            // AnimatedVisibility che ritagliava i pulsanti circolari a un rettangolo.
+            var isSubVisible by remember { mutableStateOf(false) }
+            val subAlpha by animateFloatAsState(
+                targetValue = if (isLayerMenuExpanded) 1f else 0f,
+                animationSpec = tween(if (isLayerMenuExpanded) 220 else 160),
+                finishedListener = { if (it == 0f) isSubVisible = false },
+                label = "layer_sub_alpha"
+            )
+            LaunchedEffect(isLayerMenuExpanded) {
+                if (isLayerMenuExpanded) isSubVisible = true
+            }
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Animated Sub-buttons (Membri, Istantanee, Luoghi)
-                // Solo dissolvenza, niente slide.
-                //
-                // AnimatedVisibility ritaglia il contenuto ai propri limiti quando
-                // la transizione comprende uno scorrimento: i pulsanti sembravano
-                // uscire da dietro un bordo rettangolare invisibile. Con la sola
-                // opacita' non c'e' nulla da ritagliare e l'apertura resta pulita.
-                AnimatedVisibility(
-                    visible = isLayerMenuExpanded,
-                    enter = fadeIn(animationSpec = tween(220)),
-                    exit = fadeOut(animationSpec = tween(160))
-                ) {
+                if (isSubVisible) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.graphicsLayer { alpha = subAlpha }
                     ) {
                         // 1. Members Layer Mini Button
                         IconButton(

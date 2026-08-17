@@ -13,8 +13,12 @@ import android.graphics.drawable.Drawable
 import android.location.Location
 import android.util.Log
 import android.util.LruCache
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -27,7 +31,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -384,113 +387,67 @@ fun OsmMapView(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 16.dp),
-            horizontalAlignment = Alignment.End,
+            horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Expandable Layer Switcher Row
-            // subAlpha deriva direttamente da isLayerMenuExpanded: nessun LaunchedEffect,
-            // nessun finishedListener. isSubVisible è calcolato inline — la Row entra
-            // nel layout nello stesso frame in cui isLayerMenuExpanded diventa true
-            // (alpha = 0, quindi invisibile), ed esce quando subAlpha torna a 0.
-            // Così la Column non cambia larghezza a metà frame e non appare il rettangolo.
-            val subAlpha by animateFloatAsState(
-                targetValue = if (isLayerMenuExpanded) 1f else 0f,
-                animationSpec = tween(if (isLayerMenuExpanded) 220 else 160),
-                label = "layer_sub_alpha"
-            )
-            val isSubVisible = isLayerMenuExpanded || subAlpha > 0f
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            // Layer toggle FAB
+            FloatingActionButton(
+                onClick = { isLayerMenuExpanded = !isLayerMenuExpanded },
+                modifier = Modifier
+                    .size(48.dp)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
+                    .testTag("expandable_layer_button"),
+                containerColor = if (isLayerMenuExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                contentColor = if (isLayerMenuExpanded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                shape = CircleShape
             ) {
-                if (isSubVisible) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.graphicsLayer { alpha = subAlpha }
-                    ) {
-                        // 1. Members Layer Mini Button
-                        IconButton(
-                            onClick = { showMembers = !showMembers },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (showMembers) MaterialTheme.colorScheme.primaryContainer
-                                    else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                                )
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
-                                .testTag("layer_toggle_members")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.People,
-                                contentDescription = "Mostra Membri",
-                                tint = if (showMembers) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                Icon(Icons.Default.Layers, contentDescription = "Gestione Layer Mappa", modifier = Modifier.size(24.dp))
+            }
 
-                        // 2. Snapshots Layer Mini Button
-                        IconButton(
-                            onClick = { showSnapshots = !showSnapshots },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (showSnapshots) Color(0xFFFFEDD5)
-                                    else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                                )
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
-                                .testTag("layer_toggle_snapshots")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PhotoCamera,
-                                contentDescription = "Mostra Istantanee",
-                                tint = if (showSnapshots) Color(0xFFEA580C) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        // 3. Places Layer Mini Button
-                        IconButton(
-                            onClick = { showPlaces = !showPlaces },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (showPlaces) MaterialTheme.colorScheme.secondaryContainer
-                                    else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                                )
-                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
-                                .testTag("layer_toggle_places")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Place,
-                                contentDescription = "Mostra Luoghi",
-                                tint = if (showPlaces) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
-
-                // Main Layers Toggle Round Button (Right column, matches zoom button style)
-                FloatingActionButton(
-                    onClick = { isLayerMenuExpanded = !isLayerMenuExpanded },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
-                        .testTag("expandable_layer_button"),
-                    containerColor = if (isLayerMenuExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                    contentColor = if (isLayerMenuExpanded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
-                    shape = CircleShape
+            // Sub-pulsanti: espansione VERTICALE sotto il FAB layer.
+            // La larghezza della Column non cambia mai → nessun rettangolo laterale.
+            AnimatedVisibility(
+                visible = isLayerMenuExpanded,
+                enter = expandVertically(tween(220), expandFrom = Alignment.Top) + fadeIn(tween(220)),
+                exit = shrinkVertically(tween(160), shrinkTowards = Alignment.Top) + fadeOut(tween(160))
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Layers,
-                        contentDescription = "Gestione Layer Mappa",
-                        modifier = Modifier.size(24.dp)
-                    )
+                    IconButton(
+                        onClick = { showMembers = !showMembers },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (showMembers) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
+                            .testTag("layer_toggle_members")
+                    ) {
+                        Icon(Icons.Default.People, contentDescription = "Mostra Membri", tint = if (showMembers) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(
+                        onClick = { showSnapshots = !showSnapshots },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (showSnapshots) Color(0xFFFFEDD5) else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
+                            .testTag("layer_toggle_snapshots")
+                    ) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = "Mostra Istantanee", tint = if (showSnapshots) Color(0xFFEA580C) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                    }
+                    IconButton(
+                        onClick = { showPlaces = !showPlaces },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (showPlaces) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
+                            .testTag("layer_toggle_places")
+                    ) {
+                        Icon(Icons.Default.Place, contentDescription = "Mostra Luoghi", tint = if (showPlaces) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                    }
                 }
             }
 

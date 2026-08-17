@@ -13,8 +13,6 @@ import android.graphics.drawable.Drawable
 import android.location.Location
 import android.util.Log
 import android.util.LruCache
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -28,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -433,30 +430,31 @@ fun OsmMapView(
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Espansione ORIZZONTALE senza alcun clip.
+            // Espansione ORIZZONTALE, senza NESSUNA animazione. Volutamente.
             //
-            // Ogni modificatore che clippa (AnimatedVisibility con expand/shrink,
-            // animateContentSize, clipToBounds) crea un hardware layer che sopra
-            // l'AndroidView della mappa si compone male, lasciando il rettangolo
-            // trasparente. Qui: nessun clip, larghezza della Row SEMPRE costante,
-            // e quando il menu e' chiuso i pulsanti sono rimpiazzati da uno Spacer
-            // inerte -- che non intercetta i tocchi, quindi la mappa resta usabile.
-            val subAlpha by animateFloatAsState(
-                targetValue = if (isLayerMenuExpanded) 1f else 0f,
-                animationSpec = tween(200),
-                label = "layerSubAlpha"
-            )
-
+            // I pixel della mappa li disegna il view system di Android, non
+            // Compose: l'AndroidView non finisce nel graphics layer di Compose.
+            // Percio' qualunque modificatore che allochi un RenderNode o un clip
+            // sopra quella regione -- graphicsLayer/alpha, fadeIn/fadeOut,
+            // AnimatedVisibility con expand/shrink, animateContentSize (che
+            // chiama clipToBounds al suo interno) -- ritaglia un rettangolo che
+            // la mappa non riempie, e si vede come un rettangolo trasparente che
+            // taglia i pulsanti. Tutte queste strade sono gia' state provate e
+            // falliscono per lo stesso motivo.
+            //
+            // Qui non c'e' niente da comporre: i pulsanti compaiono e spariscono
+            // e basta. Da chiusi lasciano il posto a uno Spacer della stessa
+            // larghezza, cosi' il FAB non si sposta mai e i tocchi passano alla
+            // mappa (lo Spacer non intercetta gli eventi).
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (subAlpha > 0.01f) {
+                if (isLayerMenuExpanded) {
                     IconButton(
                         onClick = { showMembers = !showMembers },
                         modifier = Modifier
                             .size(40.dp)
-                            .graphicsLayer { alpha = subAlpha }
                             .clip(CircleShape)
                             .background(if (showMembers) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
                             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
@@ -468,7 +466,6 @@ fun OsmMapView(
                         onClick = { showSnapshots = !showSnapshots },
                         modifier = Modifier
                             .size(40.dp)
-                            .graphicsLayer { alpha = subAlpha }
                             .clip(CircleShape)
                             .background(if (showSnapshots) Color(0xFFFFEDD5) else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
                             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
@@ -480,7 +477,6 @@ fun OsmMapView(
                         onClick = { showPlaces = !showPlaces },
                         modifier = Modifier
                             .size(40.dp)
-                            .graphicsLayer { alpha = subAlpha }
                             .clip(CircleShape)
                             .background(if (showPlaces) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
                             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)

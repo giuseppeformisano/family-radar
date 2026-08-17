@@ -1382,7 +1382,9 @@ class FirebaseRepository private constructor(private val context: Context) {
                                 null
                             }
                         }
-                        _currentGroupPlaces.value = list
+                        // distinctBy: un documento legacy con un campo `id` che
+                        // collide con un altro basta a far crashare la LazyColumn.
+                        _currentGroupPlaces.value = list.distinctBy { it.id }
                     }
                 }
 
@@ -2053,7 +2055,13 @@ class FirebaseRepository private constructor(private val context: Context) {
             Log.w(TAG, "addPlace firestore failed: ${e.message}")
         }
 
-        _currentGroupPlaces.value = _currentGroupPlaces.value + newPlace
+        // Aggiornamento ottimistico IDEMPOTENTE: il listener su `places` puo'
+        // aver gia' consegnato lo stesso documento appena scritto. Un append
+        // cieco lo duplicherebbe nella lista, e due elementi con la stessa key
+        // fanno crashare la LazyColumn del pannello Luoghi
+        // (IllegalArgumentException: Key "plc_..." was already used).
+        _currentGroupPlaces.value =
+            _currentGroupPlaces.value.filterNot { it.id == newPlace.id } + newPlace
         return Result.success(newPlace)
     }
 
@@ -2153,7 +2161,10 @@ class FirebaseRepository private constructor(private val context: Context) {
             )
         } else message
 
-        _currentGroupMessages.value = _currentGroupMessages.value + msg
+        // Idempotente come addPlace: il listener sui messaggi puo' riconsegnare
+        // lo stesso documento, e una key duplicata fa crashare la LazyColumn.
+        _currentGroupMessages.value =
+            _currentGroupMessages.value.filterNot { it.id == msg.id } + msg
 
         try {
             if (firestore != null) {

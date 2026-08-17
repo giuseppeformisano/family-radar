@@ -57,6 +57,7 @@ import org.osmdroid.views.overlay.Polygon
 import java.util.*
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AddPlaceDialog(
     initialLat: Double,
@@ -481,9 +482,14 @@ fun AddPlaceDialog(
                 // Category Chips
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Categoria", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold))
-                    Row(
+                    // FlowRow e non Row: cinque chip forzati su una riga sola con
+                    // SpaceBetween finiscono attaccati sui display stretti e
+                    // l'ultimo si deforma. Cosi' vanno a capo da soli e la
+                    // spaziatura resta la stessa su qualsiasi dispositivo.
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         PlaceCategory.values().forEach { cat ->
                             val isSelected = cat == selectedCategory

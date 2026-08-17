@@ -388,18 +388,17 @@ fun OsmMapView(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Expandable Layer Switcher Row
-            // graphicsLayer { alpha } non crea nessun clip boundary, a differenza di
-            // AnimatedVisibility che ritagliava i pulsanti circolari a un rettangolo.
-            var isSubVisible by remember { mutableStateOf(false) }
+            // subAlpha deriva direttamente da isLayerMenuExpanded: nessun LaunchedEffect,
+            // nessun finishedListener. isSubVisible è calcolato inline — la Row entra
+            // nel layout nello stesso frame in cui isLayerMenuExpanded diventa true
+            // (alpha = 0, quindi invisibile), ed esce quando subAlpha torna a 0.
+            // Così la Column non cambia larghezza a metà frame e non appare il rettangolo.
             val subAlpha by animateFloatAsState(
                 targetValue = if (isLayerMenuExpanded) 1f else 0f,
                 animationSpec = tween(if (isLayerMenuExpanded) 220 else 160),
-                finishedListener = { if (it == 0f) isSubVisible = false },
                 label = "layer_sub_alpha"
             )
-            LaunchedEffect(isLayerMenuExpanded) {
-                if (isLayerMenuExpanded) isSubVisible = true
-            }
+            val isSubVisible = isLayerMenuExpanded || subAlpha > 0f
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,

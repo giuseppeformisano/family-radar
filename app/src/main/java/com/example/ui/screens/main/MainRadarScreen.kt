@@ -3369,7 +3369,8 @@ private fun TripsPanel(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            "%.1f km  •  %d min".format(km, durationMin),
+                            "%.1f km  •  %d min".format(km, durationMin) +
+                                (trip.activityLabel?.let { "  •  $it" } ?: ""),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -3488,6 +3489,7 @@ private fun TripDetailDialog(
                 if (trip.stoppedMs > 60_000) {
                     TripDetailRow("Tempo fermo", "${trip.stoppedMs / 60000} min")
                 }
+                trip.activityLabel?.let { TripDetailRow("Spostamento", it) }
                 TripDetailRow("Registrazione", trip.source.label)
                 TripDetailRow("Da", trip.userName)
             }

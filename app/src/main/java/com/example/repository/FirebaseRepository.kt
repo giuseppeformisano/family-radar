@@ -1995,6 +1995,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     endPlaceName = doc.getString("endPlaceName")?.ifBlank { null },
                                     isLive = isLive,
                                     isPrivate = isPrivate,
+                                    activityKind = doc.getString("activityKind") ?: "",
                                     points = points
                                 )
                             } catch (ex: Exception) { null }
@@ -3229,6 +3230,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                 "endPlaceName" to (endPlace ?: ""),
                 "isLive" to false,
                 "isPrivate" to isPrivate,
+                "activityKind" to trip.activityKind,
                 // La traccia esce dal documento dell'elenco e va nel
                 // sottodocumento: cinquanta viaggi con i punti dentro
                 // significherebbero scaricarli tutti a ogni apertura del gruppo.
@@ -3549,6 +3551,16 @@ class FirebaseRepository private constructor(private val context: Context) {
             // La posizione mostrata deve aggiornarsi subito, senza attendere il
             // prossimo fix: altrimenti l'icona resterebbe indietro di un giro.
             CoroutineScope(Dispatchers.IO).launch { pushActivityKindNow() }
+
+            // Si annota sul viaggio in corso, cosi' il dettaglio puo' dire come
+            // ci si e' spostati. Solo i modi di VIAGGIO: una sosta a piedi in
+            // mezzo a un tragitto in auto non deve riscrivere l'etichetta.
+            val kind = _currentActivityKind
+            if (kind == ActivityKind.VEHICLE || kind == ActivityKind.BICYCLE ||
+                kind == ActivityKind.RUNNING || kind == ActivityKind.WALKING
+            ) {
+                _activeTrip.update { it?.copy(activityKind = kind) }
+            }
         }
 
         if (!_isAutoTripEnabled.value) return
@@ -3615,8 +3627,14 @@ class FirebaseRepository private constructor(private val context: Context) {
     private fun evaluateAutoTrip(location: UserLocation) {
         if (!_isAutoTripEnabled.value) return
 
+        // Un fix impreciso non puo' decidere se sei partito. In casa il GPS
+        // sbanda di decine di metri e la velocita' che ne deriva e' rumore, non
+        // movimento: senza questo filtro bastava camminare per casa perche' i
+        // fix riportassero a ripetizione una velocita' sopra soglia.
+        if (location.accuracy > TRIP_MAX_ACCURACY_METERS) return
+
         val now = System.currentTimeMillis()
-        val moving = location.speed > MOVING_SPEED_THRESHOLD_MS
+        val moving = location.speed > AUTO_TRIP_START_SPEED_MS
         val active = _activeTrip.value
 
         if (active == null) {
@@ -3636,8 +3654,15 @@ class FirebaseRepository private constructor(private val context: Context) {
                 }
             }
 
-            val movedEnough = distanceFromStationaryAnchor(location) >= AUTO_TRIP_START_DISTANCE_M
-            val movedLongEnough = now - autoMovingSinceMillis >= AUTO_TRIP_START_MS
+            val displacement = distanceFromStationaryAnchor(location)
+            val movedEnough = displacement >= AUTO_TRIP_START_DISTANCE_M
+            // Lo spostamento NETTO dal punto in cui si era fermi e' cio' che
+            // distingue un viaggio dall'andirivieni: camminando per casa la
+            // velocita' istantanea puo' superare la soglia quanto vuole, ma non
+            // ci si allontana mai. Senza questa condizione bastavano 90 secondi
+            // di movimento sul posto per far partire un viaggio.
+            val movedLongEnough = now - autoMovingSinceMillis >= AUTO_TRIP_START_MS &&
+                displacement >= AUTO_TRIP_MIN_NET_DISPLACEMENT_M
 
             if (movedEnough || movedLongEnough) {
                 autoMovingSinceMillis = 0L
@@ -3645,7 +3670,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                 Log.d(
                     TAG,
                     "Viaggio automatico avviato (" +
-                        (if (movedEnough) "distanza" else "durata") + ")"
+                        (if (movedEnough) "distanza" else "durata") +
+                        ", ${displacement.toInt()}m dall'ancora)"
                 )
                 startTrip(TripSource.AUTO)
             }
@@ -3809,6 +3835,26 @@ class FirebaseRepository private constructor(private val context: Context) {
          * non e' piu' un giro per casa.
          */
         const val AUTO_TRIP_START_DISTANCE_M = 250.0
+
+        /**
+         * Velocita' oltre la quale si comincia a contare il tempo di movimento
+         * per l'avvio automatico. Piu' alta di [MOVING_SPEED_THRESHOLD_MS], che
+         * vale 1,5 m/s cioe' una camminata svelta: per il gate delle scritture
+         * va bene, per decidere che e' cominciato un viaggio no. 2,8 m/s sono
+         * circa 10 km/h, sopra il passo di chiunque cammini.
+         */
+        const val AUTO_TRIP_START_SPEED_MS = 2.8f
+
+        /**
+         * Allontanamento netto dal punto in cui si era fermi, richiesto perche'
+         * la sola durata del movimento faccia partire un viaggio.
+         *
+         * E' la condizione che distingue un viaggio dall'andirivieni per casa:
+         * camminando avanti e indietro la velocita' istantanea puo' superare la
+         * soglia quanto vuole, ma la distanza dal punto di partenza resta
+         * prossima a zero.
+         */
+        const val AUTO_TRIP_MIN_NET_DISPLACEMENT_M = 150.0
 
         /**
          * Quanto indietro si guarda per ricostruire l'inizio di un viaggio

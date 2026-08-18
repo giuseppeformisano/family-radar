@@ -947,16 +947,20 @@ private fun createMemberMarkerDrawable(
     // "fermo" su ogni marker sarebbe rumore, dato che da fermi sono quasi tutti.
     val activityGlyph = activityGlyphFor(activityType)
     if (activityGlyph != null) {
-        val aRadius = (8 * density)
+        // Fondo CHIARO e glifo grande. Le emoji sono a colori e ignorano il
+        // colore del Paint: su fondo blu scuro, e a 9dp, la bicicletta diventava
+        // una macchia illeggibile. Su bianco i colori propri del glifo si
+        // staccano, e il bordo scuro tiene il badge distinto dalla mappa.
+        val aRadius = (10 * density)
         val aX = center - (12 * density)
         val aY = center - (12 * density)
 
         val aBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AndroidColor.rgb(30, 41, 59)
+            color = AndroidColor.WHITE
             style = Paint.Style.FILL
         }
         val aBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AndroidColor.WHITE
+            color = AndroidColor.rgb(30, 41, 59)
             style = Paint.Style.STROKE
             strokeWidth = 1.5f * density
         }
@@ -964,10 +968,8 @@ private fun createMemberMarkerDrawable(
         canvas.drawCircle(aX, aY, aRadius, aBorderPaint)
 
         val aTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AndroidColor.WHITE
-            textSize = 9 * density
+            textSize = 13 * density
             textAlign = Paint.Align.CENTER
-            isFakeBoldText = true
         }
         val aTextY = aY - ((aTextPaint.descent() + aTextPaint.ascent()) / 2)
         canvas.drawText(activityGlyph, aX, aTextY, aTextPaint)

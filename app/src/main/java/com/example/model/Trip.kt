@@ -54,6 +54,8 @@ data class Trip(
     val isLive: Boolean = false,
     /** Visibile solo a chi l'ha registrato. */
     val isPrivate: Boolean = false,
+    /** Come ci si è spostati, uno fra [ActivityKind]. Vuoto se non riconosciuto. */
+    val activityKind: String = "",
     val points: List<TripPoint> = emptyList()
 ) {
     /** Velocità media sul tempo in movimento, in m/s. Zero se non si è mai mossi. */
@@ -63,6 +65,16 @@ data class Trip(
     /** Tempo trascorso da fermi durante il viaggio (semafori, code, soste). */
     val stoppedMs: Long
         get() = (durationMs - movingMs).coerceAtLeast(0L)
+
+    /** Etichetta leggibile del modo di spostarsi, o null se non riconosciuto. */
+    val activityLabel: String?
+        get() = when (activityKind) {
+            ActivityKind.VEHICLE -> "In auto"
+            ActivityKind.BICYCLE -> "In bicicletta"
+            ActivityKind.RUNNING -> "Di corsa"
+            ActivityKind.WALKING -> "A piedi"
+            else -> null
+        }
 }
 
 data class ActiveTripState(
@@ -79,5 +91,12 @@ data class ActiveTripState(
     /** Documento del viaggio in corso su Firestore, se condiviso in diretta. */
     val liveTripId: String? = null,
     val lastLiveWriteAt: Long = 0L,
-    val startPlaceName: String? = null
+    val startPlaceName: String? = null,
+    /**
+     * Modo di spostarsi prevalente, aggiornato dalle transizioni di attività
+     * mentre il viaggio è in corso. Si tiene solo l'ultimo modo di *viaggio*
+     * riconosciuto: una sosta a piedi in mezzo a un tragitto in auto non deve
+     * riscrivere l'etichetta dell'intero viaggio.
+     */
+    val activityKind: String = ""
 )

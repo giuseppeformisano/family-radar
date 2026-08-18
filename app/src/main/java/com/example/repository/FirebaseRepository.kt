@@ -481,23 +481,22 @@ class FirebaseRepository private constructor(private val context: Context) {
         // Fetch current FCM token if available
         fetchAndSyncFcmToken()
 
-        // L'opzione e' persistita: se era attiva, i sensori vanno riarmati adesso
-        // perche' setAutoTripEnabled esce subito quando il valore non cambia.
-        if (_isAutoTripEnabled.value) {
-            ensureMotionSensing()
-        }
+        ensureMotionSensing()
     }
 
     /**
-     * Arma sensore e transizioni di attivita' se il rilevamento automatico e'
-     * attivo. Idempotente: [startMotionSensing] ripulisce prima di registrare,
-     * quindi si puo' richiamare — ed e' quello che serve dopo che l'utente ha
-     * concesso ACTIVITY_RECOGNITION, perche' al primo tentativo il permesso non
-     * c'era e la registrazione era stata saltata.
+     * Registra quello che serve per capire come si sta muovendo l'utente.
+     *
+     * Il riconoscimento di attivita' parte sempre — serve all'icona sulla mappa
+     * anche a viaggi automatici spenti — mentre il sensore hardware serve solo al
+     * rilevamento dei viaggi e segue quell'impostazione.
+     *
+     * Va richiamata dopo che l'utente ha concesso ACTIVITY_RECOGNITION: al primo
+     * tentativo il permesso non c'era e la registrazione era stata saltata.
      */
     fun ensureMotionSensing() {
-        if (!_isAutoTripEnabled.value) return
-        startMotionSensing()
+        startActivityRecognition()
+        if (_isAutoTripEnabled.value) startMotionSensing()
     }
 
     fun getStoredFcmToken(): String? {
@@ -1569,7 +1568,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     batteryLevel = (doc.getLong("batteryLevel") ?: 100L).toInt(),
                                     timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
                                     isOnline = doc.getBoolean("isOnline") ?: true,
-                                    currentPlaceName = doc.getString("currentPlaceName")
+                                    currentPlaceName = doc.getString("currentPlaceName"),
+                                    activityType = doc.getString("activityType") ?: ""
                                 )
                             } catch (ex: Exception) {
                                 null
@@ -2250,7 +2250,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                     "batteryLevel" to enrichedLocation.batteryLevel,
                     "timestamp" to enrichedLocation.timestamp,
                     "isOnline" to true,
-                    "currentPlaceName" to (enrichedLocation.currentPlaceName ?: "")
+                    "currentPlaceName" to (enrichedLocation.currentPlaceName ?: ""),
+                    "activityType" to _currentActivityKind
                 )
                 firestore.collection("groups").document(currentGroup)
                     .collection("locations").document(user.uid).set(locMap).await()
@@ -3292,12 +3293,11 @@ class FirebaseRepository private constructor(private val context: Context) {
     }
 
     /**
-     * Registra il receiver delle transizioni di attivita' e arma il sensore di
-     * movimento. Entrambi sono facoltativi: se il permesso manca o il sensore
-     * non c'e', si resta sul polling e il rilevamento funziona come prima.
+     * Arma il sensore hardware di movimento. Serve solo al rilevamento automatico
+     * dei viaggi, quindi si accende con quello. Facoltativo: se il dispositivo non
+     * ha TYPE_SIGNIFICANT_MOTION si resta sul controllo a intervalli.
      */
     private fun startMotionSensing() {
-        // --- Sensore hardware ---
         try {
             val trigger = motionTrigger ?: MotionTrigger(context).also { motionTrigger = it }
             if (trigger.isAvailable) {
@@ -3308,30 +3308,43 @@ class FirebaseRepository private constructor(private val context: Context) {
         } catch (e: Exception) {
             Log.w(TAG, "Sensore movimento non avviato: ${e.message}")
         }
+    }
 
-        // --- Activity Recognition ---
+    /**
+     * Registra le transizioni di attivita'. Indipendente dal rilevamento
+     * automatico dei viaggi, perche' serve anche solo a mostrare sulla mappa come
+     * si sta muovendo ciascun membro: gira sul sensor hub e costa quasi nulla.
+     */
+    private fun startActivityRecognition() {
+        if (activityTransitionPendingIntent != null) return
         if (!hasActivityRecognitionPermission()) {
-            Log.d(TAG, "Permesso ACTIVITY_RECOGNITION assente: resto sul polling")
+            Log.d(TAG, "Permesso ACTIVITY_RECOGNITION assente: nessun riconoscimento attivita'")
             return
         }
         try {
-            val transitions = listOf(
+            // Tipi espliciti e ciclo esplicito invece di listOf(...).flatMap {}:
+            // dentro il flatMap il compilatore non riusciva a inferire il tipo del
+            // parametro, quindi setActivityType(type) falliva e la chiamata
+            // concatenata subito dopo veniva segnalata come riferimento non
+            // risolto. Cosi' non c'e' niente da inferire.
+            val activityTypes: List<Int> = listOf(
                 DetectedActivity.IN_VEHICLE,
                 DetectedActivity.ON_BICYCLE,
                 DetectedActivity.RUNNING,
                 DetectedActivity.WALKING,
                 DetectedActivity.STILL
-            ).flatMap { type ->
-                listOf(
-                    ActivityTransition.Builder()
-                        .setActivityType(type)
-                        .setActivityTransitionType(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
-                        .build(),
-                    ActivityTransition.Builder()
-                        .setActivityType(type)
-                        .setActivityTransitionType(ActivityTransition.ACTIVITY_TRANSITION_EXIT)
-                        .build()
-                )
+            )
+            val transitions = ArrayList<ActivityTransition>()
+            for (activityType: Int in activityTypes) {
+                for (transitionType: Int in listOf(
+                    ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+                    ActivityTransition.ACTIVITY_TRANSITION_EXIT
+                )) {
+                    val builder = ActivityTransition.Builder()
+                    builder.setActivityType(activityType)
+                    builder.setActivityTransitionType(transitionType)
+                    transitions.add(builder.build())
+                }
             }
 
             val intent = Intent(context, com.example.service.ActivityTransitionReceiver::class.java)
@@ -3355,22 +3368,16 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
     }
 
+    /**
+     * Disarma solo il sensore hardware. Il riconoscimento di attivita' resta
+     * registrato: serve all'icona sulla mappa anche con i viaggi automatici spenti.
+     */
     private fun stopMotionSensing() {
         try {
             motionTrigger?.stop()
         } catch (e: Exception) {
             Log.w(TAG, "Stop sensore movimento fallito: ${e.message}")
         }
-        val pending = activityTransitionPendingIntent
-        if (pending != null && hasActivityRecognitionPermission()) {
-            try {
-                ActivityRecognition.getClient(context).removeActivityTransitionUpdates(pending)
-            } catch (e: Exception) {
-                Log.w(TAG, "Rimozione Activity Recognition fallita: ${e.message}")
-            }
-        }
-        activityTransitionPendingIntent = null
-        lastKnownActivityIsTravel = null
     }
 
     fun hasActivityRecognitionPermission(): Boolean = try {
@@ -3432,6 +3439,22 @@ class FirebaseRepository private constructor(private val context: Context) {
      * risvegliato: niente assunzioni su cosa e' inizializzato.
      */
     fun onActivityTransition(activityType: Int, isEnter: Boolean) {
+        // Il modo di spostarsi va registrato sempre, anche a viaggi automatici
+        // spenti: e' quello che la mappa mostra accanto a ciascun membro.
+        if (isEnter) {
+            _currentActivityKind = when (activityType) {
+                DetectedActivity.IN_VEHICLE -> ActivityKind.VEHICLE
+                DetectedActivity.ON_BICYCLE -> ActivityKind.BICYCLE
+                DetectedActivity.RUNNING -> ActivityKind.RUNNING
+                DetectedActivity.WALKING -> ActivityKind.WALKING
+                DetectedActivity.STILL -> ActivityKind.STILL
+                else -> _currentActivityKind
+            }
+            // La posizione mostrata deve aggiornarsi subito, senza attendere il
+            // prossimo fix: altrimenti l'icona resterebbe indietro di un giro.
+            CoroutineScope(Dispatchers.IO).launch { pushActivityKindNow() }
+        }
+
         if (!_isAutoTripEnabled.value) return
 
         val isTravel = activityType == DetectedActivity.IN_VEHICLE ||
@@ -3456,6 +3479,33 @@ class FirebaseRepository private constructor(private val context: Context) {
         autoMovingSinceMillis = 0L
         autoStationarySinceMillis = 0L
         startTrip(TripSource.AUTO)
+    }
+
+    /** Come si sta muovendo questo dispositivo, secondo Android. */
+    private var _currentActivityKind: String = ""
+
+    /**
+     * Scrive solo il campo dell'attivita' su locations/{uid}. E' un aggiornamento
+     * minuscolo e va fatto fuori dal ciclo dei fix, perche' una transizione puo'
+     * arrivare quando l'utente e' fermo e nessun fix nuovo e' in arrivo.
+     */
+    private suspend fun pushActivityKindNow() {
+        val user = _currentUserState.value ?: return
+        val groupId = user.currentGroupId ?: return
+        val db = firestore ?: return
+        if (_isGlobalGhostMode.value) return
+        val myMember = _currentGroupMembers.value.find { it.userId == user.uid }
+        if (myMember != null && !myMember.isTrackingActive) return
+
+        try {
+            db.collection("groups").document(groupId)
+                .collection("locations").document(user.uid)
+                .update("activityType", _currentActivityKind)
+                .await()
+        } catch (e: Exception) {
+            // Il documento potrebbe non esistere ancora: lo creera' il primo fix.
+            Log.v(TAG, "Attivita' non scritta: ${e.message}")
+        }
     }
 
     /**

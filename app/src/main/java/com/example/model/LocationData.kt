@@ -14,5 +14,24 @@ data class UserLocation(
     val isCharging: Boolean = false,
     val timestamp: Long = System.currentTimeMillis(),
     val isOnline: Boolean = true,
-    val currentPlaceName: String? = null
+    val currentPlaceName: String? = null,
+    /**
+     * Come si sta muovendo chi ha inviato la posizione, secondo il riconoscimento
+     * di attivita' di Android: uno fra [ActivityKind]. Vuoto quando il permesso
+     * manca o non e' ancora arrivata una transizione.
+     */
+    val activityType: String = ""
 )
+
+/**
+ * Modi di spostarsi riconosciuti, come stringhe perche' e' cosi' che finiscono
+ * nel documento Firestore. Ogni dispositivo riconosce solo il proprio stato: gli
+ * altri membri lo leggono da `locations/{uid}`.
+ */
+object ActivityKind {
+    const val VEHICLE = "VEHICLE"
+    const val BICYCLE = "BICYCLE"
+    const val WALKING = "WALKING"
+    const val RUNNING = "RUNNING"
+    const val STILL = "STILL"
+}

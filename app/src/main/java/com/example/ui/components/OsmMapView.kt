@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.model.ActivityKind
 import com.example.model.PlaceCategory
 import com.example.model.PlaceSnapshot
 import com.example.model.PlaceSnapshotCluster
@@ -357,7 +358,8 @@ fun OsmMapView(
                                     battery = userLoc.batteryLevel,
                                     isSelf = isSelf,
                                     speedKmH = speedKmH,
-                                    photoBase64 = userLoc.photoBase64
+                                    photoBase64 = userLoc.photoBase64,
+                                    activityType = userLoc.activityType
                                 )
                                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                                 setOnMarkerClickListener { _, _ ->
@@ -645,9 +647,10 @@ private fun createMemberMarkerDrawable(
     battery: Int,
     isSelf: Boolean,
     speedKmH: Int,
-    photoBase64: String?
+    photoBase64: String?,
+    activityType: String
 ): Drawable {
-    val cacheKey = "member_${name}_${battery}_${isSelf}_${speedKmH}_${photoBase64?.hashCode() ?: 0}"
+    val cacheKey = "member_${name}_${battery}_${isSelf}_${speedKmH}_${photoBase64?.hashCode() ?: 0}_$activityType"
     val cached = markerDrawableCache.get(cacheKey)
     if (cached != null) return cached
 
@@ -674,14 +677,15 @@ private fun createMemberMarkerDrawable(
     canvas.drawCircle(center, center, radius, borderPaint)
 
     // Inner avatar or initial
-    var userAvatarBitmap = ImageUtils.base64ToBitmap(photoBase64)
+    val userAvatarBitmap = ImageUtils.base64ToBitmap(photoBase64)
     if (userAvatarBitmap != null) {
-        val scaledAvatar = Bitmap.createScaledBitmap(
-            userAvatarBitmap,
-            (radius * 2).toInt(),
-            (radius * 2).toInt(),
-            true
-        )
+        // Il marker e' tondo, quindi la destinazione e' quadrata: scalare
+        // direttamente a lato x lato deformava le foto non quadrate (una verticale
+        // usciva schiacciata). Si ritaglia prima il quadrato centrale, come fa
+        // ContentScale.Crop altrove nell'app, e solo dopo si scala.
+        val squared = centerCropSquare(userAvatarBitmap)
+        val side = (radius * 2).toInt().coerceAtLeast(1)
+        val scaledAvatar = Bitmap.createScaledBitmap(squared, side, side, true)
         val circleCropBmp = getCircularBitmap(scaledAvatar)
         canvas.drawBitmap(circleCropBmp, center - radius, center - radius, null)
     } else {
@@ -732,9 +736,55 @@ private fun createMemberMarkerDrawable(
     val bTextY = badgeY - ((batteryTextPaint.descent() + batteryTextPaint.ascent()) / 2)
     canvas.drawText("${min(battery, 99)}", badgeX, bTextY, batteryTextPaint)
 
+    // Modo di spostarsi, in alto a sinistra: sta all'opposto del badge batteria
+    // per non coprirlo, e compare solo quando si e' in movimento — un pallino
+    // "fermo" su ogni marker sarebbe rumore, dato che da fermi sono quasi tutti.
+    val activityGlyph = activityGlyphFor(activityType)
+    if (activityGlyph != null) {
+        val aRadius = (8 * density)
+        val aX = center - (12 * density)
+        val aY = center - (12 * density)
+
+        val aBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.rgb(30, 41, 59)
+            style = Paint.Style.FILL
+        }
+        val aBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = 1.5f * density
+        }
+        canvas.drawCircle(aX, aY, aRadius, aBgPaint)
+        canvas.drawCircle(aX, aY, aRadius, aBorderPaint)
+
+        val aTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            textSize = 9 * density
+            textAlign = Paint.Align.CENTER
+            isFakeBoldText = true
+        }
+        val aTextY = aY - ((aTextPaint.descent() + aTextPaint.ascent()) / 2)
+        canvas.drawText(activityGlyph, aX, aTextY, aTextPaint)
+    }
+
     val resultDrawable = BitmapDrawable(ctx.resources, bitmap)
     markerDrawableCache.put(cacheKey, resultDrawable)
     return resultDrawable
+}
+
+/**
+ * Glifo del modo di spostarsi, o null se non va mostrato niente.
+ *
+ * Sono caratteri e non vettoriali di Material perche' il marker e' disegnato su
+ * Canvas: caricare e ridimensionare un drawable per ogni membro a ogni refresh
+ * costerebbe piu' di quanto rende, e questi si leggono anche a 16dp.
+ */
+private fun activityGlyphFor(activityType: String): String? = when (activityType) {
+    ActivityKind.VEHICLE -> "🚗"  // automobile
+    ActivityKind.BICYCLE -> "🚲"  // bicicletta
+    ActivityKind.RUNNING -> "🏃"  // corsa
+    ActivityKind.WALKING -> "🚶"  // camminata
+    else -> null
 }
 
 private fun createSnapshotMarkerDrawable(
@@ -879,6 +929,23 @@ private fun createPlaceMarkerDrawable(ctx: Context, place: SavedPlace): Drawable
     val resultDrawable = BitmapDrawable(ctx.resources, bitmap)
     markerDrawableCache.put(cacheKey, resultDrawable)
     return resultDrawable
+}
+
+/**
+ * Ritaglia il quadrato centrale di un'immagine, lasciando fuori le bande in
+ * eccesso sul lato lungo. Serve prima di scalare a una destinazione quadrata:
+ * senza, l'immagine viene deformata invece che ritagliata.
+ */
+private fun centerCropSquare(source: Bitmap): Bitmap {
+    val side = min(source.width, source.height)
+    if (source.width == source.height) return source
+    val left = (source.width - side) / 2
+    val top = (source.height - side) / 2
+    return try {
+        Bitmap.createBitmap(source, left, top, side, side)
+    } catch (_: Throwable) {
+        source
+    }
 }
 
 private fun getCircularBitmap(bitmap: Bitmap): Bitmap {

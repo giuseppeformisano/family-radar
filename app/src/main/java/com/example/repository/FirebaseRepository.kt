@@ -3322,11 +3322,8 @@ class FirebaseRepository private constructor(private val context: Context) {
             return
         }
         try {
-            // Tipi espliciti e ciclo esplicito invece di listOf(...).flatMap {}:
-            // dentro il flatMap il compilatore non riusciva a inferire il tipo del
-            // parametro, quindi setActivityType(type) falliva e la chiamata
-            // concatenata subito dopo veniva segnalata come riferimento non
-            // risolto. Cosi' non c'e' niente da inferire.
+            // Il metodo del builder si chiama setActivityTransition, non
+            // setActivityTransitionType: quest'ultimo non esiste nell'API.
             val activityTypes: List<Int> = listOf(
                 DetectedActivity.IN_VEHICLE,
                 DetectedActivity.ON_BICYCLE,
@@ -3334,16 +3331,19 @@ class FirebaseRepository private constructor(private val context: Context) {
                 DetectedActivity.WALKING,
                 DetectedActivity.STILL
             )
+            val transitionTypes: List<Int> = listOf(
+                ActivityTransition.ACTIVITY_TRANSITION_ENTER,
+                ActivityTransition.ACTIVITY_TRANSITION_EXIT
+            )
             val transitions = ArrayList<ActivityTransition>()
-            for (activityType: Int in activityTypes) {
-                for (transitionType: Int in listOf(
-                    ActivityTransition.ACTIVITY_TRANSITION_ENTER,
-                    ActivityTransition.ACTIVITY_TRANSITION_EXIT
-                )) {
-                    val builder = ActivityTransition.Builder()
-                    builder.setActivityType(activityType)
-                    builder.setActivityTransitionType(transitionType)
-                    transitions.add(builder.build())
+            for (activityType in activityTypes) {
+                for (transitionType in transitionTypes) {
+                    transitions.add(
+                        ActivityTransition.Builder()
+                            .setActivityType(activityType)
+                            .setActivityTransition(transitionType)
+                            .build()
+                    )
                 }
             }
 

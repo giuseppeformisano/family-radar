@@ -187,6 +187,7 @@ fun MainRadarScreen(
     var focusTargetUserId by remember { mutableStateOf<String?>(null) }
 
     val followedLocation = followedUserId?.let { id -> locations.find { it.userId == id } }
+    val followedMember = followedUserId?.let { id -> members.find { it.userId == id } }
     val followPoint = followedLocation?.let { Pair(it.latitude, it.longitude) }
 
     val unreadChatCount by repository.unreadChatCount.collectAsState()
@@ -734,7 +735,7 @@ fun MainRadarScreen(
             // Qui c'e' la faccia di chi stai seguendo e un modo esplicito per
             // smettere.
             AnimatedVisibility(
-                visible = followedLocation != null,
+                visible = followedUserId != null,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier
@@ -742,53 +743,56 @@ fun MainRadarScreen(
                     .statusBarsPadding()
                     .padding(top = if (!isSheetExpanded && locations.isNotEmpty()) 148.dp else 76.dp)
             ) {
-                followedLocation?.let { target ->
-                    GlassSurface(
-                        shape = RoundedCornerShape(Radius.pill),
-                        contentPadding = Spacing.xs
+                val bannerName = followedLocation?.let {
+                    if (!it.nickname.isNullOrBlank()) it.nickname!! else it.userName
+                } ?: followedMember?.let {
+                    if (!it.nickname.isNullOrBlank()) it.nickname!! else it.displayName
+                } ?: "…"
+                val bannerPhoto = followedLocation?.photoBase64 ?: followedMember?.photoBase64
+                GlassSurface(
+                    shape = RoundedCornerShape(Radius.pill),
+                    contentPadding = Spacing.xs
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        modifier = Modifier.padding(start = Spacing.xs, end = Spacing.sm)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                            modifier = Modifier.padding(start = Spacing.xs, end = Spacing.sm)
-                        ) {
-                            RadarAvatar(
-                                name = target.userName,
-                                photoBase64 = target.photoBase64,
-                                size = Sizes.avatarSm,
-                                ringColor = MaterialTheme.colorScheme.primary
+                        RadarAvatar(
+                            name = bannerName,
+                            photoBase64 = bannerPhoto,
+                            size = Sizes.avatarSm,
+                            ringColor = MaterialTheme.colorScheme.primary
+                        )
+                        Column {
+                            Text(
+                                text = "Stai seguendo",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
                             )
-                            Column {
-                                Text(
-                                    text = "Stai seguendo",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
+                            Text(
+                                text = bannerName,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Surface(
+                            onClick = { followedUserId = null },
+                            shape = RoundedCornerShape(Radius.pill),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.testTag("stop_following_button")
+                        ) {
+                            Text(
+                                text = "Smetti",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(
+                                    horizontal = Spacing.md,
+                                    vertical = Spacing.xs
                                 )
-                                Text(
-                                    text = if (!target.nickname.isNullOrBlank()) target.nickname!!
-                                    else target.userName,
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Surface(
-                                onClick = { followedUserId = null },
-                                shape = RoundedCornerShape(Radius.pill),
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.testTag("stop_following_button")
-                            ) {
-                                Text(
-                                    text = "Smetti",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.padding(
-                                        horizontal = Spacing.md,
-                                        vertical = Spacing.xs
-                                    )
-                                )
-                            }
+                            )
                         }
                     }
                 }

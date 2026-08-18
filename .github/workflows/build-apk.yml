@@ -90,6 +90,13 @@ jobs:
             gradle :app:assembleDebug
           fi
 
+      - name: Crea version.json
+        run: |
+          VERSION_CODE=$(grep 'versionCode = ' app/build.gradle.kts | grep -oE '[0-9]+')
+          VERSION_NAME=$(grep 'versionName = ' app/build.gradle.kts | grep -oE '"[0-9.]+"' | tr -d '"')
+          echo "{\"versionCode\": $VERSION_CODE, \"versionName\": \"$VERSION_NAME\"}" > version.json
+          echo "Version $VERSION_NAME ($VERSION_CODE)"
+
       - name: Pubblica APK
         env:
           GH_TOKEN: ${{ github.token }}
@@ -101,4 +108,5 @@ jobs:
             --prerelease \
             --title "Latest ${BUILD_TYPE} build" \
             --notes "Commit: ${{ github.sha }}" \
-            app/build/outputs/apk/**/*.apk
+            app/build/outputs/apk/**/*.apk \
+            version.json

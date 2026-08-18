@@ -12,7 +12,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
@@ -23,6 +26,8 @@ import com.example.ui.screens.groups.GroupSelectScreen
 import com.example.ui.screens.main.MainRadarScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.ThemePreferences
+import com.example.util.AppUpdater
+import com.example.util.UpdateInfo
 
 enum class AppScreen {
     AUTH,
@@ -106,6 +111,7 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
     val isChoosingGroup by repository.isChoosingGroup.collectAsState()
 
     var currentScreen by remember { mutableStateOf(AppScreen.MAIN_RADAR) }
+    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
 
     // Synchronize screen state with auth, group & deep link state
     LaunchedEffect(currentUser, userGroups, deepLinkTarget, isChoosingGroup) {
@@ -156,6 +162,10 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
 
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    LaunchedEffect("updateCheck") {
+        updateInfo = AppUpdater.check()
+    }
+
     LaunchedEffect(Unit) {
         val permissionsToRequest = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -180,6 +190,23 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
                 }
             }
         } catch (_: Exception) {}
+    }
+
+    updateInfo?.let { info ->
+        AlertDialog(
+            onDismissRequest = { updateInfo = null },
+            title = { Text("Aggiornamento disponibile") },
+            text = { Text("Versione ${info.versionName} disponibile. Aggiorna?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    AppUpdater.openDownload(context, info.apkUrl)
+                    updateInfo = null
+                }) { Text("Aggiornare") }
+            },
+            dismissButton = {
+                TextButton(onClick = { updateInfo = null }) { Text("Dopo") }
+            }
+        )
     }
 
     Crossfade(targetState = currentScreen, label = "screen_crossfade") { screen ->

@@ -543,6 +543,7 @@ fun MainRadarScreen(
                             it.copy(points = selectedTripTrack) else it
                     }
                 },
+                followedUserId = followedUserId,
                 activeTripPoints = activeTrip?.points ?: emptyList(),
                 selectedTripId = selectedTripId,
                 fitSelectedTripToken = fitTripToken,
@@ -598,9 +599,6 @@ fun MainRadarScreen(
 
             MapActionRail(
                 isFollowing = followedUserId != null,
-                followTargetName = followedLocation?.let {
-                    if (it.userId == currentUserId) "te" else (it.nickname ?: it.userName)
-                },
                 onToggleFollow = {
                     if (followedUserId != null) {
                         followedUserId = null
@@ -727,6 +725,73 @@ fun MainRadarScreen(
                     },
                     onMemberLongClick = { selectedMemberForSheet = it }
                 )
+            }
+
+            // Banner dell'inseguimento. Sostituisce l'etichetta minuscola che
+            // stava nella barra laterale: li' diceva che stavi seguendo qualcuno
+            // ma si perdeva fra i pulsanti, e soprattutto non era ovvio come
+            // uscirne — bisognava sapere che quel pulsante faceva da interruttore.
+            // Qui c'e' la faccia di chi stai seguendo e un modo esplicito per
+            // smettere.
+            AnimatedVisibility(
+                visible = followedLocation != null,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = if (!isSheetExpanded && locations.isNotEmpty()) 148.dp else 76.dp)
+            ) {
+                followedLocation?.let { target ->
+                    GlassSurface(
+                        shape = RoundedCornerShape(Radius.pill),
+                        contentPadding = Spacing.xs
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                            modifier = Modifier.padding(start = Spacing.xs, end = Spacing.sm)
+                        ) {
+                            RadarAvatar(
+                                name = target.userName,
+                                photoBase64 = target.photoBase64,
+                                size = Sizes.avatarSm,
+                                ringColor = MaterialTheme.colorScheme.primary
+                            )
+                            Column {
+                                Text(
+                                    text = "Stai seguendo",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = if (!target.nickname.isNullOrBlank()) target.nickname!!
+                                    else target.userName,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Surface(
+                                onClick = { followedUserId = null },
+                                shape = RoundedCornerShape(Radius.pill),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.testTag("stop_following_button")
+                            ) {
+                                Text(
+                                    text = "Smetti",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.padding(
+                                        horizontal = Spacing.md,
+                                        vertical = Spacing.xs
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1164,7 +1229,6 @@ private fun MapTopBar(
 @Composable
 private fun MapActionRail(
     isFollowing: Boolean,
-    followTargetName: String?,
     onToggleFollow: () -> Unit,
     onLocateSelf: () -> Unit,
     isRecording: Boolean,
@@ -1178,34 +1242,8 @@ private fun MapActionRail(
         verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         horizontalAlignment = Alignment.Start
     ) {
-        // Etichetta di stato: senza, "inseguimento attivo" resterebbe un'icona
-        // accesa senza dire su chi.
-        AnimatedVisibility(visible = isFollowing && followTargetName != null) {
-            GlassSurface(
-                shape = RoundedCornerShape(Radius.pill),
-                contentPadding = Spacing.xs
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                    modifier = Modifier.padding(horizontal = Spacing.sm)
-                ) {
-                    Icon(
-                        Icons.Default.GpsFixed,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(Sizes.iconSm)
-                    )
-                    Text(
-                        text = "Segui ${followTargetName.orEmpty()}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
-
+        // L'etichetta di stato e' salita in un banner sopra la mappa: qui era
+        // minuscola e in mezzo agli altri pulsanti, quindi non si notava.
         RailButton(
             icon = if (isFollowing) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed,
             contentDescription = if (isFollowing) "Disattiva inseguimento" else "Attiva inseguimento",

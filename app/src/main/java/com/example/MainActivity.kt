@@ -157,8 +157,14 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
         currentScreen = when {
             currentGroupActive != null -> AppScreen.MAIN_RADAR
 
-            // Primo ingresso con un solo gruppo disponibile: entra da solo.
-            activeGroups.isNotEmpty() && currentGid.isNullOrBlank() -> {
+            // Con UN SOLO gruppo entrare da soli e' comodo e non c'e' scelta da
+            // fare. Con piu' gruppi no: prima si prendeva `activeGroups.first()`,
+            // cioe' un gruppo qualunque nell'ordine in cui era arrivato da
+            // Firestore. Dopo un logout e un nuovo accesso era proprio questo a
+            // far entrare nel gruppo sbagliato, o a lasciare la UI in bilico
+            // mentre l'elenco si popolava. Se la scelta non e' ovvia, la fa
+            // l'utente.
+            currentGid.isNullOrBlank() && activeGroups.size == 1 -> {
                 repository.selectGroup(activeGroups.first().id)
                 AppScreen.MAIN_RADAR
             }

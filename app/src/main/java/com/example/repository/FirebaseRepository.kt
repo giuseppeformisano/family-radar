@@ -834,6 +834,27 @@ class FirebaseRepository private constructor(private val context: Context) {
         _currentGroupPlaces.value = emptyList()
         _currentGroupMessages.value = emptyList()
         _currentGroupMembers.value = emptyList()
+        _currentGroupSnapshots.value = emptyList()
+        _groupTrips.value = emptyList()
+        _activeGeofenceAlerts.value = emptyList()
+        _unreadChatCount.value = 0
+        _activeTrip.value = null
+
+        // Il repository e' un singleton di processo: senza questo azzeramento i
+        // due segnali che governano la scelta del gruppo sopravvivono al
+        // logout e avvelenano la sessione successiva.
+        //
+        // groupIdDismissedByUser e' il veto che impedisce di rientrare nel
+        // gruppo appena lasciato. Se resta impostato, al nuovo accesso il
+        // listener del documento utente scarta l'auto-selezione di QUEL gruppo,
+        // currentGroupId non viene mai valorizzato, e l'app o entra in un
+        // gruppo a caso o resta sulla lista senza saper dove andare.
+        //
+        // isChoosingGroup, se resta true, inchioda la UI sulla schermata di
+        // scelta a ogni riavvio.
+        groupIdDismissedByUser = null
+        _isChoosingGroup.value = false
+        resetLocationGate()
     }
 
     private suspend fun syncUserWithFirestore(user: UserData) {

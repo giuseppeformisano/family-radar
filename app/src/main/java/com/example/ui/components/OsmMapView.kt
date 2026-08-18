@@ -80,6 +80,8 @@ fun OsmMapView(
     onMapTap: () -> Unit = {},
     /** Trascinamento manuale: chi chiama lo usa per interrompere il Follow Mode. */
     onUserPan: () -> Unit = {},
+    /** Chi si sta inseguendo: il suo marker riceve un anello di richiamo. */
+    followedUserId: String? = null,
     trips: List<Trip> = emptyList(),
     activeTripPoints: List<TripPoint> = emptyList(),
     selectedTripId: String? = null,
@@ -410,7 +412,8 @@ fun OsmMapView(
                                     isSelf = isSelf,
                                     speedKmH = speedKmH,
                                     photoBase64 = userLoc.photoBase64,
-                                    activityType = userLoc.activityType
+                                    activityType = userLoc.activityType,
+                                    isFollowed = userLoc.userId == followedUserId
                                 )
                                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                                 setOnMarkerClickListener { _, _ ->
@@ -854,9 +857,10 @@ private fun createMemberMarkerDrawable(
     isSelf: Boolean,
     speedKmH: Int,
     photoBase64: String?,
-    activityType: String
+    activityType: String,
+    isFollowed: Boolean = false
 ): Drawable {
-    val cacheKey = "member_${name}_${battery}_${isSelf}_${speedKmH}_${photoBase64?.hashCode() ?: 0}_$activityType"
+    val cacheKey = "member_${name}_${battery}_${isSelf}_${speedKmH}_${photoBase64?.hashCode() ?: 0}_${activityType}_$isFollowed"
     val cached = markerDrawableCache.get(cacheKey)
     if (cached != null) return cached
 
@@ -873,6 +877,22 @@ private fun createMemberMarkerDrawable(
         style = Paint.Style.FILL
     }
     canvas.drawCircle(center, center, radius + (5 * density), pulsePaint)
+
+    // Anello di richiamo su chi si sta inseguendo. Prima l'unico segnale era
+    // un'etichetta piccola nella barra laterale: diceva CHE stai seguendo
+    // qualcuno, ma sulla mappa non si capiva CHI fra i marker fosse.
+    if (isFollowed) {
+        canvas.drawCircle(center, center, radius + (7 * density), Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.rgb(99, 102, 241)
+            style = Paint.Style.STROKE
+            strokeWidth = 3.5f * density
+        })
+        canvas.drawCircle(center, center, radius + (7 * density), Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = 1f * density
+        })
+    }
 
     // Outer solid border
     val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {

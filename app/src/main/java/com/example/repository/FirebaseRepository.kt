@@ -41,6 +41,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
@@ -3055,71 +3056,93 @@ class FirebaseRepository private constructor(private val context: Context) {
             )
             val ref = db.collection("groups").document(groupId)
                 .collection("trips").add(data).await()
-            _activeTrip.value = _activeTrip.value?.copy(liveTripId = ref.id)
+            // Atomico: qui si scrive da un thread IO mentre i fix di posizione
+            // aggiornano lo stesso stato dal main looper.
+            _activeTrip.update { it?.copy(liveTripId = ref.id) }
         } catch (e: Exception) {
             Log.w(TAG, "createLiveTripDocument fallita: ${e.message}")
         }
     }
 
+    /**
+     * Aggiunge un punto alla registrazione in corso.
+     *
+     * Tutta la modifica passa da `update {}`, che è una lettura-modifica-scrittura
+     * atomica. Con l'assegnazione diretta c'era una corsa reale: i fix arrivano
+     * sul main looper mentre [createLiveTripDocument] scrive `liveTripId` da un
+     * thread IO. Se un fix leggeva lo stato prima e lo riscriveva dopo, l'id del
+     * documento in diretta veniva perso per sempre — niente più aggiornamenti
+     * agli altri membri, e allo stop il documento originale restava orfano con
+     * `isLive = true`, cioè un viaggio "in corso" per sempre nell'elenco di tutti.
+     */
     private fun recordTripPoint(location: UserLocation) {
-        val current = _activeTrip.value ?: return
-        val lat = location.latitude
-        val lon = location.longitude
-        val now = System.currentTimeMillis()
-
         // Un fix con raggio d'incertezza enorme e' quello che fa "saltare" la
         // traccia in punti dove non si e' mai stati: capita al chiuso, nelle
         // gallerie e quando il GPS ripiega sulle celle telefoniche.
         if (location.accuracy > TRIP_MAX_ACCURACY_METERS) return
 
-        val lastLat = current.lastLat
-        val lastLon = current.lastLon
+        val lat = location.latitude
+        val lon = location.longitude
+        val now = System.currentTimeMillis()
+        var flushDue = false
 
-        if (lastLat == 0.0 && lastLon == 0.0) {
-            _activeTrip.value = current.copy(
+        _activeTrip.update { current ->
+            // Il lambda puo' essere rieseguito se un altro thread scrive nel
+            // frattempo: la decisione va ricalcolata a ogni tentativo.
+            flushDue = false
+            if (current == null) return@update null
+
+            if (current.lastLat == 0.0 && current.lastLon == 0.0) {
+                return@update current.copy(
+                    points = current.points + TripPoint(lat, lon, now),
+                    lastLat = lat,
+                    lastLon = lon,
+                    lastFixAt = now
+                )
+            }
+
+            val results = FloatArray(1)
+            android.location.Location.distanceBetween(
+                current.lastLat, current.lastLon, lat, lon, results
+            )
+            val distFromLast = results[0].toDouble()
+            if (distFromLast < 15.0) return@update current
+
+            // Secondo filtro sugli spostamenti assurdi: se per coprire quella
+            // distanza servirebbe una velocita' impossibile, il fix e' sbagliato,
+            // non e' un movimento. Senza, un singolo fix ballerino piazza un picco
+            // nella traccia e gonfia i chilometri totali.
+            val elapsedSec = (now - current.lastFixAt) / 1000.0
+            if (elapsedSec > 0.5 && distFromLast / elapsedSec > TRIP_MAX_SPEED_MS) return@update current
+
+            // Il tempo fra due punti validi e' tempo in movimento. La differenza
+            // con la durata totale e' il tempo fermo: semafori, code, soste.
+            val movingDelta = if (elapsedSec in 0.0..TRIP_MOVING_GAP_MAX_SEC) {
+                (now - current.lastFixAt).coerceAtLeast(0L)
+            } else 0L
+
+            val next = current.copy(
                 points = current.points + TripPoint(lat, lon, now),
                 lastLat = lat,
                 lastLon = lon,
+                distanceMeters = current.distanceMeters + distFromLast,
+                maxSpeedMs = maxOf(current.maxSpeedMs, location.speed),
+                movingMs = current.movingMs + movingDelta,
                 lastFixAt = now
             )
-            return
+
+            // Aggiornamento della diretta: non a ogni punto, sarebbero centinaia
+            // di scritture all'ora. Ogni 30 secondi la traccia degli altri resta
+            // fluida a un costo sostenibile.
+            if (next.liveTripId != null && now - next.lastLiveWriteAt >= TRIP_LIVE_FLUSH_MS) {
+                flushDue = true
+                next.copy(lastLiveWriteAt = now)
+            } else {
+                next
+            }
         }
 
-        val results = FloatArray(1)
-        android.location.Location.distanceBetween(lastLat, lastLon, lat, lon, results)
-        val distFromLast = results[0].toDouble()
-
-        if (distFromLast < 15.0) return
-
-        // Secondo filtro sugli spostamenti assurdi: se per coprire quella
-        // distanza servirebbe una velocita' impossibile, il fix e' sbagliato,
-        // non e' un movimento. Senza, un singolo fix ballerino piazza un picco
-        // nella traccia e gonfia i chilometri totali.
-        val elapsedSec = (now - current.lastFixAt) / 1000.0
-        if (elapsedSec > 0.5 && distFromLast / elapsedSec > TRIP_MAX_SPEED_MS) return
-
-        // Il tempo fra due punti validi e' tempo in movimento. La differenza
-        // con la durata totale e' il tempo fermo: semafori, code, soste.
-        val movingDelta = if (elapsedSec in 0.0..TRIP_MOVING_GAP_MAX_SEC) {
-            (now - current.lastFixAt).coerceAtLeast(0L)
-        } else 0L
-
-        val updated = current.copy(
-            points = current.points + TripPoint(lat, lon, now),
-            lastLat = lat,
-            lastLon = lon,
-            distanceMeters = current.distanceMeters + distFromLast,
-            maxSpeedMs = maxOf(current.maxSpeedMs, location.speed),
-            movingMs = current.movingMs + movingDelta,
-            lastFixAt = now
-        )
-        _activeTrip.value = updated
-
-        // Aggiornamento della diretta: non a ogni punto, sarebbero centinaia di
-        // scritture all'ora. Ogni 30 secondi la traccia degli altri resta fluida
-        // a un costo sostenibile.
-        if (updated.liveTripId != null && now - updated.lastLiveWriteAt >= TRIP_LIVE_FLUSH_MS) {
-            _activeTrip.value = updated.copy(lastLiveWriteAt = now)
+        if (flushDue) {
             CoroutineScope(Dispatchers.IO).launch { flushLiveTrip() }
         }
     }

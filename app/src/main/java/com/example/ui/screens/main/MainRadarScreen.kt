@@ -63,6 +63,8 @@ import com.example.repository.FirebaseRepository
 import com.example.service.LocationTrackingService
 import com.example.ui.components.*
 import com.example.ui.theme.*
+import com.example.BuildConfig
+import com.example.util.AppUpdater
 import com.example.util.ImageUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -2613,6 +2615,60 @@ private fun SettingsPanel(
                     Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
                     Spacer(Modifier.width(Spacing.sm))
                     Text("Disconnetti account")
+                }
+            }
+        }
+
+        // ---- App ----
+        item {
+            SettingsCard {
+                SettingsSectionHeader(title = "App", icon = Icons.Default.Info)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Versione",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Spacer(Modifier.height(Spacing.sm))
+                var checking by remember { mutableStateOf(false) }
+                val updateScope = rememberCoroutineScope()
+                OutlinedButton(
+                    onClick = {
+                        if (!checking) {
+                            checking = true
+                            updateScope.launch {
+                                val update = AppUpdater.check()
+                                checking = false
+                                if (update != null) {
+                                    AppUpdater.downloadAndInstall(context, update.apkUrl)
+                                } else {
+                                    Toast.makeText(context, "Sei già aggiornato", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(Radius.sm),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (checking) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(Sizes.iconMd),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.width(Spacing.sm))
+                    }
+                    Text(if (checking) "Controllo..." else "Controlla aggiornamenti")
                 }
             }
         }

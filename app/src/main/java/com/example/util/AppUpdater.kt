@@ -1,14 +1,21 @@
 package com.example.util
 
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import androidx.core.content.FileProvider
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import java.io.File
 
 data class UpdateInfo(val versionCode: Int, val versionName: String, val apkUrl: String)
 
@@ -38,9 +45,10 @@ object AppUpdater {
                 val asset = assets.getJSONObject(i)
                 when (asset.getString("name")) {
                     "version.json" -> {
-                        val downloadUrl = asset.getString("browser_download_url")
                         val vBody = client.newCall(
-                            Request.Builder().url(downloadUrl).build()
+                            Request.Builder()
+                                .url(asset.getString("browser_download_url"))
+                                .build()
                         ).execute().body?.string() ?: continue
                         val v = JSONObject(vBody)
                         versionCode = v.getInt("versionCode")
@@ -58,11 +66,75 @@ object AppUpdater {
         } catch (_: Exception) { null }
     }
 
-    fun openDownload(context: Context, apkUrl: String) {
-        context.startActivity(
-            Intent(Intent.ACTION_VIEW, Uri.parse(apkUrl)).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
+    fun downloadAndInstall(context: Context, apkUrl: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !context.packageManager.canRequestPackageInstalls()
+        ) {
+            context.startActivity(
+                Intent(
+                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:${context.packageName}")
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            return
+        }
+
+        val destFile = File(
+            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
+            "family-radar-update.apk"
         )
+        if (destFile.exists()) destFile.delete()
+
+        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val downloadId = dm.enqueue(
+            DownloadManager.Request(Uri.parse(apkUrl))
+                .setTitle("Family Radar")
+                .setDescription("Scaricamento aggiornamento...")
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+                .setDestinationInExternalFilesDir(
+                    context,
+                    Environment.DIRECTORY_DOWNLOADS,
+                    "family-radar-update.apk"
+                )
+        )
+
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context, intent: Intent) {
+                val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+                if (id != downloadId) return
+                ctx.unregisterReceiver(this)
+                installApk(ctx, destFile)
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(
+                receiver,
+                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                Context.RECEIVER_NOT_EXPORTED
+            )
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(
+                receiver,
+                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+            )
+        }
+    }
+
+    private fun installApk(context: Context, file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+        } catch (_: Exception) {}
     }
 }

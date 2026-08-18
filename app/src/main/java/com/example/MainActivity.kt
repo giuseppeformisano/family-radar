@@ -231,7 +231,7 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
                         }
                         Spacer(Modifier.width(Spacing.xs))
                         TextButton(onClick = {
-                            AppUpdater.openDownload(context, info.apkUrl)
+                            AppUpdater.downloadAndInstall(context, info.apkUrl)
                             updateInfo = null
                         }) {
                             Text(

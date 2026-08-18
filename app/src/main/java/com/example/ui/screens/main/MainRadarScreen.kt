@@ -176,6 +176,9 @@ fun MainRadarScreen(
     // Traccia del viaggio scelto, letta su richiesta: l'elenco porta solo i
     // metadati, i punti si pagano una volta sola quando servono davvero.
     var selectedTripTrack by remember { mutableStateOf<List<TripPoint>>(emptyList()) }
+    // Token di inquadratura: riaprendo lo stesso viaggio i punti sono identici,
+    // quindi da soli non farebbero riscattare l'effetto sulla mappa.
+    var fitTripToken by remember { mutableIntStateOf(0) }
 
     /** Centra la mappa su un punto e, di norma, chiude il pannello per lasciarla in vista. */
     fun focusMapOn(latitude: Double, longitude: Double, collapse: Boolean = true) {
@@ -519,6 +522,7 @@ fun MainRadarScreen(
                 },
                 activeTripPoints = activeTrip?.points ?: emptyList(),
                 selectedTripId = selectedTripId,
+                fitSelectedTripToken = fitTripToken,
                 currentUserId = currentUserId,
                 targetFocusPoint = targetMapFocus,
                 focusToken = focusToken,
@@ -868,8 +872,9 @@ fun MainRadarScreen(
                     selectedTripTrack = track
                     selectedTripId = trip.id
                     collapseSheet()
-                    // Inquadra il punto di partenza della traccia.
-                    track.firstOrNull()?.let { focusMapOn(it.latitude, it.longitude) }
+                    // Inquadra l'INTERA traccia. Centrare sulla partenza a zoom
+                    // fisso mostrava solo l'inizio del percorso.
+                    fitTripToken++
                 }
             }
         )

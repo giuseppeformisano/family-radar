@@ -83,6 +83,12 @@ fun OsmMapView(
     trips: List<Trip> = emptyList(),
     activeTripPoints: List<TripPoint> = emptyList(),
     selectedTripId: String? = null,
+    /**
+     * Incrementalo per inquadrare l'intera traccia del viaggio selezionato.
+     * Serve un token come per [focusToken]: riaprendo lo stesso viaggio la
+     * lista dei punti e' identica e da sola non farebbe riscattare l'effetto.
+     */
+    fitSelectedTripToken: Int = 0,
     onMemberSelected: (UserLocation) -> Unit,
     onPlaceSelected: (SavedPlace) -> Unit,
     onSnapshotClusterSelected: (PlaceSnapshotCluster) -> Unit = {},
@@ -176,6 +182,51 @@ fun OsmMapView(
 
     LaunchedEffect(trips, activeTripPoints, selectedTripId) {
         mapViewInstance?.let { refreshMapOverlays(it) }
+    }
+
+    // Inquadra tutta la traccia, non solo il punto di partenza: centrare
+    // sull'inizio a zoom fisso mostrava un pezzetto di percorso e lasciava il
+    // resto fuori schermo, che e' l'opposto di "mostra sulla mappa".
+    // La chiave comprende anche `trips`: quando il token scatta la traccia puo'
+    // non essere ancora arrivata nella lista, e con la sola chiave del token
+    // l'effetto non riscatterebbe piu'. Il token gia' consumato viene ricordato,
+    // cosi' gli aggiornamenti successivi dei viaggi (per esempio il riversamento
+    // di una diretta) non riportano la mappa indietro mentre la si sta usando.
+    var lastFittedToken by remember { mutableIntStateOf(0) }
+    LaunchedEffect(fitSelectedTripToken, trips, selectedTripId) {
+        if (fitSelectedTripToken == 0 || fitSelectedTripToken == lastFittedToken) return@LaunchedEffect
+        val points = trips.find { it.id == selectedTripId }?.points ?: return@LaunchedEffect
+        if (points.size < 2) return@LaunchedEffect
+        lastFittedToken = fitSelectedTripToken
+        try {
+            var minLat = points[0].latitude
+            var maxLat = points[0].latitude
+            var minLon = points[0].longitude
+            var maxLon = points[0].longitude
+            points.forEach {
+                minLat = min(minLat, it.latitude)
+                maxLat = max(maxLat, it.latitude)
+                minLon = min(minLon, it.longitude)
+                maxLon = max(maxLon, it.longitude)
+            }
+            // Margine proporzionale all'estensione: su un tragitto di due isolati
+            // un margine fisso inquadrerebbe mezza citta', su uno lungo sarebbe
+            // invisibile. Il minimo evita che una traccia quasi puntiforme dia
+            // un riquadro degenere.
+            val marginLat = ((maxLat - minLat) * 0.20).coerceAtLeast(0.0015)
+            val marginLon = ((maxLon - minLon) * 0.20).coerceAtLeast(0.0015)
+            mapViewInstance?.zoomToBoundingBox(
+                BoundingBox(
+                    maxLat + marginLat,
+                    maxLon + marginLon,
+                    minLat - marginLat,
+                    minLon - marginLon
+                ),
+                true
+            )
+        } catch (t: Throwable) {
+            Log.w("OsmMapView", "Inquadratura traccia fallita: ${t.message}")
+        }
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -395,8 +446,9 @@ fun OsmMapView(
 
                     val color = if (trip.isLive) AndroidColor.rgb(239, 68, 68)
                         else tripColors[idx % tripColors.size]
+                    val geo = trip.points.map { GeoPoint(it.latitude, it.longitude) }
                     val polyline = Polyline(mapView).apply {
-                        setPoints(trip.points.map { GeoPoint(it.latitude, it.longitude) })
+                        setPoints(geo)
                         outlinePaint.color = color
                         outlinePaint.strokeWidth = if (isSelected) 8f else 6f
                         outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
@@ -406,6 +458,32 @@ fun OsmMapView(
                         }
                     }
                     tripOverlays.add(polyline)
+
+                    // Verso di marcia: frecce lungo il percorso piu' partenza e
+                    // arrivo. Senza, una traccia e' ambigua — non si capisce da
+                    // che capo e' cominciata, e su un anello nemmeno dove finisce.
+                    tripOverlays.addAll(buildDirectionArrows(mapView, geo, color))
+
+                    tripOverlays.add(
+                        Marker(mapView).apply {
+                            position = geo.first()
+                            title = "Partenza"
+                            icon = createTripEndpointDrawable(mapView.context, isStart = true)
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                            setOnMarkerClickListener { _, _ -> true }
+                        }
+                    )
+                    if (!trip.isLive) {
+                        tripOverlays.add(
+                            Marker(mapView).apply {
+                                position = geo.last()
+                                title = "Arrivo"
+                                icon = createTripEndpointDrawable(mapView.context, isStart = false)
+                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                                setOnMarkerClickListener { _, _ -> true }
+                            }
+                        )
+                    }
                 }
                 if (activeTripPoints.size >= 2) {
                     val activePoly = Polyline(mapView).apply {
@@ -589,6 +667,134 @@ fun OsmMapView(
             }
         }
     }
+}
+
+/**
+ * Frecce di direzione lungo la traccia.
+ *
+ * Sono distribuite a intervalli regolari sui punti, non su ogni segmento: una
+ * freccia per ogni coppia di punti sarebbe illeggibile su un percorso lungo e
+ * costerebbe centinaia di marker. L'angolo viene disegnato dentro il bitmap
+ * invece di usare Marker.rotation, cosi' non si dipende dalla convenzione di
+ * rotazione di osmdroid.
+ */
+private fun buildDirectionArrows(
+    mapView: MapView,
+    points: List<GeoPoint>,
+    color: Int
+): List<Overlay> {
+    if (points.size < 2) return emptyList()
+
+    val arrows = mutableListOf<Overlay>()
+    // Circa una decina di frecce sul percorso, mai piu' fitte di un punto ogni due.
+    val step = max(2, points.size / 10)
+
+    var i = step
+    while (i < points.size) {
+        val from = points[i - 1]
+        val to = points[i]
+        val result = FloatArray(2)
+        Location.distanceBetween(
+            from.latitude, from.longitude,
+            to.latitude, to.longitude,
+            result
+        )
+        // Segmenti troppo corti danno un rilevamento instabile: si salta.
+        if (result[0] >= 5f) {
+            val bearing = result[1]
+            arrows.add(
+                Marker(mapView).apply {
+                    position = to
+                    icon = createTripArrowDrawable(mapView.context, bearing, color)
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    // Le frecce sono decorazione: non devono rubare il tocco
+                    // alla mappa ne' aprire fumetti.
+                    setOnMarkerClickListener { _, _ -> true }
+                }
+            )
+        }
+        i += step
+    }
+    return arrows
+}
+
+/** Triangolo gia' ruotato verso il rilevamento indicato. */
+private fun createTripArrowDrawable(ctx: Context, bearingDeg: Float, color: Int): Drawable {
+    // Si arrotonda a 5 gradi: la differenza non si vede e la cache resta piccola.
+    val rounded = (Math.round(bearingDeg / 5f) * 5)
+    val cacheKey = "triparrow_${rounded}_$color"
+    markerDrawableCache.get(cacheKey)?.let { return it }
+
+    val density = ctx.resources.displayMetrics.density
+    val size = (20 * density).toInt().coerceAtLeast(1)
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val center = size / 2f
+
+    canvas.save()
+    canvas.rotate(rounded.toFloat(), center, center)
+
+    val path = android.graphics.Path().apply {
+        moveTo(center, center - 6 * density)
+        lineTo(center + 4.5f * density, center + 5 * density)
+        lineTo(center, center + 2.5f * density)
+        lineTo(center - 4.5f * density, center + 5 * density)
+        close()
+    }
+
+    // Bordo chiaro sotto: sopra una mappa scura o una strada scura il triangolo
+    // pieno sparirebbe.
+    canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = AndroidColor.WHITE
+        style = Paint.Style.STROKE
+        strokeWidth = 2.5f * density
+        strokeJoin = Paint.Join.ROUND
+    })
+    canvas.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = color
+        style = Paint.Style.FILL
+    })
+    canvas.restore()
+
+    val drawable = BitmapDrawable(ctx.resources, bitmap)
+    markerDrawableCache.put(cacheKey, drawable)
+    return drawable
+}
+
+/** Pallino di partenza (verde) o di arrivo (scuro con centro chiaro). */
+private fun createTripEndpointDrawable(ctx: Context, isStart: Boolean): Drawable {
+    val cacheKey = "tripend_$isStart"
+    markerDrawableCache.get(cacheKey)?.let { return it }
+
+    val density = ctx.resources.displayMetrics.density
+    val size = (24 * density).toInt().coerceAtLeast(1)
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val center = size / 2f
+    val radius = 8 * density
+
+    val fill = if (isStart) AndroidColor.rgb(34, 197, 94) else AndroidColor.rgb(30, 41, 59)
+
+    canvas.drawCircle(center, center, radius + 2 * density, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = AndroidColor.WHITE
+        style = Paint.Style.FILL
+    })
+    canvas.drawCircle(center, center, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = fill
+        style = Paint.Style.FILL
+    })
+    // L'arrivo ha un anello interno chiaro, cosi' i due capi si distinguono
+    // anche da chi non percepisce bene la differenza di colore.
+    if (!isStart) {
+        canvas.drawCircle(center, center, radius * 0.45f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            style = Paint.Style.FILL
+        })
+    }
+
+    val drawable = BitmapDrawable(ctx.resources, bitmap)
+    markerDrawableCache.put(cacheKey, drawable)
+    return drawable
 }
 
 /**

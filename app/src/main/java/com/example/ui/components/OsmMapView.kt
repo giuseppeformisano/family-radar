@@ -383,16 +383,25 @@ fun OsmMapView(
                     AndroidColor.rgb(245, 158, 11),
                     AndroidColor.rgb(59, 130, 246)
                 )
+                // Solo il viaggio scelto e quelli in corso. Disegnarli tutti
+                // riempiva la mappa di polilinee sovrapposte che nessuno stava
+                // guardando, rendendo illeggibili anche membri e luoghi.
                 trips.forEachIndexed { idx, trip ->
+                    val isSelected = trip.id == selectedTripId
+                    if (!isSelected && !trip.isLive) return@forEachIndexed
                     if (trip.points.size < 2) return@forEachIndexed
-                    val color = tripColors[idx % tripColors.size]
+
+                    val color = if (trip.isLive) AndroidColor.rgb(239, 68, 68)
+                        else tripColors[idx % tripColors.size]
                     val polyline = Polyline(mapView).apply {
                         setPoints(trip.points.map { GeoPoint(it.latitude, it.longitude) })
-                        outlinePaint.color = if (trip.id == selectedTripId) color
-                            else AndroidColor.argb(160, AndroidColor.red(color), AndroidColor.green(color), AndroidColor.blue(color))
-                        outlinePaint.strokeWidth = if (trip.id == selectedTripId) 8f else 5f
+                        outlinePaint.color = color
+                        outlinePaint.strokeWidth = if (isSelected) 8f else 6f
                         outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
                         outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                        if (trip.isLive) {
+                            outlinePaint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(20f, 10f), 0f)
+                        }
                     }
                     tripOverlays.add(polyline)
                 }

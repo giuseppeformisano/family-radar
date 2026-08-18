@@ -26,6 +26,7 @@ import com.example.geofence.GeofenceHelper
 import com.example.model.*
 import com.example.model.Trip
 import com.example.model.TripPoint
+import com.example.model.TripSource
 import com.example.model.ActiveTripState
 import com.example.util.ImageUtils
 import com.google.android.gms.location.*
@@ -110,18 +111,21 @@ class FirebaseRepository private constructor(private val context: Context) {
     private val settingsPrefs = context.getSharedPreferences("family_radar_settings_prefs", Context.MODE_PRIVATE)
 
     /**
-     * Porta il default da 30 a [DEFAULT_TRACKING_INTERVAL_SEC] secondi.
+     * Annulla la migrazione che aveva portato l'intervallo da 30 a 90 secondi.
      *
-     * Cambiare la costante non basterebbe: chi ha gia' usato l'app ha il 30
-     * scritto nelle preferenze e se lo terrebbe per sempre. La migrazione tocca
-     * solo chi non ha mai personalizzato il valore, cioe' chi ha esattamente il
-     * vecchio default; qualsiasi altra scelta esplicita viene rispettata.
+     * Quel cambio risparmiava batteria ma rendeva la mappa troppo pigra e
+     * ingrossava il passo delle tracce dei viaggi: il default torna a 30.
+     * Si riporta a 30 solo chi ha esattamente il 90 scritto dalla vecchia
+     * migrazione automatica; chi ha scelto a mano un valore diverso — 90 incluso,
+     * se lo ha impostato dopo — non viene toccato, perché la migrazione gira una
+     * volta sola ed è marcata da una sua chiave.
      */
     private fun migrateTrackingIntervalDefault() {
-        if (settingsPrefs.getBoolean("tracking_freq_migrated_v2", false)) return
-        val stored = settingsPrefs.getInt("tracking_freq_sec", DEFAULT_TRACKING_INTERVAL_SEC)
-        val editor = settingsPrefs.edit().putBoolean("tracking_freq_migrated_v2", true)
-        if (stored == 30) {
+        val autoMigratedTo90 = settingsPrefs.getBoolean("tracking_freq_migrated_v2", false)
+        if (settingsPrefs.getBoolean("tracking_freq_restored_v3", false)) return
+
+        val editor = settingsPrefs.edit().putBoolean("tracking_freq_restored_v3", true)
+        if (autoMigratedTo90 && settingsPrefs.getInt("tracking_freq_sec", 30) == 90) {
             editor.putInt("tracking_freq_sec", DEFAULT_TRACKING_INTERVAL_SEC)
         }
         editor.apply()
@@ -153,6 +157,31 @@ class FirebaseRepository private constructor(private val context: Context) {
     // chiuso. Per l'utente resta tutto uguale, continua a comparire sulla mappa.
     private val _isPowerSavingMode = MutableStateFlow(settingsPrefs.getBoolean("power_saving_mode", false))
     val isPowerSavingMode = _isPowerSavingMode.asStateFlow()
+
+    // Rilevamento automatico dei viaggi (default spento) persistito.
+    private val _isAutoTripEnabled = MutableStateFlow(settingsPrefs.getBoolean("auto_trip_enabled", false))
+    val isAutoTripEnabled = _isAutoTripEnabled.asStateFlow()
+
+    // Se i viaggi rilevati da soli sono visibili al gruppo o solo a chi li ha fatti.
+    private val _isAutoTripShared = MutableStateFlow(settingsPrefs.getBoolean("auto_trip_shared", false))
+    val isAutoTripShared = _isAutoTripShared.asStateFlow()
+
+    fun setAutoTripEnabled(enabled: Boolean) {
+        if (_isAutoTripEnabled.value == enabled) return
+        _isAutoTripEnabled.value = enabled
+        settingsPrefs.edit().putBoolean("auto_trip_enabled", enabled).apply()
+        autoMovingSinceMillis = 0L
+        autoStationarySinceMillis = 0L
+        // L'intervallo effettivo cambia: da fermi va limitato a un minuto,
+        // altrimenti l'app non si accorge in tempo che sei partito.
+        applyEffectiveTrackingInterval()
+    }
+
+    fun setAutoTripShared(shared: Boolean) {
+        if (_isAutoTripShared.value == shared) return
+        _isAutoTripShared.value = shared
+        settingsPrefs.edit().putBoolean("auto_trip_shared", shared).apply()
+    }
 
     /**
      * Precisione da chiedere a Play Services. Unico punto di verita': la usano
@@ -1480,7 +1509,10 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     longitude = lon,
                                     radiusMeters = doc.getDouble("radiusMeters") ?: 100.0,
                                     createdBy = doc.getString("createdBy") ?: "",
-                                    createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
+                                    createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
+                                    // I documenti creati prima di questo campo non
+                                    // lo hanno: per loro il geofence resta attivo.
+                                    geofenceEnabled = doc.getBoolean("geofenceEnabled") ?: true
                                 )
                             } catch (ex: Exception) {
                                 null
@@ -1757,25 +1789,47 @@ class FirebaseRepository private constructor(private val context: Context) {
                 .addSnapshotListener { snapshot, e ->
                     if (e != null) return@addSnapshotListener
                     if (snapshot != null) {
+                        val myUid = _currentUserState.value?.uid
                         val list = snapshot.documents.mapNotNull { doc ->
                             try {
-                                @Suppress("UNCHECKED_CAST")
-                                val rawPoints = doc.get("points") as? List<Map<String, Any>> ?: emptyList()
-                                val points = rawPoints.mapNotNull { p ->
-                                    val lat = (p["latitude"] as? Double) ?: return@mapNotNull null
-                                    val lon = (p["longitude"] as? Double) ?: return@mapNotNull null
-                                    val ts = (p["timestamp"] as? Long) ?: 0L
-                                    TripPoint(lat, lon, ts)
-                                }
+                                val isLive = doc.getBoolean("isLive") ?: false
+                                val ownerId = doc.getString("userId") ?: ""
+
+                                // Un viaggio privato lo vede solo chi l'ha fatto.
+                                val isPrivate = doc.getBoolean("isPrivate") ?: false
+                                if (isPrivate && ownerId != myUid) return@mapNotNull null
+
+                                // I punti viaggiano nel documento SOLO finche' il
+                                // viaggio e' in diretta, perche' gli altri devono
+                                // vederlo avanzare. Una volta concluso stanno nel
+                                // sottodocumento e si leggono all'apertura.
+                                val points = if (isLive) {
+                                    @Suppress("UNCHECKED_CAST")
+                                    val rawPoints = doc.get("points") as? List<Map<String, Any>> ?: emptyList()
+                                    rawPoints.mapNotNull { p ->
+                                        val lat = (p["latitude"] as? Double) ?: return@mapNotNull null
+                                        val lon = (p["longitude"] as? Double) ?: return@mapNotNull null
+                                        TripPoint(lat, lon, (p["timestamp"] as? Long) ?: 0L)
+                                    }
+                                } else emptyList()
+
                                 Trip(
                                     id = doc.id,
                                     groupId = groupId,
-                                    userId = doc.getString("userId") ?: "",
+                                    userId = ownerId,
                                     userName = doc.getString("userName") ?: "Membro",
                                     startTime = doc.getLong("startTime") ?: 0L,
                                     endTime = doc.getLong("endTime") ?: 0L,
                                     durationMs = doc.getLong("durationMs") ?: 0L,
                                     distanceMeters = doc.getDouble("distanceMeters") ?: 0.0,
+                                    pointCount = (doc.getLong("pointCount") ?: 0L).toInt(),
+                                    source = TripSource.fromRaw(doc.getString("source")),
+                                    maxSpeedMs = (doc.getDouble("maxSpeedMs") ?: 0.0).toFloat(),
+                                    movingMs = doc.getLong("movingMs") ?: 0L,
+                                    startPlaceName = doc.getString("startPlaceName")?.ifBlank { null },
+                                    endPlaceName = doc.getString("endPlaceName")?.ifBlank { null },
+                                    isLive = isLive,
+                                    isPrivate = isPrivate,
                                     points = points
                                 )
                             } catch (ex: Exception) { null }
@@ -2034,12 +2088,26 @@ class FirebaseRepository private constructor(private val context: Context) {
             recordTripPoint(location)
         }
 
+        // Va valutato DOPO la registrazione del punto: se decide di avviare un
+        // viaggio qui, il fix corrente e' gia' stato usato per quello in corso e
+        // non si perde nulla; se decide di chiuderlo, la traccia e' completa.
+        evaluateAutoTrip(location)
+
         // La valutazione geofence gira su OGNI fix, anche su quelli che non
         // trasmettiamo: un ingresso o un'uscita da un luogo non va perso solo
         // perché lo spostamento era piccolo.
         val gate = evaluateLocationGate(location, currentGroup)
-        val placeForGeofence = GeofenceHelper.findCurrentPlace(location, _currentGroupPlaces.value)
-        checkGeofenceAlert(user.displayName, placeForGeofence)
+
+        // Due ricerche distinte, di proposito:
+        //  - per gli AVVISI contano solo i luoghi con geofence attivo
+        //  - per l'etichetta "dove sei" contano tutti, perché un luogo con gli
+        //    avvisi spenti resta comunque un posto che ha un nome
+        val allPlaces = _currentGroupPlaces.value
+        val placeForAlert = GeofenceHelper.findCurrentPlace(
+            location, allPlaces.filter { it.geofenceEnabled }
+        )
+        val placeForLabel = GeofenceHelper.findCurrentPlace(location, allPlaces)
+        checkGeofenceAlert(user.displayName, placeForAlert)
 
         if (!gate.shouldSend) {
             Log.v(TAG, "Fix ignorato: ${gate.reason}")
@@ -2053,7 +2121,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         lastSentGroupId = currentGroup
 
         // Compute current place
-        val matchedPlace = placeForGeofence
+        val matchedPlace = placeForLabel
         val enrichedLocation = location.copy(
             userId = user.uid,
             userName = user.displayName,
@@ -2238,7 +2306,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                     "longitude" to newPlace.longitude,
                     "radiusMeters" to newPlace.radiusMeters,
                     "createdBy" to newPlace.createdBy,
-                    "createdAt" to newPlace.createdAt
+                    "createdAt" to newPlace.createdAt,
+                    "geofenceEnabled" to newPlace.geofenceEnabled
                 )
                 firestore.collection("groups").document(currentGroup)
                     .collection("places").document(newPlace.id).set(map).await()
@@ -2255,6 +2324,57 @@ class FirebaseRepository private constructor(private val context: Context) {
         _currentGroupPlaces.value =
             _currentGroupPlaces.value.filterNot { it.id == newPlace.id } + newPlace
         return Result.success(newPlace)
+    }
+
+    /**
+     * Aggiorna un luogo esistente: nome, categoria, coordinate, raggio e
+     * attivazione del geofence.
+     *
+     * Non usa `set()` ma `update()` sui soli campi modificabili, così `createdBy`
+     * e `createdAt` restano quelli originali anche se chi modifica non è chi ha
+     * creato il luogo.
+     */
+    suspend fun updatePlace(place: SavedPlace): Result<SavedPlace> {
+        val user = _currentUserState.value ?: return Result.failure(Exception("No user"))
+        val currentGroup = user.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id
+            ?: return Result.failure(Exception("Nessun gruppo selezionato"))
+        if (place.id.isBlank()) return Result.failure(Exception("Luogo senza id"))
+
+        // Se si spegne il geofence del luogo in cui ci si trova adesso, la
+        // valutazione successiva non troverebbe più un luogo attivo e sparerebbe
+        // un evento di uscita che l'utente non ha compiuto. Si dimentica il luogo
+        // in silenzio.
+        if (!place.geofenceEnabled && lastNotifiedPlaceId == place.id) {
+            lastNotifiedPlaceId = null
+            lastNotifiedPlaceName = null
+        }
+
+        try {
+            if (firestore != null) {
+                firestore.collection("groups").document(currentGroup)
+                    .collection("places").document(place.id)
+                    .update(
+                        mapOf(
+                            "name" to place.name,
+                            "category" to place.category.name,
+                            "latitude" to place.latitude,
+                            "longitude" to place.longitude,
+                            "radiusMeters" to place.radiusMeters,
+                            "geofenceEnabled" to place.geofenceEnabled
+                        )
+                    ).await()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "updatePlace firestore failed: ${e.message}")
+            return Result.failure(e)
+        }
+
+        // Aggiornamento ottimistico: il listener consegnerà comunque la versione
+        // dal server, ma così la UI non aspetta il giro di rete.
+        _currentGroupPlaces.value = _currentGroupPlaces.value.map {
+            if (it.id == place.id) place else it
+        }
+        return Result.success(place)
     }
 
     suspend fun deletePlace(placeId: String): Result<Unit> {
@@ -2648,9 +2768,15 @@ class FirebaseRepository private constructor(private val context: Context) {
      * Intervallo di campionamento realmente in uso: quello fitto del viaggio se
      * ce n'e' uno in registrazione, altrimenti quello scelto dall'utente.
      */
-    private fun effectiveTrackingIntervalSec(): Int =
-        if (_activeTrip.value != null) TRIP_TRACKING_INTERVAL_SEC
-        else _trackingFrequencySeconds.value
+    private fun effectiveTrackingIntervalSec(): Int = when {
+        _activeTrip.value != null -> TRIP_TRACKING_INTERVAL_SEC
+        // Col rilevamento automatico attivo non si puo' aspettare l'intervallo
+        // dell'utente: l'app si accorge della partenza solo quando guarda dove
+        // sei, quindi con 10 minuti perderebbe l'inizio del tragitto — o un giro
+        // breve per intero. Da fermi si guarda al massimo ogni minuto.
+        _isAutoTripEnabled.value -> minOf(_trackingFrequencySeconds.value, AUTO_TRIP_MAX_IDLE_SEC)
+        else -> _trackingFrequencySeconds.value
+    }
 
     /**
      * Riallinea i due produttori di posizione all'intervallo effettivo. Va
@@ -2669,9 +2795,61 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
     }
 
-    fun startTrip() {
-        _activeTrip.value = ActiveTripState(startTime = System.currentTimeMillis())
+    /**
+     * Avvia una registrazione.
+     *
+     * Un viaggio MANUALE crea subito il documento su Firestore con `isLive`:
+     * gli altri membri lo vedono avanzare in tempo reale. Uno AUTOMATICO no,
+     * perché non è una scelta esplicita di chi guida e non ha senso annunciarla.
+     */
+    fun startTrip(source: TripSource = TripSource.MANUAL) {
+        if (_activeTrip.value != null) return
+
+        val now = System.currentTimeMillis()
+        val myLocation = _currentGroupLocations.value.find { it.userId == _currentUserState.value?.uid }
+
+        _activeTrip.value = ActiveTripState(
+            startTime = now,
+            source = source,
+            lastFixAt = now,
+            startPlaceName = myLocation?.currentPlaceName
+        )
         applyEffectiveTrackingInterval()
+
+        if (source == TripSource.MANUAL) {
+            CoroutineScope(Dispatchers.IO).launch { createLiveTripDocument() }
+        }
+    }
+
+    /** Crea il documento del viaggio in diretta e ne memorizza l'id. */
+    private suspend fun createLiveTripDocument() {
+        val trip = _activeTrip.value ?: return
+        val user = _currentUserState.value ?: return
+        val groupId = user.currentGroupId ?: return
+        val db = firestore ?: return
+
+        try {
+            val data = hashMapOf(
+                "userId" to user.uid,
+                "userName" to user.displayName,
+                "groupId" to groupId,
+                "startTime" to trip.startTime,
+                "endTime" to 0L,
+                "durationMs" to 0L,
+                "distanceMeters" to 0.0,
+                "pointCount" to 0,
+                "source" to trip.source.name,
+                "isLive" to true,
+                "isPrivate" to false,
+                "startPlaceName" to (trip.startPlaceName ?: ""),
+                "points" to emptyList<Map<String, Any>>()
+            )
+            val ref = db.collection("groups").document(groupId)
+                .collection("trips").add(data).await()
+            _activeTrip.value = _activeTrip.value?.copy(liveTripId = ref.id)
+        } catch (e: Exception) {
+            Log.w(TAG, "createLiveTripDocument fallita: ${e.message}")
+        }
     }
 
     private fun recordTripPoint(location: UserLocation) {
@@ -2692,7 +2870,8 @@ class FirebaseRepository private constructor(private val context: Context) {
             _activeTrip.value = current.copy(
                 points = current.points + TripPoint(lat, lon, now),
                 lastLat = lat,
-                lastLon = lon
+                lastLon = lon,
+                lastFixAt = now
             )
             return
         }
@@ -2707,18 +2886,63 @@ class FirebaseRepository private constructor(private val context: Context) {
         // distanza servirebbe una velocita' impossibile, il fix e' sbagliato,
         // non e' un movimento. Senza, un singolo fix ballerino piazza un picco
         // nella traccia e gonfia i chilometri totali.
-        val lastAt = current.points.lastOrNull()?.timestamp
-        if (lastAt != null) {
-            val elapsedSec = (now - lastAt) / 1000.0
-            if (elapsedSec > 0.5 && distFromLast / elapsedSec > TRIP_MAX_SPEED_MS) return
-        }
+        val elapsedSec = (now - current.lastFixAt) / 1000.0
+        if (elapsedSec > 0.5 && distFromLast / elapsedSec > TRIP_MAX_SPEED_MS) return
 
-        _activeTrip.value = current.copy(
+        // Il tempo fra due punti validi e' tempo in movimento. La differenza
+        // con la durata totale e' il tempo fermo: semafori, code, soste.
+        val movingDelta = if (elapsedSec in 0.0..TRIP_MOVING_GAP_MAX_SEC) {
+            (now - current.lastFixAt).coerceAtLeast(0L)
+        } else 0L
+
+        val updated = current.copy(
             points = current.points + TripPoint(lat, lon, now),
             lastLat = lat,
             lastLon = lon,
-            distanceMeters = current.distanceMeters + distFromLast
+            distanceMeters = current.distanceMeters + distFromLast,
+            maxSpeedMs = maxOf(current.maxSpeedMs, location.speed),
+            movingMs = current.movingMs + movingDelta,
+            lastFixAt = now
         )
+        _activeTrip.value = updated
+
+        // Aggiornamento della diretta: non a ogni punto, sarebbero centinaia di
+        // scritture all'ora. Ogni 30 secondi la traccia degli altri resta fluida
+        // a un costo sostenibile.
+        if (updated.liveTripId != null && now - updated.lastLiveWriteAt >= TRIP_LIVE_FLUSH_MS) {
+            _activeTrip.value = updated.copy(lastLiveWriteAt = now)
+            CoroutineScope(Dispatchers.IO).launch { flushLiveTrip() }
+        }
+    }
+
+    /** Riversa sul documento in diretta i punti accumulati finora. */
+    private suspend fun flushLiveTrip() {
+        val trip = _activeTrip.value ?: return
+        val tripId = trip.liveTripId ?: return
+        val groupId = _currentUserState.value?.currentGroupId ?: return
+        val db = firestore ?: return
+
+        try {
+            val simplified = rdpSimplify(trip.points, TRIP_RDP_EPSILON_METERS)
+            db.collection("groups").document(groupId)
+                .collection("trips").document(tripId)
+                .update(
+                    mapOf(
+                        "distanceMeters" to trip.distanceMeters,
+                        "durationMs" to (System.currentTimeMillis() - trip.startTime),
+                        "pointCount" to simplified.size,
+                        "points" to simplified.map {
+                            hashMapOf(
+                                "latitude" to it.latitude,
+                                "longitude" to it.longitude,
+                                "timestamp" to it.timestamp
+                            )
+                        }
+                    )
+                ).await()
+        } catch (e: Exception) {
+            Log.w(TAG, "flushLiveTrip fallita: ${e.message}")
+        }
     }
 
     suspend fun stopAndSaveTrip(): Result<Unit> {
@@ -2733,17 +2957,31 @@ class FirebaseRepository private constructor(private val context: Context) {
 
         val user = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
         val groupId = user.currentGroupId ?: return Result.failure(Exception("Nessun gruppo"))
+        val db = firestore ?: return Result.failure(Exception("Firestore non disponibile"))
 
-        if (trip.points.size < 2) return Result.success(Unit)
+        // Troppo corto per essere un viaggio: se era condiviso in diretta va
+        // comunque rimosso, altrimenti resta un documento "in corso" per sempre.
+        if (trip.points.size < 2) {
+            trip.liveTripId?.let { id ->
+                try {
+                    db.collection("groups").document(groupId)
+                        .collection("trips").document(id).delete().await()
+                } catch (_: Exception) {}
+            }
+            return Result.success(Unit)
+        }
 
-        val simplified = rdpSimplify(trip.points, epsilon = 10.0)
+        val simplified = rdpSimplify(trip.points, TRIP_RDP_EPSILON_METERS)
         val endTime = System.currentTimeMillis()
+        val endPlace = GeofenceHelper.findCurrentPlace(
+            UserLocation(latitude = trip.lastLat, longitude = trip.lastLon),
+            _currentGroupPlaces.value
+        )?.name
+
+        val isPrivate = trip.source == TripSource.AUTO && !_isAutoTripShared.value
 
         return try {
-            val pointMaps = simplified.map { p ->
-                hashMapOf("latitude" to p.latitude, "longitude" to p.longitude, "timestamp" to p.timestamp)
-            }
-            val data = hashMapOf(
+            val meta = hashMapOf(
                 "userId" to user.uid,
                 "userName" to user.displayName,
                 "groupId" to groupId,
@@ -2751,10 +2989,42 @@ class FirebaseRepository private constructor(private val context: Context) {
                 "endTime" to endTime,
                 "durationMs" to (endTime - trip.startTime),
                 "distanceMeters" to trip.distanceMeters,
-                "points" to pointMaps
+                "pointCount" to simplified.size,
+                "source" to trip.source.name,
+                "maxSpeedMs" to trip.maxSpeedMs.toDouble(),
+                "movingMs" to trip.movingMs,
+                "startPlaceName" to (trip.startPlaceName ?: ""),
+                "endPlaceName" to (endPlace ?: ""),
+                "isLive" to false,
+                "isPrivate" to isPrivate,
+                // La traccia esce dal documento dell'elenco e va nel
+                // sottodocumento: cinquanta viaggi con i punti dentro
+                // significherebbero scaricarli tutti a ogni apertura del gruppo.
+                "points" to emptyList<Map<String, Any>>()
             )
-            firestore?.collection("groups")?.document(groupId)
-                ?.collection("trips")?.add(data)?.await()
+
+            val tripRef = if (trip.liveTripId != null) {
+                val ref = db.collection("groups").document(groupId)
+                    .collection("trips").document(trip.liveTripId)
+                ref.set(meta).await()
+                ref
+            } else {
+                db.collection("groups").document(groupId)
+                    .collection("trips").add(meta).await()
+            }
+
+            tripRef.collection("track").document("data").set(
+                mapOf(
+                    "points" to simplified.map {
+                        hashMapOf(
+                            "latitude" to it.latitude,
+                            "longitude" to it.longitude,
+                            "timestamp" to it.timestamp
+                        )
+                    }
+                )
+            ).await()
+
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "stopAndSaveTrip failed: ${e.message}")
@@ -2762,15 +3032,91 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
     }
 
+    /**
+     * Legge la traccia di un viaggio, su richiesta. L'elenco porta solo i
+     * metadati: i punti si pagano solo quando si apre quel viaggio.
+     */
+    suspend fun loadTripTrack(tripId: String): List<TripPoint> {
+        val groupId = _currentUserState.value?.currentGroupId ?: return emptyList()
+        val db = firestore ?: return emptyList()
+        return try {
+            val doc = db.collection("groups").document(groupId)
+                .collection("trips").document(tripId)
+                .collection("track").document("data").get().await()
+
+            @Suppress("UNCHECKED_CAST")
+            val raw = doc.get("points") as? List<Map<String, Any>> ?: emptyList()
+            raw.mapNotNull { p ->
+                val lat = p["latitude"] as? Double ?: return@mapNotNull null
+                val lon = p["longitude"] as? Double ?: return@mapNotNull null
+                TripPoint(lat, lon, (p["timestamp"] as? Long) ?: 0L)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "loadTripTrack fallita: ${e.message}")
+            emptyList()
+        }
+    }
+
     suspend fun deleteTrip(tripId: String): Result<Unit> {
         val user = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
         val groupId = user.currentGroupId ?: return Result.failure(Exception("Nessun gruppo"))
         return try {
-            firestore?.collection("groups")?.document(groupId)
-                ?.collection("trips")?.document(tripId)?.delete()?.await()
+            val tripRef = firestore?.collection("groups")?.document(groupId)
+                ?.collection("trips")?.document(tripId)
+            // Il sottodocumento della traccia non se ne va da solo: Firestore non
+            // cancella le sottocollezioni insieme al documento padre.
+            try { tripRef?.collection("track")?.document("data")?.delete()?.await() } catch (_: Exception) {}
+            tripRef?.delete()?.await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    // ---- Rilevamento automatico ----
+
+    private var autoMovingSinceMillis: Long = 0L
+    private var autoStationarySinceMillis: Long = 0L
+
+    /**
+     * Decide da sola quando comincia e quando finisce uno spostamento.
+     *
+     * Parte dopo [AUTO_TRIP_START_MS] di movimento continuo, così una camminata
+     * di pochi passi verso la finestra non diventa un viaggio. Chiude dopo
+     * [AUTO_TRIP_STOP_MS] da fermo, perché una sosta breve — semaforo, benzina —
+     * fa parte dello stesso tragitto e spezzarlo in due sarebbe peggio.
+     */
+    private fun evaluateAutoTrip(location: UserLocation) {
+        if (!_isAutoTripEnabled.value) return
+
+        val now = System.currentTimeMillis()
+        val moving = location.speed > MOVING_SPEED_THRESHOLD_MS
+        val active = _activeTrip.value
+
+        if (active == null) {
+            if (!moving) { autoMovingSinceMillis = 0L; return }
+            if (autoMovingSinceMillis == 0L) autoMovingSinceMillis = now
+            if (now - autoMovingSinceMillis >= AUTO_TRIP_START_MS) {
+                autoMovingSinceMillis = 0L
+                autoStationarySinceMillis = 0L
+                Log.d(TAG, "Viaggio automatico avviato")
+                startTrip(TripSource.AUTO)
+            }
+            return
+        }
+
+        // Un viaggio manuale lo chiude chi l'ha aperto, non l'automatismo.
+        if (active.source != TripSource.AUTO) return
+
+        if (moving) {
+            autoStationarySinceMillis = 0L
+            return
+        }
+        if (autoStationarySinceMillis == 0L) autoStationarySinceMillis = now
+        if (now - autoStationarySinceMillis >= AUTO_TRIP_STOP_MS) {
+            autoStationarySinceMillis = 0L
+            Log.d(TAG, "Viaggio automatico concluso")
+            CoroutineScope(Dispatchers.IO).launch { stopAndSaveTrip() }
         }
     }
 
@@ -2842,11 +3188,14 @@ class FirebaseRepository private constructor(private val context: Context) {
         const val HEARTBEAT_INTERVAL_MS = 5 * 60_000L
 
         /**
-         * Intervallo GPS di partenza. Novanta secondi: con il filtro anti-jitter
-         * la posizione a schermo resta reattiva quando ci si muove, ma da fermi
-         * non si scrive nulla e il chip GPS lavora molto meno.
+         * Intervallo GPS di partenza: 30 secondi.
+         *
+         * Era stato portato a 90 per risparmiare batteria, ma a quel passo la
+         * mappa risultava pigra e le tracce dei viaggi troppo grossolane. Il
+         * risparmio vero lo fanno comunque il filtro anti-jitter (da fermi non si
+         * scrive) e la precisione adattiva del servizio, non la rarefazione dei fix.
          */
-        const val DEFAULT_TRACKING_INTERVAL_SEC = 90
+        const val DEFAULT_TRACKING_INTERVAL_SEC = 30
 
         /**
          * Cadenza dei fix mentre un viaggio e' in registrazione.
@@ -2864,6 +3213,31 @@ class FirebaseRepository private constructor(private val context: Context) {
 
         /** ~200 km/h: oltre, non e' movimento ma un errore del sensore. */
         const val TRIP_MAX_SPEED_MS = 55.0
+
+        /**
+         * Soglia di semplificazione della traccia. Dieci metri, sullo schermo di
+         * un telefono, sono meno di un pixel a qualunque zoom realistico: toglie
+         * ridondanza, non forma.
+         */
+        const val TRIP_RDP_EPSILON_METERS = 10.0
+
+        /** Ogni quanto la diretta viene riversata su Firestore. */
+        const val TRIP_LIVE_FLUSH_MS = 30_000L
+
+        /**
+         * Oltre questo intervallo fra due punti non si conta tempo in movimento:
+         * il buco e' dovuto al GPS perso, non a un tratto percorso.
+         */
+        const val TRIP_MOVING_GAP_MAX_SEC = 120.0
+
+        /** Movimento continuo necessario prima che parta un viaggio automatico. */
+        const val AUTO_TRIP_START_MS = 90_000L
+
+        /** Immobilita' necessaria prima che un viaggio automatico si chiuda. */
+        const val AUTO_TRIP_STOP_MS = 3 * 60_000L
+
+        /** Attesa massima fra due fix quando il rilevamento automatico e' attivo. */
+        const val AUTO_TRIP_MAX_IDLE_SEC = 60
 
         /** Variazione minima di batteria che giustifica una scrittura su members/{uid}. */
         const val BATTERY_WRITE_DELTA = 5

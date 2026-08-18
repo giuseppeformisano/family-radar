@@ -106,6 +106,8 @@ fun MainRadarScreen(
     val isTrackingEnabled by repository.isBackgroundTrackingEnabled.collectAsState()
     val isGlobalGhostMode by repository.isGlobalGhostMode.collectAsState()
     val isPowerSavingMode by repository.isPowerSavingMode.collectAsState()
+    val isAutoTripEnabled by repository.isAutoTripEnabled.collectAsState()
+    val isAutoTripShared by repository.isAutoTripShared.collectAsState()
     val deepLinkTarget by repository.deepLinkTarget.collectAsState()
 
     val currentGroup = userGroups.find { it.id == currentUser?.currentGroupId } ?: userGroups.firstOrNull()
@@ -166,6 +168,10 @@ fun MainRadarScreen(
     val groupTrips by repository.groupTrips.collectAsState()
     val activeTrip by repository.activeTrip.collectAsState()
     var selectedTripId by remember { mutableStateOf<String?>(null) }
+    var tripForDetail by remember { mutableStateOf<Trip?>(null) }
+    // Traccia del viaggio scelto, letta su richiesta: l'elenco porta solo i
+    // metadati, i punti si pagano una volta sola quando servono davvero.
+    var selectedTripTrack by remember { mutableStateOf<List<TripPoint>>(emptyList()) }
 
     /** Centra la mappa su un punto e, di norma, chiude il pannello per lasciarla in vista. */
     fun focusMapOn(latitude: Double, longitude: Double, collapse: Boolean = true) {
@@ -393,9 +399,10 @@ fun MainRadarScreen(
                                 activeTrip = activeTrip,
                                 currentUserId = currentUserId,
                                 selectedTripId = selectedTripId,
+                                // Il tap apre la scheda di dettaglio; e' da li'
+                                // che si sceglie se portare la traccia in mappa.
                                 onTripSelected = { tripId ->
-                                    selectedTripId = if (selectedTripId == tripId) null else tripId
-                                    collapseSheet()
+                                    tripForDetail = groupTrips.find { it.id == tripId }
                                 },
                                 onDeleteTrip = { tripId ->
                                     coroutineScope.launch { repository.deleteTrip(tripId) }
@@ -420,6 +427,8 @@ fun MainRadarScreen(
                                 isTrackingEnabled = isTrackingEnabled,
                                 isGlobalGhostMode = isGlobalGhostMode,
                                 isPowerSavingMode = isPowerSavingMode,
+                                isAutoTripEnabled = isAutoTripEnabled,
+                                isAutoTripShared = isAutoTripShared,
                                 isSimulationRunning = isSimulationRunning,
                                 onEditProfileClick = { showEditProfileDialog = true },
                                 onSwitchGroup = onSwitchGroup,
@@ -435,6 +444,16 @@ fun MainRadarScreen(
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 },
+                                onToggleAutoTrip = { enabled ->
+                                    repository.setAutoTripEnabled(enabled)
+                                    Toast.makeText(
+                                        context,
+                                        if (enabled) "L'app registrerà i viaggi da sola"
+                                        else "Rilevamento automatico disattivato",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                },
+                                onToggleAutoTripShared = { repository.setAutoTripShared(it) },
                                 onToggleTracking = { enabled ->
                                     repository.setBackgroundTrackingEnabled(enabled)
                                     Toast.makeText(
@@ -483,7 +502,15 @@ fun MainRadarScreen(
                 locations = locations,
                 places = places,
                 snapshots = snapshots,
-                trips = groupTrips,
+                // I viaggi conclusi arrivano senza punti: la traccia di quello
+                // aperto viene letta a parte e reinnestata qui, così la mappa
+                // riceve solo cio' che deve davvero disegnare.
+                trips = remember(groupTrips, selectedTripId, selectedTripTrack) {
+                    groupTrips.map {
+                        if (it.id == selectedTripId && selectedTripTrack.isNotEmpty())
+                            it.copy(points = selectedTripTrack) else it
+                    }
+                },
                 activeTripPoints = activeTrip?.points ?: emptyList(),
                 selectedTripId = selectedTripId,
                 currentUserId = currentUserId,
@@ -733,6 +760,38 @@ fun MainRadarScreen(
                         else "Errore salvataggio: ${res.exceptionOrNull()?.message}",
                         Toast.LENGTH_SHORT
                     ).show()
+                }
+            }
+        )
+    }
+
+    tripForDetail?.let { trip ->
+        TripDetailDialog(
+            trip = trip,
+            isOnMap = selectedTripId == trip.id,
+            onDismiss = { tripForDetail = null },
+            onHideFromMap = {
+                tripForDetail = null
+                selectedTripId = null
+                selectedTripTrack = emptyList()
+            },
+            onShowOnMap = {
+                tripForDetail = null
+                coroutineScope.launch {
+                    // Un viaggio in corso porta gia' i punti con se': quelli
+                    // conclusi hanno la traccia nel sottodocumento.
+                    val track = if (trip.isLive) trip.points
+                        else repository.loadTripTrack(trip.id)
+
+                    if (track.isEmpty()) {
+                        Toast.makeText(context, "Traccia non disponibile", Toast.LENGTH_SHORT).show()
+                        return@launch
+                    }
+                    selectedTripTrack = track
+                    selectedTripId = trip.id
+                    collapseSheet()
+                    // Inquadra il punto di partenza della traccia.
+                    track.firstOrNull()?.let { focusMapOn(it.latitude, it.longitude) }
                 }
             }
         )
@@ -2031,12 +2090,16 @@ private fun SettingsPanel(
     isTrackingEnabled: Boolean,
     isGlobalGhostMode: Boolean,
     isPowerSavingMode: Boolean,
+    isAutoTripEnabled: Boolean,
+    isAutoTripShared: Boolean,
     isSimulationRunning: Boolean,
     onEditProfileClick: () -> Unit,
     onSwitchGroup: () -> Unit,
     onUpdateInterval: (Int) -> Unit,
     onToggleTracking: (Boolean) -> Unit,
     onTogglePowerSaving: (Boolean) -> Unit,
+    onToggleAutoTrip: (Boolean) -> Unit,
+    onToggleAutoTripShared: (Boolean) -> Unit,
     onToggleGlobalGhostMode: (Boolean) -> Unit,
     onToggleGroupTracking: (Boolean) -> Unit,
     onToggleAccessPolicy: (Boolean) -> Unit,
@@ -2248,6 +2311,35 @@ private fun SettingsPanel(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+
+        // ---- Viaggi ----
+        item {
+            SettingsCard {
+                SettingsSectionHeader(
+                    title = "Viaggi",
+                    subtitle = "Registrazione dei tuoi spostamenti",
+                    icon = Icons.Default.Route
+                )
+                SettingsToggleRow(
+                    title = "Rileva i viaggi da solo",
+                    description = "Registra quando ti muovi, senza premere niente. Consuma più batteria",
+                    icon = Icons.Default.AutoMode,
+                    checked = isAutoTripEnabled,
+                    onCheckedChange = onToggleAutoTrip,
+                    testTag = "auto_trip_switch"
+                )
+                if (isAutoTripEnabled) {
+                    SettingsToggleRow(
+                        title = "Condividi i viaggi automatici",
+                        description = "Se lo spegni, li vedi solo tu",
+                        icon = if (isAutoTripShared) Icons.Default.Group else Icons.Default.Lock,
+                        checked = isAutoTripShared,
+                        onCheckedChange = onToggleAutoTripShared,
+                        testTag = "auto_trip_shared_switch"
+                    )
+                }
             }
         }
 
@@ -2864,30 +2956,58 @@ private fun TripsPanel(
                     horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
                 ) {
                     Icon(
-                        Icons.Default.Route,
+                        if (trip.isLive) Icons.Default.DirectionsCar else Icons.Default.Route,
                         contentDescription = null,
-                        tint = if (isSelected) MaterialTheme.colorScheme.primary
-                               else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = when {
+                            trip.isLive -> MaterialTheme.colorScheme.error
+                            isSelected -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                         modifier = Modifier.size(Sizes.iconMd)
                     )
                     Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+                        ) {
+                            Text(
+                                trip.userName,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            // Distinguere a colpo d'occhio cosa ha premuto una
+                            // persona da cosa ha dedotto l'app.
+                            TripBadge(
+                                text = if (trip.isLive) "IN CORSO" else trip.source.label.uppercase(),
+                                color = when {
+                                    trip.isLive -> MaterialTheme.colorScheme.error
+                                    trip.source == TripSource.AUTO -> MaterialTheme.colorScheme.tertiary
+                                    else -> MaterialTheme.colorScheme.primary
+                                }
+                            )
+                            if (trip.isPrivate) {
+                                TripBadge(
+                                    text = "PRIVATO",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        val route = listOfNotNull(trip.startPlaceName, trip.endPlaceName)
                         Text(
-                            trip.userName,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            dateFormat.format(java.util.Date(trip.startTime)),
+                            if (route.size == 2) "${route[0]} → ${route[1]}"
+                            else dateFormat.format(java.util.Date(trip.startTime)),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            "%.1f km  •  %d min  •  %d punti".format(km, durationMin, trip.points.size),
+                            "%.1f km  •  %d min".format(km, durationMin),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    if (isMine) {
+                    if (isMine && !trip.isLive) {
                         IconButton(onClick = { onDeleteTrip(trip.id) }) {
                             Icon(
                                 Icons.Default.Delete,
@@ -2900,5 +3020,182 @@ private fun TripsPanel(
                 }
             }
         }
+    }
+}
+
+/** Etichetta compatta: manuale / automatico / in corso / privato. */
+@Composable
+private fun TripBadge(text: String, color: Color) {
+    Surface(
+        shape = RoundedCornerShape(Radius.pill),
+        color = color.copy(alpha = 0.15f)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            modifier = Modifier.padding(horizontal = Spacing.sm, vertical = 1.dp)
+        )
+    }
+}
+
+/**
+ * Scheda di dettaglio di un viaggio.
+ *
+ * Il tap sull'elenco apre prima questa: la traccia sulla mappa e' un passo
+ * successivo e volontario, perche' disegnarla chiude il pannello e sposta
+ * l'inquadratura, e non e' detto che sia quello che si voleva.
+ */
+@Composable
+private fun TripDetailDialog(
+    trip: Trip,
+    isOnMap: Boolean,
+    onDismiss: () -> Unit,
+    onShowOnMap: () -> Unit,
+    onHideFromMap: () -> Unit
+) {
+    val dateFormat = remember { SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.ITALY) }
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.ITALY) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                if (trip.source == TripSource.AUTO) Icons.Default.AutoMode else Icons.Default.Route,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        },
+        title = {
+            Column {
+                Text(
+                    text = listOfNotNull(trip.startPlaceName, trip.endPlaceName)
+                        .takeIf { it.size == 2 }?.joinToString(" → ")
+                        ?: "Viaggio di ${trip.userName}",
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Text(
+                    text = dateFormat.format(Date(trip.startTime)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    TripStatTile(
+                        label = "Distanza",
+                        value = "%.1f".format(trip.distanceMeters / 1000.0),
+                        unit = "km",
+                        modifier = Modifier.weight(1f)
+                    )
+                    TripStatTile(
+                        label = "Durata",
+                        value = "${trip.durationMs / 60000}",
+                        unit = "min",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    TripStatTile(
+                        label = "Media",
+                        value = "${(trip.averageSpeedMs * 3.6f).toInt()}",
+                        unit = "km/h",
+                        modifier = Modifier.weight(1f)
+                    )
+                    TripStatTile(
+                        label = "Massima",
+                        value = "${(trip.maxSpeedMs * 3.6f).toInt()}",
+                        unit = "km/h",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                HairlineDivider()
+
+                TripDetailRow("Partenza", timeFormat.format(Date(trip.startTime)))
+                if (trip.endTime > 0) {
+                    TripDetailRow("Arrivo", timeFormat.format(Date(trip.endTime)))
+                }
+                if (trip.stoppedMs > 60_000) {
+                    TripDetailRow("Tempo fermo", "${trip.stoppedMs / 60000} min")
+                }
+                TripDetailRow("Registrazione", trip.source.label)
+                TripDetailRow("Da", trip.userName)
+            }
+        },
+        confirmButton = {
+            if (isOnMap) {
+                OutlinedButton(onClick = onHideFromMap) {
+                    Icon(Icons.Default.LayersClear, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                    Spacer(Modifier.width(Spacing.xs))
+                    Text("Togli dalla mappa")
+                }
+            } else {
+                Button(onClick = onShowOnMap) {
+                    Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                    Spacer(Modifier.width(Spacing.xs))
+                    Text("Mostra sulla mappa")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Chiudi") }
+        }
+    )
+}
+
+@Composable
+private fun TripStatTile(
+    label: String,
+    value: String,
+    unit: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(Radius.md),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(Spacing.md),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(text = value, style = MetricTextStyle, color = MaterialTheme.colorScheme.onSurface)
+                Spacer(Modifier.width(2.dp))
+                Text(
+                    text = unit,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 2.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TripDetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }

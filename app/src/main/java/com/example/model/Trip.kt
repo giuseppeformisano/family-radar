@@ -1,11 +1,38 @@
 package com.example.model
 
+/** Come è nato il viaggio: premuto da chi guida, o rilevato dall'app. */
+enum class TripSource {
+    MANUAL,
+    AUTO;
+
+    val label: String
+        get() = when (this) {
+            MANUAL -> "Manuale"
+            AUTO -> "Automatico"
+        }
+
+    companion object {
+        fun fromRaw(raw: String?): TripSource =
+            entries.firstOrNull { it.name == raw } ?: MANUAL
+    }
+}
+
 data class TripPoint(
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
     val timestamp: Long = 0L
 )
 
+/**
+ * Viaggio salvato.
+ *
+ * [points] è deliberatamente vuoto negli elementi che arrivano dall'elenco:
+ * il listener carica solo i metadati, altrimenti aprire il gruppo scaricherebbe
+ * la traccia completa di cinquanta viaggi per disegnare polilinee che nessuno
+ * sta guardando. I punti si leggono su richiesta con `loadTripTrack`, tranne
+ * per un viaggio [isLive], che li porta con sé perché serve mostrarlo in
+ * tempo reale agli altri membri.
+ */
 data class Trip(
     val id: String = "",
     val groupId: String = "",
@@ -15,13 +42,42 @@ data class Trip(
     val endTime: Long = 0L,
     val durationMs: Long = 0L,
     val distanceMeters: Double = 0.0,
+    val pointCount: Int = 0,
+    val source: TripSource = TripSource.MANUAL,
+    /** Velocità massima registrata, in m/s. */
+    val maxSpeedMs: Float = 0f,
+    /** Tempo effettivamente in movimento: la differenza col totale è tempo fermo. */
+    val movingMs: Long = 0L,
+    val startPlaceName: String? = null,
+    val endPlaceName: String? = null,
+    /** Viaggio in corso: gli altri lo vedono avanzare sulla mappa. */
+    val isLive: Boolean = false,
+    /** Visibile solo a chi l'ha registrato. */
+    val isPrivate: Boolean = false,
     val points: List<TripPoint> = emptyList()
-)
+) {
+    /** Velocità media sul tempo in movimento, in m/s. Zero se non si è mai mossi. */
+    val averageSpeedMs: Float
+        get() = if (movingMs > 0) (distanceMeters / (movingMs / 1000.0)).toFloat() else 0f
+
+    /** Tempo trascorso da fermi durante il viaggio (semafori, code, soste). */
+    val stoppedMs: Long
+        get() = (durationMs - movingMs).coerceAtLeast(0L)
+}
 
 data class ActiveTripState(
     val startTime: Long = System.currentTimeMillis(),
     val points: List<TripPoint> = emptyList(),
     val lastLat: Double = 0.0,
     val lastLon: Double = 0.0,
-    val distanceMeters: Double = 0.0
+    val distanceMeters: Double = 0.0,
+    val source: TripSource = TripSource.MANUAL,
+    val maxSpeedMs: Float = 0f,
+    val movingMs: Long = 0L,
+    /** Istante dell'ultimo fix considerato, per accumulare [movingMs]. */
+    val lastFixAt: Long = 0L,
+    /** Documento del viaggio in corso su Firestore, se condiviso in diretta. */
+    val liveTripId: String? = null,
+    val lastLiveWriteAt: Long = 0L,
+    val startPlaceName: String? = null
 )

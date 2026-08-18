@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -26,6 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
@@ -391,15 +394,28 @@ private fun GroupCard(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                if (isPending) {
-                    Icon(
+                // L'immagine del gruppo era gia' letta dal repository ma qui non
+                // veniva mai guardata: la card mostrava sempre l'iniziale, quindi
+                // cambiare la foto non si vedeva nell'elenco.
+                val groupBitmap = remember(group.photoBase64) {
+                    ImageUtils.base64ToBitmap(group.photoBase64.ifBlank { null })
+                }
+                when {
+                    isPending -> Icon(
                         Icons.Default.HourglassTop,
                         contentDescription = null,
                         tint = androidx.compose.ui.graphics.Color.White,
                         modifier = Modifier.size(Sizes.iconLg)
                     )
-                } else {
-                    Text(
+
+                    groupBitmap != null -> Image(
+                        bitmap = groupBitmap.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+
+                    else -> Text(
                         text = group.name.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "G",
                         style = MaterialTheme.typography.headlineSmall,
                         color = androidx.compose.ui.graphics.Color.White

@@ -57,7 +57,6 @@ import org.osmdroid.views.overlay.Polygon
 import java.util.*
 import kotlin.math.roundToInt
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AddPlaceDialog(
     initialLat: Double,
@@ -494,38 +493,59 @@ fun AddPlaceDialog(
                 // Category Chips
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Categoria", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold))
-                    // FlowRow e non Row: cinque chip forzati su una riga sola con
-                    // SpaceBetween finiscono attaccati sui display stretti e
-                    // l'ultimo si deforma. Cosi' vanno a capo da soli e la
-                    // spaziatura resta la stessa su qualsiasi dispositivo.
-                    FlowRow(
+                    // Cinque colonne di uguale larghezza, icona sopra ed etichetta
+                    // sotto. Con le FilterChip a icona+testo affiancati la quinta
+                    // categoria non ci stava e andava a capo, lasciando una riga
+                    // spaiata; impilando i due elementi ogni voce e' abbastanza
+                    // stretta da entrare su qualsiasi schermo. Stessa grammatica
+                    // della barra di navigazione del foglio.
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         PlaceCategory.values().forEach { cat ->
                             val isSelected = cat == selectedCategory
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = {
-                                    selectedCategory = cat
-                                    if (placeName.isBlank() || PlaceCategory.values().any { it.label == placeName }) {
-                                        placeName = cat.label
+                            val icon = when (cat) {
+                                PlaceCategory.HOME -> Icons.Default.Home
+                                PlaceCategory.WORK -> Icons.Default.Work
+                                PlaceCategory.SCHOOL -> Icons.Default.School
+                                PlaceCategory.GYM -> Icons.Default.FitnessCenter
+                                PlaceCategory.OTHER -> Icons.Default.Place
+                            }
+                            val container = if (isSelected) MaterialTheme.colorScheme.secondaryContainer
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            val content = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(container)
+                                    .clickable {
+                                        selectedCategory = cat
+                                        if (placeName.isBlank() || PlaceCategory.values().any { it.label == placeName }) {
+                                            placeName = cat.label
+                                        }
                                     }
-                                },
-                                label = { Text(cat.label, fontSize = 12.sp) },
-                                leadingIcon = {
-                                    val icon = when (cat) {
-                                        PlaceCategory.HOME -> Icons.Default.Home
-                                        PlaceCategory.WORK -> Icons.Default.Work
-                                        PlaceCategory.SCHOOL -> Icons.Default.School
-                                        PlaceCategory.GYM -> Icons.Default.FitnessCenter
-                                        PlaceCategory.OTHER -> Icons.Default.Place
-                                    }
-                                    Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
-                                },
-                                shape = RoundedCornerShape(10.dp)
-                            )
+                                    .padding(vertical = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    icon,
+                                    contentDescription = cat.label,
+                                    tint = content,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = cat.label,
+                                    fontSize = 10.sp,
+                                    color = content,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }

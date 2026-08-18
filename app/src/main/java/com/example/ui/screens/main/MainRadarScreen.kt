@@ -17,10 +17,19 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size as GeometrySize
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -55,6 +64,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -126,14 +136,22 @@ fun MainRadarScreen(
     // carosello e ogni altro consumatore, e ha effetto subito invece di
     // aspettare il prossimo fix del membro.
     val locations = remember(rawLocations, members) {
-        rawLocations.map { loc ->
-            val member = members.find { it.userId == loc.userId } ?: return@map loc
-            loc.copy(
-                userName = member.displayName.ifBlank { loc.userName },
-                nickname = member.nickname?.ifBlank { null } ?: loc.nickname,
-                photoBase64 = member.photoBase64?.ifBlank { null } ?: loc.photoBase64
-            )
-        }
+        rawLocations
+            .filter { loc ->
+                members.any {
+                    it.userId == loc.userId &&
+                    !it.status.equals("PENDING", ignoreCase = true) &&
+                    !it.status.equals("REJECTED", ignoreCase = true)
+                }
+            }
+            .map { loc ->
+                val member = members.find { it.userId == loc.userId } ?: return@map loc
+                loc.copy(
+                    userName = member.displayName.ifBlank { loc.userName },
+                    nickname = member.nickname?.ifBlank { null } ?: loc.nickname,
+                    photoBase64 = member.photoBase64?.ifBlank { null } ?: loc.photoBase64
+                )
+            }
     }
 
     val currentGroup = userGroups.find { it.id == currentUser?.currentGroupId } ?: userGroups.firstOrNull()
@@ -1143,6 +1161,12 @@ fun MainRadarScreen(
                 capturedSnapshotBitmap = null
             }
         )
+    }
+
+    // Mostra overlay di caricamento mentre i dati del gruppo si caricano
+    val isGroupDataLoading = currentGroup != null && currentUserId.isNotBlank() && members.isEmpty()
+    if (isGroupDataLoading) {
+        GroupLoadingOverlay()
     }
 }
 
@@ -2967,36 +2991,103 @@ private fun SettingsPanel(
                 }
 
                 when (val result = checkResult) {
-                    is CheckResult.Available -> AlertDialog(
-                        onDismissRequest = { checkResult = null },
-                        title = { Text("Aggiornamento disponibile") },
-                        text = { Text("È disponibile la versione ${result.info.versionName}. Scaricala e installala ora.") },
-                        confirmButton = {
-                            Button(onClick = {
-                                checkResult = null
-                                AppUpdater.downloadAndInstall(context, result.info.apkUrl)
-                            }) { Text("Aggiorna") }
-                        },
-                        dismissButton = {
-                            OutlinedButton(onClick = { checkResult = null }) { Text("Dopo") }
+                    is CheckResult.Available -> Dialog(onDismissRequest = { checkResult = null }) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(Spacing.md),
+                            shape = RoundedCornerShape(Radius.xl),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(Spacing.md)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(Sizes.avatarLg)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.SystemUpdate, contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
+                                }
+                                Text(
+                                    text = "È disponibile la versione ${result.info.versionName}.\nScaricala e installala ora.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                                    OutlinedButton(onClick = { checkResult = null }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm)) { Text("Dopo") }
+                                    Button(onClick = { checkResult = null; AppUpdater.downloadAndInstall(context, result.info.apkUrl) },
+                                        modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm)) { Text("Aggiorna") }
+                                }
+                            }
                         }
-                    )
-                    CheckResult.UpToDate -> AlertDialog(
-                        onDismissRequest = { checkResult = null },
-                        title = { Text("Sei aggiornato") },
-                        text = { Text("Stai usando la versione ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}), che è l'ultima disponibile.") },
-                        confirmButton = {
-                            Button(onClick = { checkResult = null }) { Text("OK") }
+                    }
+                    CheckResult.UpToDate -> Dialog(onDismissRequest = { checkResult = null }) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(Spacing.md),
+                            shape = RoundedCornerShape(Radius.xl),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(Spacing.md)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(Sizes.avatarLg)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(Sizes.iconLg))
+                                }
+                                Text(
+                                    text = "Stai usando la versione ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}),\nche è l'ultima disponibile.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                Button(onClick = { checkResult = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) { Text("OK") }
+                            }
                         }
-                    )
-                    CheckResult.NetworkError -> AlertDialog(
-                        onDismissRequest = { checkResult = null },
-                        title = { Text("Impossibile verificare") },
-                        text = { Text("Controlla la connessione e riprova.") },
-                        confirmButton = {
-                            Button(onClick = { checkResult = null }) { Text("OK") }
+                    }
+                    CheckResult.NetworkError -> Dialog(onDismissRequest = { checkResult = null }) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(Spacing.md),
+                            shape = RoundedCornerShape(Radius.xl),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(Spacing.md)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(Sizes.avatarLg)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.WifiOff, contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(Sizes.iconLg))
+                                }
+                                Text(
+                                    text = "Impossibile verificare gli aggiornamenti.\nControlla la connessione e riprova.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                Button(onClick = { checkResult = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) { Text("OK") }
+                            }
                         }
-                    )
+                    }
                     null -> Unit
                 }
             }
@@ -3062,6 +3153,7 @@ private fun SettingsSectionHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            Spacer(Modifier.height(2.dp))
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
@@ -3152,48 +3244,146 @@ private fun ConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(Radius.xl),
-        containerColor = MaterialTheme.colorScheme.surface,
-        icon = {
-            Box(
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(Spacing.md),
+            shape = RoundedCornerShape(Radius.xl),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
                 modifier = Modifier
-                    .size(Sizes.avatarLg)
-                    .clip(CircleShape)
-                    .background(iconTint.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(Spacing.xxl),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(Spacing.md)
             ) {
-                Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(Sizes.iconLg))
-            }
-        },
-        title = {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        },
-        text = {
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                shape = RoundedCornerShape(Radius.sm),
-                colors = ButtonDefaults.buttonColors(containerColor = iconTint)
-            ) { Text(confirmLabel) }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(Radius.sm)) {
-                Text("Annulla")
+                Box(
+                    modifier = Modifier
+                        .size(Sizes.avatarLg)
+                        .clip(CircleShape)
+                        .background(iconTint.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(Sizes.iconLg))
+                }
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(Radius.sm)
+                    ) { Text("Annulla") }
+                    Button(
+                        onClick = onConfirm,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(Radius.sm),
+                        colors = ButtonDefaults.buttonColors(containerColor = iconTint)
+                    ) { Text(confirmLabel) }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun GroupLoadingOverlay() {
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val infiniteTransition = rememberInfiniteTransition(label = "radar_loading")
+    val sweepAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2000, easing = LinearEasing)
+        ),
+        label = "sweep"
     )
+
+    Dialog(
+        onDismissRequest = {},
+        properties = DialogProperties(
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(backgroundColor.copy(alpha = 0.93f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(Spacing.xl)
+            ) {
+                Canvas(modifier = Modifier.size(140.dp)) {
+                    val center = Offset(size.width / 2, size.height / 2)
+                    val maxRadius = size.minDimension / 2
+
+                    // Concentric rings
+                    for (i in 1..3) {
+                        drawCircle(
+                            color = primaryColor.copy(alpha = 0.15f),
+                            radius = maxRadius * i / 3f,
+                            center = center,
+                            style = Stroke(width = 1.5.dp.toPx())
+                        )
+                    }
+
+                    // Radar sweep pie slice (trailing fade)
+                    for (i in 0 until 30) {
+                        val alpha = (i / 30f) * 0.55f
+                        val startA = sweepAngle - 90f - 3f * (30 - i)
+                        drawArc(
+                            color = primaryColor.copy(alpha = alpha),
+                            startAngle = startA,
+                            sweepAngle = 3f,
+                            useCenter = true,
+                            topLeft = Offset(center.x - maxRadius, center.y - maxRadius),
+                            size = GeometrySize(maxRadius * 2, maxRadius * 2)
+                        )
+                    }
+
+                    // Outer ring
+                    drawCircle(
+                        color = primaryColor.copy(alpha = 0.4f),
+                        radius = maxRadius,
+                        center = center,
+                        style = Stroke(width = 2.dp.toPx())
+                    )
+
+                    // Center dot
+                    drawCircle(color = primaryColor, radius = 5.dp.toPx(), center = center)
+
+                    // Sweep tip line
+                    val tipX = center.x + maxRadius * kotlin.math.cos(Math.toRadians((sweepAngle - 90.0))).toFloat()
+                    val tipY = center.y + maxRadius * kotlin.math.sin(Math.toRadians((sweepAngle - 90.0))).toFloat()
+                    drawLine(
+                        color = primaryColor.copy(alpha = 0.8f),
+                        start = center,
+                        end = Offset(tipX, tipY),
+                        strokeWidth = 2.dp.toPx()
+                    )
+                }
+                Text(
+                    text = "Caricamento in corso...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
 }
 
 @Composable

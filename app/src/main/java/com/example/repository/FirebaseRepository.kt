@@ -2402,6 +2402,7 @@ class FirebaseRepository private constructor(private val context: Context) {
 
     private var lastNotifiedPlaceId: String? = null
     private var lastNotifiedPlaceName: String? = null
+    private var geofenceExitMissCount = 0
 
     /**
      * Trova il luogo "corrente" ai fini degli avvisi applicando l'isteresi:
@@ -2431,6 +2432,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         val groupId = user.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id ?: return
 
         if (place != null) {
+            geofenceExitMissCount = 0
             if (lastNotifiedPlaceId != place.id) {
                 lastNotifiedPlaceId = place.id
                 lastNotifiedPlaceName = place.name
@@ -2478,6 +2480,9 @@ class FirebaseRepository private constructor(private val context: Context) {
             }
         } else {
             if (lastNotifiedPlaceId != null) {
+                geofenceExitMissCount++
+                if (geofenceExitMissCount < 3) return
+                geofenceExitMissCount = 0
                 val previousPlaceName = lastNotifiedPlaceName ?: "un luogo sicuro"
                 val previousPlaceId = lastNotifiedPlaceId ?: ""
                 val exitEventId = "evt_${UUID.randomUUID().toString().take(8)}"
@@ -3932,7 +3937,7 @@ class FirebaseRepository private constructor(private val context: Context) {
          * raggio + questo margine. Assorbe i salti del GPS mentre si sta fermi
          * sul bordo di un luogo salvato.
          */
-        const val GEOFENCE_EXIT_MARGIN_METERS = 35.0
+        const val GEOFENCE_EXIT_MARGIN_METERS = 50.0
 
         /** ~200 km/h: oltre, non e' movimento ma un errore del sensore. */
         const val TRIP_MAX_SPEED_MS = 55.0

@@ -12,14 +12,19 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SystemUpdate
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -263,56 +268,55 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
     }
 
     updateInfo?.let { info ->
-        AlertDialog(
-            onDismissRequest = { updateInfo = null },
-            shape = RoundedCornerShape(Radius.xl),
-            containerColor = MaterialTheme.colorScheme.surface,
-            icon = {
-                Box(
-                    modifier = Modifier
-                        .size(Sizes.avatarLg)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
+        androidx.compose.ui.window.Dialog(onDismissRequest = { updateInfo = null }) {
+            androidx.compose.material3.Card(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
+                colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Icon(
-                        Icons.Default.SystemUpdate,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(Sizes.iconLg)
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.SystemUpdate,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                    Text(
+                        text = "È disponibile la versione ${info.versionName}.\nScaricala e installala ora.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(
+                            onClick = { updateInfo = null },
+                            modifier = Modifier.weight(1f),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                        ) { Text("Dopo") }
+                        Button(
+                            onClick = {
+                                AppUpdater.downloadAndInstall(context, info.apkUrl)
+                                updateInfo = null
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                        ) { Text("Aggiorna") }
+                    }
                 }
-            },
-            title = {
-                Text(
-                    text = "Aggiornamento disponibile",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            },
-            text = {
-                Text(
-                    text = "È disponibile la versione ${info.versionName}. Scaricala e installala ora.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        AppUpdater.downloadAndInstall(context, info.apkUrl)
-                        updateInfo = null
-                    },
-                    shape = RoundedCornerShape(Radius.sm)
-                ) { Text("Aggiornare") }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { updateInfo = null },
-                    shape = RoundedCornerShape(Radius.sm)
-                ) { Text("Dopo") }
             }
-        )
+        }
     }
 
     Crossfade(targetState = currentScreen, label = "screen_crossfade") { screen ->
@@ -321,10 +325,14 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
                 AuthScreen(
                     repository = repository,
                     onAuthSuccess = {
-                        currentScreen = if (repository.userGroupsState.value.isNotEmpty()) {
-                            AppScreen.MAIN_RADAR
-                        } else {
-                            AppScreen.GROUP_SELECT
+                        val activeGroups = repository.userGroupsState.value
+                            .filter { it.userMembershipStatus == "ACTIVE" }
+                        currentScreen = when {
+                            activeGroups.size == 1 -> {
+                                repository.selectGroup(activeGroups.first().id)
+                                AppScreen.MAIN_RADAR
+                            }
+                            else -> AppScreen.GROUP_SELECT
                         }
                     }
                 )

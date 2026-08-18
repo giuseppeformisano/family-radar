@@ -63,24 +63,35 @@ fun AddPlaceDialog(
     initialLat: Double,
     initialLon: Double,
     onDismiss: () -> Unit,
-    onPlaceAdded: (SavedPlace) -> Unit
+    onPlaceAdded: (SavedPlace) -> Unit,
+    /**
+     * Se valorizzato il dialog lavora in modifica: i campi partono precompilati e
+     * il luogo restituito conserva id, autore e data di creazione originali.
+     * Se null si crea un luogo nuovo, come prima.
+     */
+    existingPlace: SavedPlace? = null
 ) {
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val coroutineScope = rememberCoroutineScope()
     val isDark = isSystemInDarkTheme()
+    val isEditing = existingPlace != null
 
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var searchFeedback by remember { mutableStateOf<String?>(null) }
 
-    var placeName by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf(PlaceCategory.HOME) }
-    var radiusMeters by remember { mutableStateOf(100f) }
+    var placeName by remember { mutableStateOf(existingPlace?.name ?: "") }
+    var selectedCategory by remember { mutableStateOf(existingPlace?.category ?: PlaceCategory.HOME) }
+    var radiusMeters by remember { mutableStateOf(existingPlace?.radiusMeters?.toFloat() ?: 100f) }
+    var geofenceEnabled by remember { mutableStateOf(existingPlace?.geofenceEnabled ?: true) }
 
-    // Coordinates managed visually via map scroll/pin
-    val startLat = if (initialLat != 0.0) initialLat else 41.9028
-    val startLon = if (initialLon != 0.0) initialLon else 12.4964
+    // In modifica il pin parte dalle coordinate del luogo, non da quelle passate
+    // dal chiamante (che sono la posizione corrente dell'utente).
+    val startLat = existingPlace?.latitude?.takeIf { it != 0.0 }
+        ?: if (initialLat != 0.0) initialLat else 41.9028
+    val startLon = existingPlace?.longitude?.takeIf { it != 0.0 }
+        ?: if (initialLon != 0.0) initialLon else 12.4964
     var currentPinLat by remember { mutableStateOf(startLat) }
     var currentPinLon by remember { mutableStateOf(startLon) }
     var resolvedAddress by remember { mutableStateOf("Posizione sulla mappa...") }
@@ -236,11 +247,12 @@ fun AddPlaceDialog(
                         }
                         Column {
                             Text(
-                                "Nuovo Luogo Sicuro",
+                                if (isEditing) "Modifica Luogo" else "Nuovo Luogo Sicuro",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
                             Text(
-                                "Posiziona il pin sulla mappa o cerca",
+                                if (isEditing) "Aggiorna nome, posizione, raggio e avvisi"
+                                else "Posiziona il pin sulla mappa o cerca",
                                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                             )
                         }
@@ -539,9 +551,45 @@ fun AddPlaceDialog(
                         onValueChange = { radiusMeters = it },
                         valueRange = 50f..500f,
                         steps = 8,
+                        enabled = geofenceEnabled,
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("radius_slider")
+                    )
+                }
+
+                // Attivazione del geofence
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = if (geofenceEnabled) Icons.Default.NotificationsActive
+                        else Icons.Default.NotificationsOff,
+                        contentDescription = null,
+                        tint = if (geofenceEnabled) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Avvisi di arrivo e partenza",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                        Text(
+                            if (geofenceEnabled)
+                                "Il gruppo riceve una notifica quando qualcuno entra o esce"
+                            else
+                                "Il luogo resta sulla mappa ma non genera notifiche",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = geofenceEnabled,
+                        onCheckedChange = { geofenceEnabled = it },
+                        modifier = Modifier.testTag("geofence_enabled_switch")
                     )
                 }
 
@@ -559,12 +607,16 @@ fun AddPlaceDialog(
                     }
                     Button(
                         onClick = {
-                            val finalPlace = SavedPlace(
+                            // In modifica si parte dal luogo esistente con copy(),
+                            // così id, createdBy e createdAt restano gli originali.
+                            val base = existingPlace ?: SavedPlace()
+                            val finalPlace = base.copy(
                                 name = placeName.ifBlank { selectedCategory.label },
                                 category = selectedCategory,
                                 latitude = currentPinLat,
                                 longitude = currentPinLon,
-                                radiusMeters = radiusMeters.toDouble()
+                                radiusMeters = radiusMeters.toDouble(),
+                                geofenceEnabled = geofenceEnabled
                             )
                             onPlaceAdded(finalPlace)
                         },
@@ -575,7 +627,7 @@ fun AddPlaceDialog(
                     ) {
                         Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Salva Luogo")
+                        Text(if (isEditing) "Salva Modifiche" else "Salva Luogo")
                     }
                 }
             }

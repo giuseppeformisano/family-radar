@@ -138,6 +138,8 @@ fun MainRadarScreen(
     // --- Stato UI locale ---
     var selectedMemberForSheet by remember { mutableStateOf<UserLocation?>(null) }
     var selectedPlaceForSheet by remember { mutableStateOf<SavedPlace?>(null) }
+    // Non null mentre il dialog e' aperto in modifica su quel luogo.
+    var placeToEdit by remember { mutableStateOf<SavedPlace?>(null) }
     var showAddPlaceDialog by remember { mutableStateOf(false) }
     var showEditProfileDialog by remember { mutableStateOf(false) }
     var memberToKick by remember { mutableStateOf<GroupMember?>(null) }
@@ -389,6 +391,7 @@ fun MainRadarScreen(
                                 },
                                 onFocusPlace = { place -> focusMapOn(place.latitude, place.longitude) },
                                 onAddPlaceClick = { showAddPlaceDialog = true },
+                                onEditPlace = { placeToEdit = it },
                                 onDeletePlace = { placeId ->
                                     coroutineScope.launch { repository.deletePlace(placeId) }
                                 }
@@ -730,6 +733,53 @@ fun MainRadarScreen(
                 coroutineScope.launch {
                     repository.deletePlace(toDelete.id)
                     Toast.makeText(context, "Luogo '${toDelete.name}' eliminato", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onEditPlace = { toEdit ->
+                selectedPlaceForSheet = null
+                placeToEdit = toEdit
+            },
+            onToggleGeofence = { target, enabled ->
+                coroutineScope.launch {
+                    val res = repository.updatePlace(target.copy(geofenceEnabled = enabled))
+                    if (res.isSuccess) {
+                        // Il foglio mostra la copia che gli e' stata passata: senza
+                        // questo aggiornamento l'interruttore tornerebbe indietro.
+                        selectedPlaceForSheet = res.getOrNull()
+                        Toast.makeText(
+                            context,
+                            if (enabled) "Avvisi attivati per '${target.name}'"
+                            else "Avvisi disattivati per '${target.name}'",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "Errore: ${res.exceptionOrNull()?.message}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            }
+        )
+    }
+
+    placeToEdit?.let { editing ->
+        AddPlaceDialog(
+            initialLat = editing.latitude,
+            initialLon = editing.longitude,
+            existingPlace = editing,
+            onDismiss = { placeToEdit = null },
+            onPlaceAdded = { updated ->
+                placeToEdit = null
+                coroutineScope.launch {
+                    val res = repository.updatePlace(updated)
+                    Toast.makeText(
+                        context,
+                        if (res.isSuccess) "Luogo '${updated.name}' aggiornato"
+                        else "Errore salvataggio: ${res.exceptionOrNull()?.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
         )
@@ -1890,6 +1940,7 @@ private fun PlacesPanel(
     onPlaceClick: (SavedPlace) -> Unit,
     onFocusPlace: (SavedPlace) -> Unit,
     onAddPlaceClick: () -> Unit,
+    onEditPlace: (SavedPlace) -> Unit,
     onDeletePlace: (String) -> Unit
 ) {
     LazyColumn(
@@ -1938,6 +1989,7 @@ private fun PlacesPanel(
                     place = place,
                     onClick = { onPlaceClick(place) },
                     onFocus = { onFocusPlace(place) },
+                    onEdit = { onEditPlace(place) },
                     onDelete = { onDeletePlace(place.id) }
                 )
             }
@@ -1963,6 +2015,7 @@ private fun PlaceRow(
     place: SavedPlace,
     onClick: () -> Unit,
     onFocus: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     val accent = placeColor(place.category)
@@ -1996,21 +2049,46 @@ private fun PlaceRow(
             }
 
             Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+                ) {
+                    Text(
+                        text = place.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    // Un luogo senza avvisi resta in elenco identico agli altri:
+                    // senza questo segno non si capirebbe perche' non notifica.
+                    if (!place.geofenceEnabled) {
+                        Icon(
+                            Icons.Default.NotificationsOff,
+                            contentDescription = "Avvisi disattivati",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(Sizes.iconSm)
+                        )
+                    }
+                }
                 Text(
-                    text = place.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "${place.category.label} · raggio ${place.radiusMeters.toInt()} m",
+                    text = "${place.category.label} · raggio ${place.radiusMeters.toInt()} m" +
+                        if (!place.geofenceEnabled) " · avvisi spenti" else "",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
                 )
             }
 
+            IconButton(onClick = onEdit) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = "Modifica luogo",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(Sizes.iconMd)
+                )
+            }
             IconButton(onClick = onFocus) {
                 Icon(
                     Icons.Default.NearMe,

@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,7 +29,10 @@ fun PlaceDetailSheet(
     place: SavedPlace,
     onDismiss: () -> Unit,
     onShowOnMap: (SavedPlace) -> Unit,
-    onDeletePlace: (SavedPlace) -> Unit
+    onDeletePlace: (SavedPlace) -> Unit,
+    onEditPlace: (SavedPlace) -> Unit = {},
+    /** Accende o spegne gli avvisi senza dover aprire il dialog di modifica. */
+    onToggleGeofence: (SavedPlace, Boolean) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -205,15 +209,79 @@ fun PlaceDetailSheet(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            OutlinedButton(
-                onClick = { showDeleteConfirm = true },
-                modifier = Modifier.fillMaxWidth(),
+            // Interruttore rapido degli avvisi: e' la modifica piu' frequente,
+            // non vale la pena passare dal dialog completo per farla.
+            Surface(
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Elimina Luogo")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = if (place.geofenceEnabled) Icons.Default.NotificationsActive
+                        else Icons.Default.NotificationsOff,
+                        contentDescription = null,
+                        tint = if (place.geofenceEnabled) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Avvisi arrivo e partenza",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                        Text(
+                            if (place.geofenceEnabled) "Attivi per questo luogo"
+                            else "Disattivati: nessuna notifica",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = place.geofenceEnabled,
+                        onCheckedChange = { onToggleGeofence(place, it) },
+                        modifier = Modifier.testTag("place_geofence_switch")
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        onEditPlace(place)
+                        onDismiss()
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("edit_place_button"),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Modifica")
+                }
+
+                OutlinedButton(
+                    onClick = { showDeleteConfirm = true },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Elimina")
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))

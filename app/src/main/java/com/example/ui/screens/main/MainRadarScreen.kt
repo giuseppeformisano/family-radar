@@ -557,7 +557,9 @@ fun MainRadarScreen(
                                 onLogout = {
                                     LocationTrackingService.stop(context)
                                     repository.signOut()
-                                }
+                                },
+                                onSendFeedback = { text -> repository.sendFeedback(text) },
+                                onFetchFeedback = { repository.fetchFeedback() }
                             )
                         }
                     }
@@ -2442,7 +2444,9 @@ private fun SettingsPanel(
     onToggleSimulation: (Boolean) -> Unit,
     onRequestLeaveGroup: () -> Unit,
     onRequestDeleteGroup: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onSendFeedback: suspend (String) -> Unit,
+    onFetchFeedback: suspend () -> List<com.example.model.FeedbackEntry>
 ) {
     val context = LocalContext.current
     val currentThemeMode by ThemePreferences.themeModeFlow.collectAsState()
@@ -3132,7 +3136,7 @@ private fun SettingsPanel(
                             if (feedbackText.isBlank()) return@Button
                             feedbackSending = true
                             feedbackScope.launch {
-                                repository.sendFeedback(feedbackText)
+                                onSendFeedback(feedbackText)
                                 feedbackSending = false
                                 feedbackSent = true
                                 feedbackText = ""
@@ -3197,7 +3201,7 @@ private fun SettingsPanel(
                                     devUnlocked = true
                                     loadingFeedback = true
                                     devScope.launch {
-                                        feedbackList = repository.fetchFeedback()
+                                        feedbackList = onFetchFeedback()
                                         loadingFeedback = false
                                     }
                                 }

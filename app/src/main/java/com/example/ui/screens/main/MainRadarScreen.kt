@@ -64,6 +64,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -3093,6 +3095,63 @@ private fun SettingsPanel(
             }
         }
 
+        // ---- Feedback ----
+        item {
+            val feedbackScope = rememberCoroutineScope()
+            var feedbackText by remember { mutableStateOf("") }
+            var feedbackSent by remember { mutableStateOf(false) }
+            var feedbackSending by remember { mutableStateOf(false) }
+
+            SettingsCard {
+                SettingsSectionHeader(
+                    title = "Feedback",
+                    subtitle = "Segnala problemi o suggerisci miglioramenti",
+                    icon = Icons.Default.Feedback
+                )
+                if (feedbackSent) {
+                    Text(
+                        text = "Grazie per il tuo feedback!",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(vertical = Spacing.sm)
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = feedbackText,
+                        onValueChange = { feedbackText = it },
+                        placeholder = { Text("Scrivi qui il tuo feedback...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(Radius.sm),
+                        minLines = 3,
+                        maxLines = 6,
+                        enabled = !feedbackSending
+                    )
+                    Spacer(Modifier.height(Spacing.sm))
+                    Button(
+                        onClick = {
+                            if (feedbackText.isBlank()) return@Button
+                            feedbackSending = true
+                            feedbackScope.launch {
+                                repository.sendFeedback(feedbackText)
+                                feedbackSending = false
+                                feedbackSent = true
+                                feedbackText = ""
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(Radius.sm),
+                        enabled = !feedbackSending && feedbackText.isNotBlank()
+                    ) {
+                        if (feedbackSending) {
+                            CircularProgressIndicator(modifier = Modifier.size(Sizes.iconMd), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                            Spacer(Modifier.width(Spacing.sm))
+                        }
+                        Text("Invia feedback")
+                    }
+                }
+            }
+        }
+
         // ---- Sviluppo ----
         // Ultimo di tutti e qualificato: e' uno strumento di test, non una
         // funzionalita'. Prima stava in mezzo alle impostazioni vere senza
@@ -3112,6 +3171,73 @@ private fun SettingsPanel(
                     onCheckedChange = onToggleSimulation,
                     testTag = "simulation_toggle_button"
                 )
+
+                Spacer(Modifier.height(Spacing.md))
+
+                val devScope = rememberCoroutineScope()
+                var devPassword by remember { mutableStateOf("") }
+                var devUnlocked by remember { mutableStateOf(false) }
+                var feedbackList by remember { mutableStateOf<List<com.example.model.FeedbackEntry>>(emptyList()) }
+                var loadingFeedback by remember { mutableStateOf(false) }
+                val dateFormatFb = remember { java.text.SimpleDateFormat("dd/MM/yy HH:mm", java.util.Locale.ITALY) }
+
+                if (!devUnlocked) {
+                    OutlinedTextField(
+                        value = devPassword,
+                        onValueChange = { devPassword = it },
+                        label = { Text("Password sviluppatore") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(Radius.sm),
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                if (devPassword == "radarfeedback") {
+                                    devUnlocked = true
+                                    loadingFeedback = true
+                                    devScope.launch {
+                                        feedbackList = repository.fetchFeedback()
+                                        loadingFeedback = false
+                                    }
+                                }
+                            }
+                        )
+                    )
+                } else {
+                    Text(
+                        "Feedback ricevuti (${feedbackList.size})",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(Spacing.sm))
+                    if (loadingFeedback) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .size(Sizes.iconLg)
+                                .align(Alignment.CenterHorizontally)
+                        )
+                    } else if (feedbackList.isEmpty()) {
+                        Text("Nessun feedback ancora.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        feedbackList.forEach { entry ->
+                            Surface(
+                                shape = RoundedCornerShape(Radius.md),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(Spacing.md)) {
+                                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                        Text(entry.userName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                        Text(dateFormatFb.format(java.util.Date(entry.timestamp)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Text(entry.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 2.dp))
+                                    Text("v${entry.versionName} (${entry.versionCode})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -3727,40 +3853,39 @@ private fun TripDetailDialog(
                     .padding(Spacing.xxl),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
-                // Header: icon + title + close button
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                // Icona centrata
+                Box(
+                    modifier = Modifier
+                        .size(Sizes.avatarLg)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                        .align(Alignment.CenterHorizontally),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(
-                            if (trip.source == TripSource.AUTO) Icons.Default.AutoMode else Icons.Default.Route,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Column {
-                            Text(
-                                text = listOfNotNull(trip.startPlaceName, trip.endPlaceName)
-                                    .takeIf { it.size == 2 }?.joinToString(" → ")
-                                    ?: "Viaggio di ${trip.userName}",
-                                style = MaterialTheme.typography.titleLarge
-                            )
-                            Text(
-                                text = dateFormat.format(Date(trip.startTime)),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Chiudi")
-                    }
+                    Icon(
+                        if (trip.source == TripSource.AUTO) Icons.Default.AutoMode else Icons.Default.Route,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(Sizes.iconLg)
+                    )
                 }
+                Spacer(Modifier.height(Spacing.xs))
+                // Titolo centrato sotto l'icona
+                Text(
+                    text = listOfNotNull(trip.startPlaceName, trip.endPlaceName)
+                        .takeIf { it.size == 2 }?.joinToString(" → ")
+                        ?: "Viaggio di ${trip.userName}",
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = dateFormat.format(Date(trip.startTime)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 // Stat tiles
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {

@@ -63,28 +63,10 @@ fun PlaceDetailSheet(
                     .padding(Spacing.xxl),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Header: title + close button
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Dettaglio luogo",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, contentDescription = "Chiudi")
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(Spacing.md))
-
                 // Category Icon Badge
                 Box(
                     modifier = Modifier
-                        .size(64.dp)
+                        .size(72.dp)
                         .clip(CircleShape)
                         .background(catColor.copy(alpha = 0.2f)),
                     contentAlignment = Alignment.Center
@@ -99,7 +81,7 @@ fun PlaceDetailSheet(
                         },
                         contentDescription = null,
                         tint = catColor,
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(36.dp)
                     )
                 }
 

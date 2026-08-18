@@ -519,8 +519,13 @@ class FirebaseRepository private constructor(private val context: Context) {
         try {
             FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
                 if (!token.isNullOrBlank()) {
-                    Log.d(TAG, "Fetched FCM token: $token")
-                    updateFcmToken(token)
+                    val stored = getStoredFcmToken()
+                    if (token != stored) {
+                        Log.d(TAG, "FCM token aggiornato, sincronizzo su Firestore")
+                        updateFcmToken(token)
+                    } else {
+                        Log.d(TAG, "FCM token invariato, skip scrittura Firestore")
+                    }
                 }
             }.addOnFailureListener { e ->
                 Log.w(TAG, "Failed to get FCM token: ${e.message}")
@@ -552,6 +557,52 @@ class FirebaseRepository private constructor(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error updating FCM token: ${e.message}")
+        }
+    }
+
+    suspend fun sendFeedback(text: String): Result<Unit> {
+        val user = _currentUserState.value ?: return Result.failure(Exception("Non autenticato"))
+        return try {
+            val entry = hashMapOf(
+                "text" to text.trim(),
+                "userId" to user.uid,
+                "userName" to (user.displayName.ifBlank { "Utente" }),
+                "timestamp" to System.currentTimeMillis(),
+                "versionName" to com.example.BuildConfig.VERSION_NAME,
+                "versionCode" to com.example.BuildConfig.VERSION_CODE
+            )
+            firestore?.collection("feedback")?.add(entry)?.await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.w(TAG, "sendFeedback error: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchFeedback(): List<com.example.model.FeedbackEntry> {
+        return try {
+            firestore?.collection("feedback")
+                ?.orderBy("timestamp", Query.Direction.DESCENDING)
+                ?.limit(50)
+                ?.get()
+                ?.await()
+                ?.documents
+                ?.mapNotNull { doc ->
+                    try {
+                        com.example.model.FeedbackEntry(
+                            id = doc.id,
+                            text = doc.getString("text") ?: "",
+                            userId = doc.getString("userId") ?: "",
+                            userName = doc.getString("userName") ?: "Utente",
+                            timestamp = doc.getLong("timestamp") ?: 0L,
+                            versionName = doc.getString("versionName") ?: "",
+                            versionCode = doc.getLong("versionCode")?.toInt() ?: 0
+                        )
+                    } catch (_: Exception) { null }
+                } ?: emptyList()
+        } catch (e: Exception) {
+            Log.w(TAG, "fetchFeedback error: ${e.message}")
+            emptyList()
         }
     }
 
@@ -2214,6 +2265,9 @@ class FirebaseRepository private constructor(private val context: Context) {
     private var lastSentLongitude: Double? = null
     private var lastSentAtMillis: Long = 0L
     private var lastSentBatteryLevel: Int? = null
+    private var lastWrittenLocUserName: String? = null
+    private var lastWrittenLocNickname: String? = null
+    private var lastWrittenLocPhoto: String? = null
 
     /**
      * Gruppo in cui e' finita l'ultima scrittura. Senza questo il gate ragiona
@@ -2362,11 +2416,12 @@ class FirebaseRepository private constructor(private val context: Context) {
         // Update Firestore
         try {
             if (firestore != null) {
-                val locMap = hashMapOf(
+                val profileChanged = enrichedLocation.userName != lastWrittenLocUserName ||
+                    (enrichedLocation.nickname ?: "") != (lastWrittenLocNickname ?: "") ||
+                    (enrichedLocation.photoBase64 ?: "") != (lastWrittenLocPhoto ?: "")
+
+                val locMap = hashMapOf<String, Any?>(
                     "userId" to enrichedLocation.userId,
-                    "userName" to enrichedLocation.userName,
-                    "nickname" to (enrichedLocation.nickname ?: ""),
-                    "photoBase64" to (enrichedLocation.photoBase64 ?: ""),
                     "latitude" to enrichedLocation.latitude,
                     "longitude" to enrichedLocation.longitude,
                     "accuracy" to enrichedLocation.accuracy,
@@ -2378,8 +2433,19 @@ class FirebaseRepository private constructor(private val context: Context) {
                     "currentPlaceName" to (enrichedLocation.currentPlaceName ?: ""),
                     "activityType" to _currentActivityKind
                 )
+
+                if (profileChanged || gate.isHeartbeat) {
+                    locMap["userName"] = enrichedLocation.userName
+                    locMap["nickname"] = enrichedLocation.nickname ?: ""
+                    locMap["photoBase64"] = enrichedLocation.photoBase64 ?: ""
+                    lastWrittenLocUserName = enrichedLocation.userName
+                    lastWrittenLocNickname = enrichedLocation.nickname
+                    lastWrittenLocPhoto = enrichedLocation.photoBase64
+                }
+
                 firestore.collection("groups").document(currentGroup)
-                    .collection("locations").document(user.uid).set(locMap).await()
+                    .collection("locations").document(user.uid)
+                    .set(locMap, com.google.firebase.firestore.SetOptions.merge()).await()
 
                 // La batteria vive anche in members/{uid} perche' la lista membri la
                 // mostra senza leggere le posizioni. Aggiornarla a ogni fix pero'
@@ -2671,37 +2737,46 @@ class FirebaseRepository private constructor(private val context: Context) {
         try {
             if (firestore != null && groupId.isNotBlank() && memberId.isNotBlank()) {
                 if (isSelf) {
-                    // 1. Profilo account (nome + foto globali).
-                    _currentUserState.value = currentUser!!.copy(
-                        displayName = cleanName,
-                        photoBase64 = cleanPhoto
-                    )
-                    firestore.collection("users").document(memberId).set(
-                        hashMapOf("displayName" to cleanName, "photoBase64" to cleanPhoto),
-                        com.google.firebase.firestore.SetOptions.merge()
-                    )
+                    val nameUnchanged = cleanName == currentUser!!.displayName
+                    val photoUnchanged = cleanPhoto == currentUser.photoBase64
 
-                    // 2. Nome + foto in TUTTI i gruppi; il soprannome solo in quello corrente.
-                    val allGroupIds = (_userGroupsState.value.map { it.id } + groupId).distinct()
-                    for (gid in allGroupIds) {
-                        val memberMap = hashMapOf<String, Any?>(
-                            "displayName" to cleanName,
-                            "photoBase64" to cleanPhoto
-                        )
-                        val locMap = hashMapOf<String, Any?>(
-                            "userName" to cleanName,
-                            "photoBase64" to cleanPhoto
-                        )
-                        if (gid == groupId) {
-                            memberMap["nickname"] = cleanNick
-                            locMap["nickname"] = cleanNick
-                        }
-                        firestore.collection("groups").document(gid)
+                    if (nameUnchanged && photoUnchanged) {
+                        // Solo il nickname è cambiato: aggiorna solo il gruppo corrente
+                        val memberMap = hashMapOf<String, Any?>("nickname" to cleanNick)
+                        val locMap = hashMapOf<String, Any?>("nickname" to cleanNick)
+                        firestore.collection("groups").document(groupId)
                             .collection("members").document(memberId)
                             .set(memberMap, com.google.firebase.firestore.SetOptions.merge())
-                        firestore.collection("groups").document(gid)
+                        firestore.collection("groups").document(groupId)
                             .collection("locations").document(memberId)
                             .set(locMap, com.google.firebase.firestore.SetOptions.merge())
+                    } else {
+                        // Nome o foto cambiati: propaga a tutti i gruppi
+                        _currentUserState.value = currentUser.copy(displayName = cleanName, photoBase64 = cleanPhoto)
+                        firestore.collection("users").document(memberId)
+                            .set(hashMapOf("displayName" to cleanName, "photoBase64" to cleanPhoto), com.google.firebase.firestore.SetOptions.merge())
+
+                        val allGroupIds = (_userGroupsState.value.map { it.id } + groupId).distinct()
+                        for (gid in allGroupIds) {
+                            val memberMap = hashMapOf<String, Any?>(
+                                "displayName" to cleanName,
+                                "photoBase64" to cleanPhoto
+                            )
+                            val locMap2 = hashMapOf<String, Any?>(
+                                "userName" to cleanName,
+                                "photoBase64" to cleanPhoto
+                            )
+                            if (gid == groupId) {
+                                memberMap["nickname"] = cleanNick
+                                locMap2["nickname"] = cleanNick
+                            }
+                            firestore.collection("groups").document(gid)
+                                .collection("members").document(memberId)
+                                .set(memberMap, com.google.firebase.firestore.SetOptions.merge())
+                            firestore.collection("groups").document(gid)
+                                .collection("locations").document(memberId)
+                                .set(locMap2, com.google.firebase.firestore.SetOptions.merge())
+                        }
                     }
                 } else {
                     // Non e' il proprio profilo: si tocca solo il gruppo indicato.

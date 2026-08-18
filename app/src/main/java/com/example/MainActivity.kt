@@ -11,13 +11,25 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.window.Dialog
+import com.example.ui.components.GlassSurface
+import com.example.ui.theme.Radius
+import com.example.ui.theme.Spacing
 import androidx.core.content.ContextCompat
 import com.example.model.DeepLinkTarget
 import com.example.repository.FirebaseRepository
@@ -193,20 +205,45 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
     }
 
     updateInfo?.let { info ->
-        AlertDialog(
-            onDismissRequest = { updateInfo = null },
-            title = { Text("Aggiornamento disponibile") },
-            text = { Text("Versione ${info.versionName} disponibile. Aggiorna?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    AppUpdater.openDownload(context, info.apkUrl)
-                    updateInfo = null
-                }) { Text("Aggiornare") }
-            },
-            dismissButton = {
-                TextButton(onClick = { updateInfo = null }) { Text("Dopo") }
+        Dialog(onDismissRequest = { updateInfo = null }) {
+            GlassSurface(
+                shape = RoundedCornerShape(Radius.lg),
+                contentPadding = Spacing.lg
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                    Text(
+                        text = "Aggiornamento disponibile",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Versione ${info.versionName}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = { updateInfo = null }) {
+                            Text("Dopo", style = MaterialTheme.typography.labelLarge)
+                        }
+                        Spacer(Modifier.width(Spacing.xs))
+                        TextButton(onClick = {
+                            AppUpdater.openDownload(context, info.apkUrl)
+                            updateInfo = null
+                        }) {
+                            Text(
+                                "Aggiornare",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
             }
-        )
+        }
     }
 
     Crossfade(targetState = currentScreen, label = "screen_crossfade") { screen ->

@@ -1,6 +1,9 @@
 package com.example.util
 
 import android.app.DownloadManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -8,6 +11,7 @@ import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +27,8 @@ object AppUpdater {
 
     private const val RELEASES_URL =
         "https://api.github.com/repos/giuseppeformisano/family-radar/releases/tags/latest-debug"
+    private const val CHANNEL_UPDATE = "radar_update"
+    private const val NOTIF_ID = 9001
 
     suspend fun check(): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
@@ -103,7 +109,7 @@ object AppUpdater {
                 val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
                 if (id != downloadId) return
                 ctx.unregisterReceiver(this)
-                installApk(ctx, destFile)
+                showInstallNotification(ctx, destFile)
             }
         }
 
@@ -111,7 +117,7 @@ object AppUpdater {
             context.registerReceiver(
                 receiver,
                 IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                Context.RECEIVER_NOT_EXPORTED
+                Context.RECEIVER_EXPORTED
             )
         } else {
             @Suppress("UnspecifiedRegisterReceiverFlag")
@@ -122,18 +128,38 @@ object AppUpdater {
         }
     }
 
-    private fun installApk(context: Context, file: File) {
+    private fun showInstallNotification(context: Context, file: File) {
         try {
             val uri = FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.fileprovider",
                 file
             )
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "application/vnd.android.package-archive")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
+            val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val pending = PendingIntent.getActivity(
+                context, 0, installIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                manager.createNotificationChannel(
+                    NotificationChannel(CHANNEL_UPDATE, "Aggiornamenti", NotificationManager.IMPORTANCE_HIGH)
+                )
+            }
+
+            manager.notify(
+                NOTIF_ID,
+                NotificationCompat.Builder(context, CHANNEL_UPDATE)
+                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                    .setContentTitle("Family Radar aggiornato")
+                    .setContentText("Tocca per installare la versione scaricata")
+                    .setAutoCancel(true)
+                    .setContentIntent(pending)
+                    .build()
             )
         } catch (_: Exception) {}
     }

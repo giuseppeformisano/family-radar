@@ -50,6 +50,12 @@ enum class AppScreen {
     MAIN_RADAR
 }
 
+/** Tentativi del controllo aggiornamenti all'avvio, prima di rinunciare per questa sessione. */
+private const val UPDATE_CHECK_ATTEMPTS = 3
+
+/** Attesa fra i tentativi, moltiplicata per il numero del tentativo. */
+private const val UPDATE_CHECK_RETRY_DELAY_MS = 5_000L
+
 class MainActivity : ComponentActivity() {
 
     private lateinit var repository: FirebaseRepository
@@ -190,14 +196,38 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
         // checkDetailed e non check: quest'ultimo restituisce null sia quando si e'
         // gia' aggiornati sia quando la rete non risponde, e all'avvio le due cose
         // erano indistinguibili — sembrava che il controllo non funzionasse piu'.
-        // Qui non si mostra nulla all'utente in caso di errore (un avviso a ogni
-        // avvio offline sarebbe fastidioso), ma il motivo resta nel log.
-        when (val result = AppUpdater.checkDetailed()) {
-            is CheckResult.Available -> updateInfo = result.info
-            CheckResult.UpToDate ->
-                android.util.Log.d("AppUpdater", "Nessun aggiornamento: versione corrente ${BuildConfig.VERSION_CODE}")
-            CheckResult.NetworkError ->
-                android.util.Log.w("AppUpdater", "Controllo aggiornamenti non riuscito: rete o API GitHub")
+        // In caso di errore non si mostra nulla (un avviso a ogni avvio offline
+        // sarebbe fastidioso), ma il motivo resta nel log.
+        //
+        // E si riprova: questo controllo parte all'apertura dell'app, quando la
+        // rete puo' non essere ancora pronta — soprattutto sui dispositivi con
+        // gestione energetica aggressiva. Con un solo tentativo un errore di rete
+        // significava nessun avviso di aggiornamento per tutta la sessione.
+        var attempt = 0
+        while (attempt < UPDATE_CHECK_ATTEMPTS) {
+            when (val result = AppUpdater.checkDetailed()) {
+                is CheckResult.Available -> {
+                    updateInfo = result.info
+                    return@LaunchedEffect
+                }
+                CheckResult.UpToDate -> {
+                    android.util.Log.d(
+                        "AppUpdater",
+                        "Nessun aggiornamento: installata ${BuildConfig.VERSION_CODE}"
+                    )
+                    return@LaunchedEffect
+                }
+                CheckResult.NetworkError -> {
+                    attempt++
+                    android.util.Log.w(
+                        "AppUpdater",
+                        "Controllo aggiornamenti non riuscito (tentativo $attempt di $UPDATE_CHECK_ATTEMPTS)"
+                    )
+                    if (attempt < UPDATE_CHECK_ATTEMPTS) {
+                        kotlinx.coroutines.delay(UPDATE_CHECK_RETRY_DELAY_MS * attempt)
+                    }
+                }
+            }
         }
     }
 

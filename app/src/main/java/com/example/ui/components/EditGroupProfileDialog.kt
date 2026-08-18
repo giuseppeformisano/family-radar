@@ -82,6 +82,21 @@ fun EditGroupProfileDialog(
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Box(
+                    modifier = Modifier
+                        .size(Sizes.avatarLg)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(Sizes.iconLg)
+                    )
+                }
+                Spacer(Modifier.height(Spacing.sm))
                 Text(
                     text = "Il tuo profilo",
                     fontSize = 20.sp,

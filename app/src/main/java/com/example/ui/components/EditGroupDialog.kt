@@ -119,6 +119,21 @@ fun EditGroupDialog(
                     .padding(Spacing.xxl),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                Box(
+                    modifier = Modifier
+                        .size(Sizes.avatarLg)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Group,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(Sizes.iconLg)
+                    )
+                }
+                Spacer(Modifier.height(Spacing.sm))
                 Text(
                     text = "Modifica gruppo",
                     style = MaterialTheme.typography.titleLarge,

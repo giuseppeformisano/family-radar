@@ -60,23 +60,18 @@ fun MemberDetailSheet(
                     .padding(Spacing.xxl),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Header: title + close button
+                // Solo il pulsante di chiusura, allineato a destra: il titolo
+                // "Dettaglio membro" era ridondante, la faccia e il nome sotto
+                // dicono gia' di chi si tratta.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Dettaglio membro",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        modifier = Modifier.weight(1f)
-                    )
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Default.Close, contentDescription = "Chiudi")
                     }
                 }
-
-                Spacer(modifier = Modifier.height(Spacing.md))
 
                 // Member Avatar
                 Box(

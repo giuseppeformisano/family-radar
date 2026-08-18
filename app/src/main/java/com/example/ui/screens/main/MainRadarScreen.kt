@@ -2746,8 +2746,6 @@ private fun SettingsSectionHeader(
         action?.invoke()
     }
     Spacer(Modifier.height(Spacing.md))
-    HairlineDivider()
-    Spacer(Modifier.height(Spacing.xs))
 }
 
 @Composable

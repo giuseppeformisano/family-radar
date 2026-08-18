@@ -184,8 +184,7 @@ object AppUpdater {
                 // dal permesso notifiche (su Android 13+ del S22 puo' essere negato,
                 // e allora la sola notifica non sarebbe mai comparsa). La notifica
                 // resta come rete di sicurezza se l'installer non parte da solo.
-                launchInstaller(ctx, file)
-                showInstallNotification(ctx, file)
+                if (!launchInstaller(ctx, file)) showInstallNotification(ctx, file)
             }
         }
 
@@ -256,10 +255,10 @@ object AppUpdater {
         }.onFailure { Log.w("AppUpdater", "openInBrowser fallito: ${it.message}") }
     }
 
-    /** Lancia la schermata di installazione del pacchetto scaricato. */
-    private fun launchInstaller(context: Context, file: File) {
-        runCatching {
-            if (!file.exists()) return
+    /** Lancia la schermata di installazione del pacchetto scaricato. Ritorna true se avviato. */
+    private fun launchInstaller(context: Context, file: File): Boolean {
+        if (!file.exists()) return false
+        return runCatching {
             val uri = FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.fileprovider",
@@ -271,7 +270,11 @@ object AppUpdater {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
             )
-        }.onFailure { Log.w("AppUpdater", "launchInstaller fallito: ${it.message}") }
+            true
+        }.getOrElse {
+            Log.w("AppUpdater", "launchInstaller fallito: ${it.message}")
+            false
+        }
     }
 
     private fun showInstallNotification(context: Context, file: File) {

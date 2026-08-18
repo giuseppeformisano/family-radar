@@ -41,6 +41,7 @@ import com.example.ui.screens.main.MainRadarScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.ThemePreferences
 import com.example.util.AppUpdater
+import com.example.util.CheckResult
 import com.example.util.UpdateInfo
 
 enum class AppScreen {
@@ -186,7 +187,18 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect("updateCheck") {
-        updateInfo = AppUpdater.check()
+        // checkDetailed e non check: quest'ultimo restituisce null sia quando si e'
+        // gia' aggiornati sia quando la rete non risponde, e all'avvio le due cose
+        // erano indistinguibili — sembrava che il controllo non funzionasse piu'.
+        // Qui non si mostra nulla all'utente in caso di errore (un avviso a ogni
+        // avvio offline sarebbe fastidioso), ma il motivo resta nel log.
+        when (val result = AppUpdater.checkDetailed()) {
+            is CheckResult.Available -> updateInfo = result.info
+            CheckResult.UpToDate ->
+                android.util.Log.d("AppUpdater", "Nessun aggiornamento: versione corrente ${BuildConfig.VERSION_CODE}")
+            CheckResult.NetworkError ->
+                android.util.Log.w("AppUpdater", "Controllo aggiornamenti non riuscito: rete o API GitHub")
+        }
     }
 
     LaunchedEffect(Unit) {

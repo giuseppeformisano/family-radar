@@ -43,9 +43,9 @@ object AppUpdater {
     // (aspetta indefinitamente). Su reti instabili il check si bloccava in
     // silenzio e il dialog non compariva mai.
     private val client = OkHttpClient.Builder()
-        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-        .callTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .callTimeout(30, TimeUnit.SECONDS)
         .build()
 
     /** Ritorna UpdateInfo se c'e' una versione piu' recente, null altrimenti. */
@@ -121,11 +121,13 @@ object AppUpdater {
             return
         }
 
-        val destFile = File(
-            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-            "family-radar-update.apk"
-        )
-        runCatching { if (destFile.exists()) destFile.delete() }
+        // Nome univoco a ogni download. Con un nome fisso, se la cancellazione del
+        // file precedente non andava a buon fine — capita quando una voce del
+        // DownloadManager lo referenzia ancora — DownloadManager non sovrascriveva
+        // ma scriveva su "...-1.apk", e l'app continuava a puntare al percorso
+        // vecchio: la notifica compariva e toccarla non faceva nulla.
+        val fileName = "family-radar-update-${System.currentTimeMillis()}.apk"
+        purgeOldDownloads(context)
 
         // Su molti Samsung il "Gestione download" di sistema puo' essere
         // disattivato dall'utente: in quel caso getSystemService o enqueue lanciano
@@ -151,7 +153,7 @@ object AppUpdater {
                     .setDestinationInExternalFilesDir(
                         context,
                         Environment.DIRECTORY_DOWNLOADS,
-                        "family-radar-update.apk"
+                        fileName
                     )
             )
         } catch (e: Exception) {
@@ -165,12 +167,25 @@ object AppUpdater {
                 val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
                 if (id != downloadId) return
                 runCatching { ctx.unregisterReceiver(this) }
+
+                // Il percorso va chiesto al DownloadManager, non ricostruito: e' lui
+                // a decidere dove ha scritto davvero, e qui si scopre anche se il
+                // download e' andato a buon fine. Prima si dava per scontato che
+                // fosse riuscito, quindi un download fallito mostrava comunque
+                // "Tocca per installare" e il tocco non poteva fare nulla.
+                val file = resolveDownloadedFile(dm, id)
+                if (file == null) {
+                    Log.w("AppUpdater", "APK non disponibile dopo il download: apro il browser")
+                    openInBrowser(ctx, apkUrl)
+                    return
+                }
+
                 // Avvia direttamente la schermata di installazione: non dipende
                 // dal permesso notifiche (su Android 13+ del S22 puo' essere negato,
                 // e allora la sola notifica non sarebbe mai comparsa). La notifica
                 // resta come rete di sicurezza se l'installer non parte da solo.
-                launchInstaller(ctx, destFile)
-                showInstallNotification(ctx, destFile)
+                launchInstaller(ctx, file)
+                showInstallNotification(ctx, file)
             }
         }
 
@@ -188,6 +203,46 @@ object AppUpdater {
                     IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
                 )
             }
+        }
+    }
+
+    /**
+     * Dove il DownloadManager ha scritto davvero, e solo se ha finito bene.
+     *
+     * Restituisce null se il download e' fallito o se il file non c'e': in quel
+     * caso non va offerta l'installazione, perche' toccare la notifica aprirebbe
+     * l'installer su un percorso vuoto e non accadrebbe niente.
+     */
+    private fun resolveDownloadedFile(dm: DownloadManager, id: Long): File? = try {
+        dm.query(DownloadManager.Query().setFilterById(id))?.use { c ->
+            if (!c.moveToFirst()) return null
+
+            val status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+            if (status != DownloadManager.STATUS_SUCCESSFUL) {
+                val reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                Log.w("AppUpdater", "Download non riuscito: status=$status reason=$reason")
+                return null
+            }
+
+            val localUri = c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
+                ?: return null
+            val path = Uri.parse(localUri).path ?: return null
+            File(path).takeIf { it.exists() && it.length() > 0L }
+        }
+    } catch (e: Exception) {
+        Log.w("AppUpdater", "resolveDownloadedFile fallito: ${e.message}")
+        null
+    }
+
+    /**
+     * Ripulisce gli APK scaricati in precedenza. Con il nome univoco per download
+     * si accumulerebbero: sono decine di MB a testa nella cartella dell'app.
+     */
+    private fun purgeOldDownloads(context: Context) {
+        runCatching {
+            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+                ?.listFiles { f -> f.name.startsWith("family-radar-update") && f.name.endsWith(".apk") }
+                ?.forEach { runCatching { it.delete() } }
         }
     }
 

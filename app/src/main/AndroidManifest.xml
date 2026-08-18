@@ -19,6 +19,10 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Rilevamento automatico dei viaggi: Android sveglia l'app ai cambi di
+         attivita' invece di farle controllare la posizione a intervalli. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <uses-permission android:name="com.google.android.gms.permission.ACTIVITY_RECOGNITION" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -61,6 +65,12 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- Riceve i cambi di attivita' (IN_VEHICLE, STILL...) da Play Services -->
+        <receiver
+            android:name=".service.ActivityTransitionReceiver"
+            android:enabled="true"
+            android:exported="false" />
 
         <!-- FileProvider for High-Resolution Camera Capture -->
         <provider

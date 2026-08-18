@@ -562,6 +562,7 @@ fun MainRadarScreen(
                     System.currentTimeMillis() - it.timestamp < PRESENCE_ONLINE_MS
                 },
                 onSwitchGroup = onSwitchGroup,
+                onOpenSettings = { openPanel(RadarPanel.SETTINGS) },
                 onSos = { showSosConfirmDialog = true },
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -1009,6 +1010,7 @@ private fun MapTopBar(
     memberCount: Int,
     onlineCount: Int,
     onSwitchGroup: () -> Unit,
+    onOpenSettings: () -> Unit,
     onSos: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1060,6 +1062,24 @@ private fun MapTopBar(
                 Icon(
                     Icons.Default.SwapHoriz,
                     contentDescription = "Cambia gruppo",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Le impostazioni stanno qui e non fra le schede del foglio: le altre
+            // sezioni mostrano dati del gruppo che vivono sulla mappa, questa e'
+            // configurazione. Tenendola fra le schede costringeva a cinque voci
+            // in scorrimento orizzontale, con l'ultima fuori schermo.
+            //
+            // Nessun pallino di notifica qui: le richieste di adesione si
+            // approvano nel pannello Membri, ed e' li' che sta il loro badge.
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.testTag("open_settings_button")
+            ) {
+                Icon(
+                    Icons.Default.Settings,
+                    contentDescription = "Impostazioni",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -1270,6 +1290,20 @@ private fun MemberCarousel(
 // SELETTORE DI PANNELLO
 // ============================================================================
 
+/**
+ * Barra di navigazione del foglio.
+ *
+ * Erano cinque PillChip in scorrimento orizzontale: su un telefono stretto
+ * l'ultima restava fuori schermo, e una destinazione che si scopre scorrendo
+ * non è una destinazione. In più la chip, in Material 3, è il componente che
+ * filtra una lista — non quello che cambia sezione.
+ *
+ * Ora sono quattro voci a larghezza uguale che entrano su qualsiasi schermo,
+ * con la pastiglia dell'indicatore attivo dietro l'icona: la stessa grammatica
+ * della NavigationBar, ma costruita sui token del progetto invece che sui
+ * default di Material, così segue la palette anche in Material You.
+ * Impostazioni è salita nella barra sopra la mappa.
+ */
 @Composable
 private fun PanelSelector(
     selected: RadarPanel,
@@ -1281,52 +1315,100 @@ private fun PanelSelector(
     onSelect: (RadarPanel) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val entries = listOf(
+        PanelEntry(RadarPanel.MEMBERS, Icons.Default.Group, memberCount, pendingCount, "nav_members_tab"),
+        PanelEntry(RadarPanel.CHAT, Icons.Default.Chat, null, chatCount.coerceAtMost(99), "nav_chat_tab"),
+        PanelEntry(RadarPanel.PLACES, Icons.Default.Place, placeCount, 0, "nav_places_tab"),
+        PanelEntry(RadarPanel.TRIPS, Icons.Default.Route, tripCount.takeIf { it > 0 }, 0, "nav_trips_tab")
+    )
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+            .padding(horizontal = Spacing.sm, vertical = Spacing.xs)
     ) {
-        PillChip(
-            label = "${RadarPanel.MEMBERS.label} ($memberCount)",
-            selected = selected == RadarPanel.MEMBERS,
-            onClick = { onSelect(RadarPanel.MEMBERS) },
-            icon = Icons.Default.Group,
-            // Il badge delle richieste in attesa sta qui e non su Impostazioni:
-            // Approva/Rifiuta sono in questo pannello. Sull'altro chip indicava
-            // un pannello dove non c'e' niente da approvare.
-            badgeCount = pendingCount,
-            modifier = Modifier.testTag("nav_members_tab")
-        )
-        PillChip(
-            label = RadarPanel.CHAT.label,
-            selected = selected == RadarPanel.CHAT,
-            onClick = { onSelect(RadarPanel.CHAT) },
-            icon = Icons.Default.Chat,
-            badgeCount = chatCount.coerceAtMost(99),
-            modifier = Modifier.testTag("nav_chat_tab")
-        )
-        PillChip(
-            label = "${RadarPanel.PLACES.label} ($placeCount)",
-            selected = selected == RadarPanel.PLACES,
-            onClick = { onSelect(RadarPanel.PLACES) },
-            icon = Icons.Default.Place,
-            modifier = Modifier.testTag("nav_places_tab")
-        )
-        PillChip(
-            label = if (tripCount > 0) "${RadarPanel.TRIPS.label} ($tripCount)" else RadarPanel.TRIPS.label,
-            selected = selected == RadarPanel.TRIPS,
-            onClick = { onSelect(RadarPanel.TRIPS) },
-            icon = Icons.Default.Route,
-            modifier = Modifier.testTag("nav_trips_tab")
-        )
-        PillChip(
-            label = RadarPanel.SETTINGS.label,
-            selected = selected == RadarPanel.SETTINGS,
-            onClick = { onSelect(RadarPanel.SETTINGS) },
-            icon = Icons.Default.Settings,
-            modifier = Modifier.testTag("nav_settings_tab")
+        entries.forEach { entry ->
+            PanelSelectorItem(
+                entry = entry,
+                isSelected = selected == entry.panel,
+                onClick = { onSelect(entry.panel) },
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+private data class PanelEntry(
+    val panel: RadarPanel,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    /** Conteggio mostrato accanto all'etichetta, se ha senso per quella sezione. */
+    val count: Int?,
+    /** Notifiche non lette o richieste in attesa: pallino rosso, non conteggio neutro. */
+    val badge: Int,
+    val testTag: String
+)
+
+@Composable
+private fun PanelSelectorItem(
+    entry: PanelEntry,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Il colore va animato: cambiando scheda l'indicatore deve scorrere, non
+    // saltare. Nessun clip e nessun layer sopra la mappa, siamo dentro il foglio.
+    val indicatorColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.secondaryContainer
+        else Color.Transparent,
+        animationSpec = tween(220),
+        label = "panel_indicator"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = tween(220),
+        label = "panel_content"
+    )
+
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(Radius.md))
+            .clickable(onClick = onClick)
+            .padding(vertical = Spacing.xs)
+            .testTag(entry.testTag),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .size(width = 56.dp, height = 30.dp)
+                    .clip(RoundedCornerShape(Radius.pill))
+                    .background(indicatorColor)
+            )
+            Icon(
+                imageVector = entry.icon,
+                contentDescription = entry.panel.label,
+                tint = contentColor,
+                modifier = Modifier.size(Sizes.iconSm)
+            )
+            if (entry.badge > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 10.dp, y = (-2).dp)
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.error)
+                )
+            }
+        }
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = if (entry.count != null) "${entry.panel.label} ${entry.count}" else entry.panel.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = contentColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

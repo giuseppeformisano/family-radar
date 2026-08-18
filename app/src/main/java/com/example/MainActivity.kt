@@ -171,7 +171,10 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
     val permissionsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
-        // Permissions handled
+        // ACTIVITY_RECOGNITION puo' essere stato appena concesso: al primo
+        // tentativo di registrazione non c'era e le transizioni erano state
+        // saltate, quindi si riprova ora.
+        repository.ensureMotionSensing()
     }
 
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -188,6 +191,11 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        // Serve al rilevamento automatico dei viaggi: senza, Android non manda le
+        // transizioni di attivita' e si ripiega sul controllo a intervalli.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            permissionsToRequest.add(Manifest.permission.ACTIVITY_RECOGNITION)
         }
         permissionsLauncher.launch(permissionsToRequest.toTypedArray())
 

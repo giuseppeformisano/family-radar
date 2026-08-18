@@ -29,6 +29,7 @@ import com.example.model.TripPoint
 import com.example.model.TripSource
 import com.example.model.ActiveTripState
 import com.example.util.ImageUtils
+import com.example.util.MotionTrigger
 import com.google.android.gms.location.*
 import com.google.firebase.FirebaseException
 import com.google.firebase.auth.*
@@ -172,6 +173,12 @@ class FirebaseRepository private constructor(private val context: Context) {
         settingsPrefs.edit().putBoolean("auto_trip_enabled", enabled).apply()
         autoMovingSinceMillis = 0L
         autoStationarySinceMillis = 0L
+        recentFixes.clear()
+        if (enabled) {
+            startMotionSensing()
+        } else {
+            stopMotionSensing()
+        }
         // L'intervallo effettivo cambia: da fermi va limitato a un minuto,
         // altrimenti l'app non si accorge in tempo che sei partito.
         applyEffectiveTrackingInterval()
@@ -473,6 +480,24 @@ class FirebaseRepository private constructor(private val context: Context) {
 
         // Fetch current FCM token if available
         fetchAndSyncFcmToken()
+
+        // L'opzione e' persistita: se era attiva, i sensori vanno riarmati adesso
+        // perche' setAutoTripEnabled esce subito quando il valore non cambia.
+        if (_isAutoTripEnabled.value) {
+            ensureMotionSensing()
+        }
+    }
+
+    /**
+     * Arma sensore e transizioni di attivita' se il rilevamento automatico e'
+     * attivo. Idempotente: [startMotionSensing] ripulisce prima di registrare,
+     * quindi si puo' richiamare — ed e' quello che serve dopo che l'utente ha
+     * concesso ACTIVITY_RECOGNITION, perche' al primo tentativo il permesso non
+     * c'era e la registrazione era stata saltata.
+     */
+    fun ensureMotionSensing() {
+        if (!_isAutoTripEnabled.value) return
+        startMotionSensing()
     }
 
     fun getStoredFcmToken(): String? {
@@ -2152,6 +2177,10 @@ class FirebaseRepository private constructor(private val context: Context) {
         // Il filtro dei 15 m dentro recordTripPoint basta a togliere il rumore.
         if (_activeTrip.value != null) {
             recordTripPoint(location)
+        } else {
+            // Fuori dal viaggio i fix finiscono nel buffer: se fra poco parte un
+            // rilevamento automatico, sono loro il tratto iniziale da recuperare.
+            rememberFix(location)
         }
 
         // Va valutato DOPO la registrazione del punto: se decide di avviare un
@@ -2874,12 +2903,52 @@ class FirebaseRepository private constructor(private val context: Context) {
         val now = System.currentTimeMillis()
         val myLocation = _currentGroupLocations.value.find { it.userId == _currentUserState.value?.uid }
 
+        // Un viaggio automatico parte per definizione a spostamento gia' iniziato:
+        // i fix tenuti da [rememberFix] sono il tratto percorso mentre l'app stava
+        // ancora decidendo, e senza recuperarli la traccia comincerebbe a meta'
+        // strada. Il manuale invece parte quando lo dice l'utente: li' il presente
+        // e' l'inizio giusto.
+        val backfill = if (source == TripSource.AUTO) backfilledStartPoints() else emptyList()
+        val first = backfill.firstOrNull()
+        val last = backfill.lastOrNull()
+
+        // Distanza e tempo in movimento del tratto recuperato: senza questo la
+        // traccia comparirebbe sulla mappa ma i chilometri di quel pezzo non
+        // sarebbero contati, e la media risulterebbe piu' bassa del vero.
+        var backfillDistance = 0.0
+        var backfillMovingMs = 0L
+        for (i in 1 until backfill.size) {
+            val a = backfill[i - 1]
+            val b = backfill[i]
+            val results = FloatArray(1)
+            android.location.Location.distanceBetween(
+                a.latitude, a.longitude, b.latitude, b.longitude, results
+            )
+            backfillDistance += results[0].toDouble()
+            val gapSec = (b.timestamp - a.timestamp) / 1000.0
+            if (gapSec in 0.0..TRIP_MOVING_GAP_MAX_SEC) {
+                backfillMovingMs += (b.timestamp - a.timestamp).coerceAtLeast(0L)
+            }
+        }
+
         _activeTrip.value = ActiveTripState(
-            startTime = now,
+            startTime = first?.timestamp ?: now,
             source = source,
-            lastFixAt = now,
+            points = backfill,
+            lastLat = last?.latitude ?: 0.0,
+            lastLon = last?.longitude ?: 0.0,
+            distanceMeters = backfillDistance,
+            movingMs = backfillMovingMs,
+            lastFixAt = last?.timestamp ?: now,
             startPlaceName = myLocation?.currentPlaceName
         )
+        if (backfill.isNotEmpty()) {
+            Log.d(TAG, "Viaggio avviato recuperando ${backfill.size} punti gia' percorsi")
+        }
+        recentFixes.clear()
+        // Il viaggio impone da se' la cadenza fitta: l'infittimento del sensore
+        // ha finito il suo compito.
+        isFixRateBoosted = false
         applyEffectiveTrackingInterval()
 
         if (source == TripSource.MANUAL) {
@@ -3144,13 +3213,258 @@ class FirebaseRepository private constructor(private val context: Context) {
     private var autoMovingSinceMillis: Long = 0L
     private var autoStationarySinceMillis: Long = 0L
 
+    // ---------------------------------------------------------------------
+    // RILEVAMENTO AUTOMATICO: TRE SEGNALI, UN SOLO PUNTO DI DECISIONE
+    //
+    // Il polling da solo arrivava sempre tardi. L'app guarda la posizione a
+    // intervalli, quindi fra la partenza vera e il primo fix in movimento si
+    // perde fino a un intervallo intero; e la soglia dei 90 secondi puo' essere
+    // verificata solo al fix successivo, che ne aggiunge un altro. Con un
+    // minuto di cadenza il viaggio partiva dopo tre.
+    //
+    // Ora concorrono tre segnali, e il primo che basta fa partire il viaggio:
+    //
+    //  1. TYPE_SIGNIFICANT_MOTION ([MotionTrigger]) — il sensor hub sveglia il
+    //     processo appena il telefono si muove davvero. Non dice come ti stai
+    //     muovendo, ma permette di infittire subito i fix invece di aspettare
+    //     il prossimo giro del polling.
+    //  2. Activity Recognition ([onActivityTransition]) — Android conferma
+    //     IN_VEHICLE / ON_BICYCLE / RUNNING. E' un classificatore e ci mette
+    //     qualche decina di secondi, ma quando parla non sono falsi positivi.
+    //  3. Distanza percorsa ([AUTO_TRIP_START_DISTANCE_M]) — se ti sei
+    //     allontanato tanto dal punto in cui eri fermo, la conferma temporale
+    //     non serve piu': ti sei spostato e basta.
+    //
+    // E in ogni caso il viaggio non comincia da dove sei quando scatta la
+    // soglia, ma dai fix tenuti in [recentFixes]: vedi [backfilledStartPoints].
+    // ---------------------------------------------------------------------
+
+    /** Ultimi fix osservati, per ricostruire il tratto percorso prima dell'avvio. */
+    private val recentFixes = ArrayDeque<TripPoint>()
+
+    /** Ultimo stato riportato dall'Activity Recognition, null se non si sa. */
+    private var lastKnownActivityIsTravel: Boolean? = null
+
+    private var motionTrigger: MotionTrigger? = null
+    private var activityTransitionPendingIntent: android.app.PendingIntent? = null
+
+    /** Da dove eri fermo l'ultima volta: serve alla scorciatoia sulla distanza. */
+    private var stationaryAnchorLat: Double = 0.0
+    private var stationaryAnchorLon: Double = 0.0
+
+    /** Vero mentre i fix sono infittiti dopo uno scatto del sensore di movimento. */
+    private var isFixRateBoosted: Boolean = false
+    private var fixBoostStartedAt: Long = 0L
+
+    /**
+     * Tiene in memoria gli ultimi fix, scartando quelli piu' vecchi di
+     * [AUTO_TRIP_BACKFILL_WINDOW_MS]. Costa nulla — sono coordinate in RAM, non
+     * scritture — ed e' quello che permette a un viaggio di cominciare da dove
+     * e' cominciato davvero invece che da dove eri quando l'app se n'e' accorta.
+     */
+    private fun rememberFix(location: UserLocation) {
+        if (!_isAutoTripEnabled.value) return
+        if (location.accuracy > TRIP_MAX_ACCURACY_METERS) return
+
+        val now = System.currentTimeMillis()
+        recentFixes.addLast(TripPoint(location.latitude, location.longitude, now))
+
+        while (recentFixes.isNotEmpty() &&
+            now - recentFixes.first().timestamp > AUTO_TRIP_BACKFILL_WINDOW_MS
+        ) {
+            recentFixes.removeFirst()
+        }
+        while (recentFixes.size > AUTO_TRIP_BACKFILL_MAX_POINTS) {
+            recentFixes.removeFirst()
+        }
+    }
+
+    /**
+     * I punti bufferizzati da usare come inizio del viaggio: si risale indietro
+     * finche' i fix restano vicini nel tempo, cioe' finche' fanno parte dello
+     * stesso spostamento.
+     */
+    private fun backfilledStartPoints(): List<TripPoint> {
+        if (recentFixes.isEmpty()) return emptyList()
+        val ordered = recentFixes.toList()
+        val cutoff = System.currentTimeMillis() - AUTO_TRIP_BACKFILL_WINDOW_MS
+        return ordered.filter { it.timestamp >= cutoff }
+    }
+
+    /**
+     * Registra il receiver delle transizioni di attivita' e arma il sensore di
+     * movimento. Entrambi sono facoltativi: se il permesso manca o il sensore
+     * non c'e', si resta sul polling e il rilevamento funziona come prima.
+     */
+    private fun startMotionSensing() {
+        // --- Sensore hardware ---
+        try {
+            val trigger = motionTrigger ?: MotionTrigger(context).also { motionTrigger = it }
+            if (trigger.isAvailable) {
+                trigger.start { onSignificantMotion() }
+            } else {
+                Log.d(TAG, "TYPE_SIGNIFICANT_MOTION non disponibile: resto sul polling")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Sensore movimento non avviato: ${e.message}")
+        }
+
+        // --- Activity Recognition ---
+        if (!hasActivityRecognitionPermission()) {
+            Log.d(TAG, "Permesso ACTIVITY_RECOGNITION assente: resto sul polling")
+            return
+        }
+        try {
+            val transitions = listOf(
+                DetectedActivity.IN_VEHICLE,
+                DetectedActivity.ON_BICYCLE,
+                DetectedActivity.RUNNING,
+                DetectedActivity.WALKING,
+                DetectedActivity.STILL
+            ).flatMap { type ->
+                listOf(
+                    ActivityTransition.Builder()
+                        .setActivityType(type)
+                        .setActivityTransitionType(ActivityTransition.ACTIVITY_TRANSITION_ENTER)
+                        .build(),
+                    ActivityTransition.Builder()
+                        .setActivityType(type)
+                        .setActivityTransitionType(ActivityTransition.ACTIVITY_TRANSITION_EXIT)
+                        .build()
+                )
+            }
+
+            val intent = Intent(context, com.example.service.ActivityTransitionReceiver::class.java)
+                .setAction(com.example.service.ActivityTransitionReceiver.ACTION_TRANSITION)
+            // Da API 31 il PendingIntent va dichiarato mutabile: e' il sistema a
+            // riempirlo con il risultato della transizione.
+            val flags = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE
+            } else {
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val pending = android.app.PendingIntent.getBroadcast(context, 0, intent, flags)
+            activityTransitionPendingIntent = pending
+
+            ActivityRecognition.getClient(context)
+                .requestActivityTransitionUpdates(ActivityTransitionRequest(transitions), pending)
+                .addOnSuccessListener { Log.d(TAG, "Activity Recognition registrata") }
+                .addOnFailureListener { Log.w(TAG, "Activity Recognition fallita: ${it.message}") }
+        } catch (e: Exception) {
+            Log.w(TAG, "Activity Recognition non registrata: ${e.message}")
+        }
+    }
+
+    private fun stopMotionSensing() {
+        try {
+            motionTrigger?.stop()
+        } catch (e: Exception) {
+            Log.w(TAG, "Stop sensore movimento fallito: ${e.message}")
+        }
+        val pending = activityTransitionPendingIntent
+        if (pending != null && hasActivityRecognitionPermission()) {
+            try {
+                ActivityRecognition.getClient(context).removeActivityTransitionUpdates(pending)
+            } catch (e: Exception) {
+                Log.w(TAG, "Rimozione Activity Recognition fallita: ${e.message}")
+            }
+        }
+        activityTransitionPendingIntent = null
+        lastKnownActivityIsTravel = null
+    }
+
+    fun hasActivityRecognitionPermission(): Boolean = try {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.ACTIVITY_RECOGNITION
+            ) == PackageManager.PERMISSION_GRANTED
+        } else true
+    } catch (e: Exception) {
+        false
+    }
+
+    /**
+     * Il sensor hub ha svegliato il processo. Non sappiamo ancora se e' un
+     * viaggio, quindi non si avvia niente: si accende il GPS fitto, cosi' i fix
+     * successivi arrivano subito e finiscono in [recentFixes]. Se poi si rivela
+     * un falso allarme, [applyEffectiveTrackingInterval] rimette la cadenza
+     * normale alla chiusura del viaggio o al prossimo giro.
+     */
+    private fun onSignificantMotion() {
+        if (!_isAutoTripEnabled.value) return
+        if (_activeTrip.value != null) return
+        try {
+            isFixRateBoosted = true
+            fixBoostStartedAt = System.currentTimeMillis()
+            if (silentLocationCallback != null) startSilentLocationTracking()
+            if (_isBackgroundTrackingEnabled.value) {
+                com.example.service.LocationTrackingService.updateInterval(
+                    context, TRIP_TRACKING_INTERVAL_SEC
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Infittimento fix dopo movimento fallito: ${e.message}")
+        }
+    }
+
+    /**
+     * Riporta la cadenza dei fix a quella normale dopo un infittimento che non ha
+     * prodotto un viaggio. Senza questo, un singolo falso allarme del sensore
+     * — il telefono spostato sul tavolo — lascerebbe l'app a chiedere la posizione
+     * ogni cinque secondi per sempre.
+     */
+    private fun endFixRateBoostIfIdle() {
+        if (!isFixRateBoosted) return
+        if (_activeTrip.value != null) return
+        if (System.currentTimeMillis() - fixBoostStartedAt < FIX_BOOST_MAX_MS) return
+        isFixRateBoosted = false
+        Log.d(TAG, "Nessun viaggio dopo il movimento: cadenza fix ripristinata")
+        applyEffectiveTrackingInterval()
+    }
+
+    /**
+     * Android ha riconosciuto un cambio di attivita'. Un ENTER in uno stato di
+     * spostamento e' la conferma piu' affidabile che abbiamo e fa partire il
+     * viaggio senza attendere la soglia temporale; un ENTER in STILL chiude la
+     * finestra e riabilita la chiusura per immobilita'.
+     *
+     * Chiamata dal broadcast receiver, quindi puo' arrivare col processo appena
+     * risvegliato: niente assunzioni su cosa e' inizializzato.
+     */
+    fun onActivityTransition(activityType: Int, isEnter: Boolean) {
+        if (!_isAutoTripEnabled.value) return
+
+        val isTravel = activityType == DetectedActivity.IN_VEHICLE ||
+            activityType == DetectedActivity.ON_BICYCLE ||
+            activityType == DetectedActivity.RUNNING
+
+        if (activityType == DetectedActivity.STILL && isEnter) {
+            lastKnownActivityIsTravel = false
+            return
+        }
+
+        if (!isTravel || !isEnter) return
+        lastKnownActivityIsTravel = true
+
+        if (_activeTrip.value != null) {
+            // Gia' in viaggio: la conferma serve solo a non farlo chiudere.
+            autoStationarySinceMillis = 0L
+            return
+        }
+
+        Log.d(TAG, "Viaggio automatico avviato su conferma di sistema")
+        autoMovingSinceMillis = 0L
+        autoStationarySinceMillis = 0L
+        startTrip(TripSource.AUTO)
+    }
+
     /**
      * Decide da sola quando comincia e quando finisce uno spostamento.
      *
-     * Parte dopo [AUTO_TRIP_START_MS] di movimento continuo, così una camminata
-     * di pochi passi verso la finestra non diventa un viaggio. Chiude dopo
-     * [AUTO_TRIP_STOP_MS] da fermo, perché una sosta breve — semaforo, benzina —
-     * fa parte dello stesso tragitto e spezzarlo in due sarebbe peggio.
+     * Parte quando uno dei tre segnali basta (vedi il blocco di commento sopra),
+     * così una camminata di pochi passi verso la finestra non diventa un viaggio.
+     * Chiude dopo [AUTO_TRIP_STOP_MS] da fermo, perché una sosta breve — semaforo,
+     * benzina — fa parte dello stesso tragitto e spezzarlo in due sarebbe peggio.
      */
     private fun evaluateAutoTrip(location: UserLocation) {
         if (!_isAutoTripEnabled.value) return
@@ -3160,12 +3474,33 @@ class FirebaseRepository private constructor(private val context: Context) {
         val active = _activeTrip.value
 
         if (active == null) {
-            if (!moving) { autoMovingSinceMillis = 0L; return }
-            if (autoMovingSinceMillis == 0L) autoMovingSinceMillis = now
-            if (now - autoMovingSinceMillis >= AUTO_TRIP_START_MS) {
+            if (!moving) {
+                autoMovingSinceMillis = 0L
+                // Da fermo questo e' il punto da cui misurare l'allontanamento.
+                stationaryAnchorLat = location.latitude
+                stationaryAnchorLon = location.longitude
+                endFixRateBoostIfIdle()
+                return
+            }
+            if (autoMovingSinceMillis == 0L) {
+                autoMovingSinceMillis = now
+                if (stationaryAnchorLat == 0.0 && stationaryAnchorLon == 0.0) {
+                    stationaryAnchorLat = location.latitude
+                    stationaryAnchorLon = location.longitude
+                }
+            }
+
+            val movedEnough = distanceFromStationaryAnchor(location) >= AUTO_TRIP_START_DISTANCE_M
+            val movedLongEnough = now - autoMovingSinceMillis >= AUTO_TRIP_START_MS
+
+            if (movedEnough || movedLongEnough) {
                 autoMovingSinceMillis = 0L
                 autoStationarySinceMillis = 0L
-                Log.d(TAG, "Viaggio automatico avviato")
+                Log.d(
+                    TAG,
+                    "Viaggio automatico avviato (" +
+                        (if (movedEnough) "distanza" else "durata") + ")"
+                )
                 startTrip(TripSource.AUTO)
             }
             return
@@ -3178,12 +3513,31 @@ class FirebaseRepository private constructor(private val context: Context) {
             autoStationarySinceMillis = 0L
             return
         }
+
+        // Se il sistema dice ancora che sei in viaggio, la velocita' a zero e'
+        // probabilmente una sosta o un fix scadente: non si chiude.
+        if (lastKnownActivityIsTravel == true) {
+            autoStationarySinceMillis = 0L
+            return
+        }
+
         if (autoStationarySinceMillis == 0L) autoStationarySinceMillis = now
         if (now - autoStationarySinceMillis >= AUTO_TRIP_STOP_MS) {
             autoStationarySinceMillis = 0L
             Log.d(TAG, "Viaggio automatico concluso")
             CoroutineScope(Dispatchers.IO).launch { stopAndSaveTrip() }
         }
+    }
+
+    private fun distanceFromStationaryAnchor(location: UserLocation): Double {
+        if (stationaryAnchorLat == 0.0 && stationaryAnchorLon == 0.0) return 0.0
+        val results = FloatArray(1)
+        android.location.Location.distanceBetween(
+            stationaryAnchorLat, stationaryAnchorLon,
+            location.latitude, location.longitude,
+            results
+        )
+        return results[0].toDouble()
     }
 
     private fun rdpSimplify(points: List<TripPoint>, epsilon: Double): List<TripPoint> {
@@ -3296,8 +3650,36 @@ class FirebaseRepository private constructor(private val context: Context) {
          */
         const val TRIP_MOVING_GAP_MAX_SEC = 120.0
 
-        /** Movimento continuo necessario prima che parta un viaggio automatico. */
+        /**
+         * Movimento continuo necessario prima che parta un viaggio automatico.
+         * E' la via piu' lenta delle tre: di norma arrivano prima la conferma di
+         * sistema o la soglia di distanza.
+         */
         const val AUTO_TRIP_START_MS = 90_000L
+
+        /**
+         * Allontanamento dal punto in cui si era fermi che da' per certo lo
+         * spostamento, senza attendere [AUTO_TRIP_START_MS]. Sopra i due isolati
+         * non e' piu' un giro per casa.
+         */
+        const val AUTO_TRIP_START_DISTANCE_M = 250.0
+
+        /**
+         * Quanto indietro si guarda per ricostruire l'inizio di un viaggio
+         * rilevato da solo. Cinque minuti coprono il caso peggiore del polling
+         * senza rischiare di incollare al viaggio uno spostamento precedente.
+         */
+        const val AUTO_TRIP_BACKFILL_WINDOW_MS = 5 * 60_000L
+
+        /** Tetto al buffer dei fix recenti, per non far crescere la memoria. */
+        const val AUTO_TRIP_BACKFILL_MAX_POINTS = 120
+
+        /**
+         * Quanto si tengono i fix infittiti dopo uno scatto del sensore di
+         * movimento senza che sia partito un viaggio. Oltre, era un falso allarme
+         * e la cadenza torna quella normale.
+         */
+        const val FIX_BOOST_MAX_MS = 3 * 60_000L
 
         /** Immobilita' necessaria prima che un viaggio automatico si chiuda. */
         const val AUTO_TRIP_STOP_MS = 3 * 60_000L

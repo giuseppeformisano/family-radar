@@ -2141,7 +2141,7 @@ private fun SettingsPanel(
                 )
                 SettingsToggleRow(
                     title = "Modalità fantasma",
-                    description = "Nasconde la tua posizione in tutti i gruppi contemporaneamente",
+                    description = "Nessuno ti vede, in tutti i gruppi",
                     icon = if (isGlobalGhostMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                     iconTint = if (isGlobalGhostMode) MaterialTheme.colorScheme.error
                     else MaterialTheme.colorScheme.primary,
@@ -2151,7 +2151,7 @@ private fun SettingsPanel(
                 )
                 SettingsToggleRow(
                     title = "Condividi in questo gruppo",
-                    description = "Se disattivato resti invisibile solo ai membri di ${currentGroup?.name ?: "questo gruppo"}",
+                    description = "Se lo spegni, sparisci solo da ${currentGroup?.name ?: "questo gruppo"}",
                     icon = Icons.Default.ShareLocation,
                     checked = myMember?.isTrackingActive ?: true,
                     onCheckedChange = onToggleGroupTracking,
@@ -2168,12 +2168,12 @@ private fun SettingsPanel(
             SettingsCard {
                 SettingsSectionHeader(
                     title = "Tracciamento",
-                    subtitle = "Come viene rilevata la tua posizione",
+                    subtitle = "Come viene rilevata la posizione",
                     icon = Icons.Default.GpsFixed
                 )
                 SettingsToggleRow(
                     title = "Tracciamento in background",
-                    description = "Mantiene attivo il radar anche ad app chiusa, con notifica persistente",
+                    description = "Continua a funzionare anche ad app chiusa",
                     icon = Icons.Default.GpsFixed,
                     checked = isTrackingEnabled,
                     onCheckedChange = onToggleTracking,
@@ -2181,8 +2181,7 @@ private fun SettingsPanel(
                 )
                 SettingsToggleRow(
                     title = "Risparmio energia",
-                    description = "Ricava la posizione da WiFi e rete dati invece che dal GPS: " +
-                        "molta meno batteria, precisione circa 100 metri. Il tracciamento resta attivo.",
+                    description = "Meno batteria, posizione meno precisa (circa 100 metri)",
                     icon = Icons.Default.BatterySaver,
                     iconTint = if (isPowerSavingMode) RadarSemantic.BatteryOk
                     else MaterialTheme.colorScheme.primary,
@@ -2195,6 +2194,11 @@ private fun SettingsPanel(
                     text = "Frequenza aggiornamento",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Ogni quanto viene rilevata la tua posizione",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(Spacing.sm))
                 Row(
@@ -2240,9 +2244,7 @@ private fun SettingsPanel(
                 )
                 Spacer(Modifier.height(Spacing.xs))
                 Text(
-                    text = "Non riguarda i viaggi: durante una registrazione la " +
-                        "posizione viene rilevata ogni pochi secondi, per avere una " +
-                        "traccia fedele al percorso.",
+                    text = "Durante un viaggio si passa sempre a 5 secondi",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2356,9 +2358,9 @@ private fun SettingsPanel(
                     SettingsToggleRow(
                         title = "Approvazione nuovi membri",
                         description = if (currentGroup.requiresApproval)
-                            "Chi usa il codice invito deve essere approvato da te"
+                            "Devi approvare tu chi entra col codice"
                         else
-                            "Chiunque abbia il codice entra subito nel gruppo",
+                            "Chi ha il codice entra subito",
                         icon = Icons.Default.AdminPanelSettings,
                         checked = currentGroup.requiresApproval,
                         onCheckedChange = onToggleAccessPolicy,
@@ -2453,12 +2455,12 @@ private fun SettingsPanel(
             SettingsCard {
                 SettingsSectionHeader(
                     title = "Sviluppo",
-                    subtitle = "Strumenti di test, non servono all'uso normale",
+                    subtitle = "Strumenti di prova",
                     icon = Icons.Default.Code
                 )
                 SettingsToggleRow(
                     title = "Simula movimento",
-                    description = "Muove membri di prova sulla mappa. Utile solo su emulatore",
+                    description = "Muove membri finti sulla mappa. Solo per prove",
                     icon = if (isSimulationRunning) Icons.Default.DirectionsRun else Icons.Default.PlayCircle,
                     checked = isSimulationRunning,
                     onCheckedChange = onToggleSimulation,

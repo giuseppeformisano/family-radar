@@ -936,11 +936,27 @@ class FirebaseRepository private constructor(private val context: Context) {
                     if (ownerId == userId) {
                         updatedGroups.add(group.copy(userMembershipStatus = "ACTIVE"))
                     } else {
+                        // Il documento arriva fresco da Firestore: di quello che c'e'
+                        // gia' in stato conserviamo solo lo stato di appartenenza e
+                        // prendiamo da qui nome, descrizione e immagine. Senza questo
+                        // ramo le modifiche del proprietario non raggiungevano mai chi
+                        // non e' owner: attachMemberDocListener cattura groupData una
+                        // volta sola e non si riattacca (vedi la guardia su
+                        // memberStatusListeners), quindi ripubblicava per sempre la
+                        // versione vista al primo giro.
+                        if (existingInState != null) {
+                            updatedGroups.add(
+                                group.copy(userMembershipStatus = existingInState.userMembershipStatus)
+                            )
+                        }
                         attachMemberDocListener(gId, group, userId)
                     }
                 }
 
-                // Keep owner groups plus existing confirmed member groups that are still valid in Firestore
+                // Keep owner groups plus existing confirmed member groups that are still valid in Firestore.
+                // updatedGroups viene prima nella concatenazione, quindi il distinctBy
+                // tiene la copia fresca e questa lista copre solo i gruppi non ancora
+                // ricostruiti sopra.
                 val currentActiveMemberGroups = _userGroupsState.value.filter { g ->
                     g.ownerId != userId && currentGroupDocs.any { it.id == g.id }
                 }
@@ -972,7 +988,12 @@ class FirebaseRepository private constructor(private val context: Context) {
 
                 if (memberDoc != null && memberDoc.exists()) {
                     val status = memberDoc.getString("status") ?: "ACTIVE"
-                    val groupWithStatus = groupData.copy(userMembershipStatus = status)
+                    // memberGroupsMap e' tenuto aggiornato dal listener sulla collection
+                    // groups: leggendo da li' invece dal groupData catturato alla
+                    // creazione di questo listener, una rinomina o un cambio di immagine
+                    // fatti dal proprietario non vengono piu' sovrascritti col vecchio.
+                    val freshGroup = memberGroupsMap[groupId] ?: groupData
+                    val groupWithStatus = freshGroup.copy(userMembershipStatus = status)
 
                     val currentList = _userGroupsState.value.toMutableList()
                     val idx = currentList.indexOfFirst { it.id == groupId }

@@ -140,8 +140,18 @@ fun MainRadarScreen(
     val currentUserId = currentUser?.uid ?: ""
     val isOwnerOrAdmin = currentGroup?.ownerId == currentUserId ||
         members.find { it.userId == currentUserId }?.role in listOf("owner", "admin")
-    val pendingMembers = remember(members) { members.filter { it.status == "PENDING" } }
-    val activeMembers = remember(members) { members.filter { it.status == "ACTIVE" } }
+    val pendingMembers = remember(members) {
+        members.filter { it.status.equals("PENDING", ignoreCase = true) }
+    }
+    // Attivo = "non in attesa e non rifiutato". Filtrare per status == "ACTIVE"
+    // esatto nascondeva membri con status mancante o legacy (es. maiuscole/minuscole
+    // diverse), facendo comparire "1 membro" in gruppi che ne hanno due.
+    val activeMembers = remember(members) {
+        members.filterNot {
+            it.status.equals("PENDING", ignoreCase = true) ||
+                it.status.equals("REJECTED", ignoreCase = true)
+        }
+    }
 
     // --- Stato del bottom sheet ---
     val sheetState = rememberStandardBottomSheetState(

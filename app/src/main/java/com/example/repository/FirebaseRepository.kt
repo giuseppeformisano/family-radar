@@ -75,6 +75,12 @@ class FirebaseRepository private constructor(private val context: Context) {
     private var userDocListener: ListenerRegistration? = null
     private var groupsCollectionListener: ListenerRegistration? = null
     private val memberStatusListeners = java.util.concurrent.ConcurrentHashMap<String, ListenerRegistration>()
+    // Ultimo status visto per gruppo. Serve a distinguere una vera approvazione
+    // (transizione PENDING -> ACTIVE, in cui e' giusto entrare da soli) dal primo
+    // snapshot di un gruppo gia' ACTIVE dopo una nuova installazione: in quel caso
+    // NON bisogna auto-selezionare, altrimenti con piu' gruppi i listener partono
+    // in parallelo e si rincorrono selezionando ciascuno il proprio gruppo.
+    private val memberStatusSeen = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val memberGroupsMap = java.util.concurrent.ConcurrentHashMap<String, GroupData>()
     private var lastObservedEventTimestamp: Long = System.currentTimeMillis()
     private var lastObservedMessageTimestamp: Long = System.currentTimeMillis()
@@ -884,6 +890,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         groupsCollectionListener = null
         memberStatusListeners.values.forEach { it.remove() }
         memberStatusListeners.clear()
+        memberStatusSeen.clear()
         memberGroupsMap.clear()
     }
 
@@ -1034,6 +1041,13 @@ class FirebaseRepository private constructor(private val context: Context) {
 
                 if (memberDoc != null && memberDoc.exists()) {
                     val status = memberDoc.getString("status") ?: "ACTIVE"
+                    // Una vera approvazione e' una transizione da uno stato precedente
+                    // NON attivo (tipicamente PENDING) a ACTIVE. Al primo snapshot
+                    // prev e' null: un gruppo gia' ACTIVE all'avvio non e' un'approvazione.
+                    val prevStatus = memberStatusSeen.put(groupId, status)
+                    val isFreshApproval = prevStatus != null &&
+                        !prevStatus.equals("ACTIVE", ignoreCase = true) &&
+                        status.equals("ACTIVE", ignoreCase = true)
                     // memberGroupsMap e' tenuto aggiornato dal listener sulla collection
                     // groups: leggendo da li' invece dal groupData catturato alla
                     // creazione di questo listener, una rinomina o un cambio di immagine
@@ -1065,8 +1079,16 @@ class FirebaseRepository private constructor(private val context: Context) {
                             Log.w(TAG, "FCM subscription error: ${e.message}")
                         }
 
-                        // Auto-select group to immediately transition UI to Main Radar Screen
-                        if (_currentUserState.value?.currentGroupId.isNullOrBlank() || _currentUserState.value?.currentGroupId == groupId) {
+                        // Auto-entra SOLO in due casi sicuri:
+                        //  - e' il gruppo gia' corrente (re-attivazione, idempotente);
+                        //  - e' una vera approvazione appena avvenuta.
+                        // Il vecchio ramo "currentGroupId vuoto -> entra" faceva sì che,
+                        // dopo una nuova installazione con piu' gruppi, ogni listener
+                        // entrasse nel proprio gruppo, causando il flip-flop. La scelta
+                        // iniziale spetta a userDocListener (gruppo salvato) e a
+                        // MainActivity (auto solo se il gruppo attivo e' uno solo).
+                        val currentGid = _currentUserState.value?.currentGroupId
+                        if (currentGid == groupId || (isFreshApproval && currentGid.isNullOrBlank())) {
                             selectGroup(groupId)
                         }
                     }
@@ -2294,11 +2316,18 @@ class FirebaseRepository private constructor(private val context: Context) {
         //  - per l'etichetta "dove sei" contano tutti, perché un luogo con gli
         //    avvisi spenti resta comunque un posto che ha un nome
         val allPlaces = _currentGroupPlaces.value
-        val placeForAlert = GeofenceHelper.findCurrentPlace(
-            location, allPlaces.filter { it.geofenceEnabled }
-        )
         val placeForLabel = GeofenceHelper.findCurrentPlace(location, allPlaces)
-        checkGeofenceAlert(user.displayName, placeForAlert)
+
+        // Gli AVVISI di ingresso/uscita si valutano solo su fix affidabili e con
+        // isteresi: un fix impreciso o un salto del GPS mentre si sta fermi dentro
+        // un luogo non deve produrre una raffica di "entra"/"esci". La sola etichetta
+        // "dove sei" (placeForLabel) resta senza filtro perché non genera notifiche.
+        if (location.accuracy <= GEOFENCE_MAX_ACCURACY_METERS) {
+            val placeForAlert = resolveGeofencePlaceWithHysteresis(
+                location, allPlaces.filter { it.geofenceEnabled }
+            )
+            checkGeofenceAlert(user.displayName, placeForAlert)
+        }
 
         if (!gate.shouldSend) {
             Log.v(TAG, "Fix ignorato: ${gate.reason}")
@@ -2373,6 +2402,29 @@ class FirebaseRepository private constructor(private val context: Context) {
 
     private var lastNotifiedPlaceId: String? = null
     private var lastNotifiedPlaceName: String? = null
+
+    /**
+     * Trova il luogo "corrente" ai fini degli avvisi applicando l'isteresi:
+     *  - per ENTRARE serve stare entro il raggio pieno;
+     *  - per USCIRE dal luogo in cui si e' gia' dentro serve superare
+     *    raggio + [GEOFENCE_EXIT_MARGIN_METERS].
+     * Cosi' un jitter di pochi metri sul bordo non alterna ingresso/uscita.
+     */
+    private fun resolveGeofencePlaceWithHysteresis(
+        location: UserLocation,
+        places: List<SavedPlace>
+    ): SavedPlace? {
+        // Se siamo gia' dentro un luogo, ci restiamo finche' non usciamo davvero.
+        val current = places.find { it.id == lastNotifiedPlaceId }
+        if (current != null) {
+            val d = GeofenceHelper.calculateDistanceMeters(
+                location.latitude, location.longitude, current.latitude, current.longitude
+            )
+            if (d <= current.radiusMeters + GEOFENCE_EXIT_MARGIN_METERS) return current
+        }
+        // Altrimenti si entra in un nuovo luogo solo col raggio pieno.
+        return places.firstOrNull { GeofenceHelper.isInsidePlace(location, it) }
+    }
 
     private fun checkGeofenceAlert(userName: String, place: SavedPlace?) {
         val user = _currentUserState.value ?: return
@@ -3692,14 +3744,19 @@ class FirebaseRepository private constructor(private val context: Context) {
             }
 
             val displacement = distanceFromStationaryAnchor(location)
-            val movedEnough = displacement >= AUTO_TRIP_START_DISTANCE_M
+            // Lo spostamento conta come reale solo se supera nettamente
+            // l'incertezza del fix: un GPS che sbanda con 40 m di accuratezza puo'
+            // riportare un'ancora "lontana" 150 m senza che ci si sia mossi. Chiedere
+            // displacement > 3x accuracy scarta questi salti in casa.
+            val displacementIsReal = displacement > location.accuracy * 3f
+            val movedEnough = displacement >= AUTO_TRIP_START_DISTANCE_M && displacementIsReal
             // Lo spostamento NETTO dal punto in cui si era fermi e' cio' che
             // distingue un viaggio dall'andirivieni: camminando per casa la
             // velocita' istantanea puo' superare la soglia quanto vuole, ma non
             // ci si allontana mai. Senza questa condizione bastavano 90 secondi
             // di movimento sul posto per far partire un viaggio.
             val movedLongEnough = now - autoMovingSinceMillis >= AUTO_TRIP_START_MS &&
-                displacement >= AUTO_TRIP_MIN_NET_DISPLACEMENT_M
+                displacement >= AUTO_TRIP_MIN_NET_DISPLACEMENT_M && displacementIsReal
 
             if (movedEnough || movedLongEnough) {
                 autoMovingSinceMillis = 0L
@@ -3839,6 +3896,20 @@ class FirebaseRepository private constructor(private val context: Context) {
 
         /** Oltre questo raggio d'incertezza il fix non entra nella traccia. */
         const val TRIP_MAX_ACCURACY_METERS = 50f
+
+        /**
+         * Oltre questo raggio d'incertezza il fix non genera avvisi geofence:
+         * un fix impreciso non puo' decidere in modo affidabile se sei entrato o
+         * uscito da un luogo, ed e' la causa principale delle raffiche di notifiche.
+         */
+        const val GEOFENCE_MAX_ACCURACY_METERS = 40f
+
+        /**
+         * Isteresi: una volta dentro un luogo si "esce" solo superando
+         * raggio + questo margine. Assorbe i salti del GPS mentre si sta fermi
+         * sul bordo di un luogo salvato.
+         */
+        const val GEOFENCE_EXIT_MARGIN_METERS = 35.0
 
         /** ~200 km/h: oltre, non e' movimento ma un errore del sensore. */
         const val TRIP_MAX_SPEED_MS = 55.0

@@ -83,14 +83,14 @@ fun EditGroupProfileDialog(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Profilo nel Gruppo",
+                    text = "Il tuo profilo",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Text(
-                    text = "Personalizza come appari agli altri membri di questo gruppo",
+                    text = "Nome e foto valgono in tutti i tuoi gruppi",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
@@ -194,7 +194,7 @@ fun EditGroupProfileDialog(
                 OutlinedTextField(
                     value = displayName,
                     onValueChange = { displayName = it },
-                    label = { Text("Nome nel Gruppo") },
+                    label = { Text("Nome") },
                     placeholder = { Text("es. Papà, Mamma, Marco") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -210,7 +210,7 @@ fun EditGroupProfileDialog(
                 OutlinedTextField(
                     value = nickname,
                     onValueChange = { nickname = it },
-                    label = { Text("Soprannome (opzionale)") },
+                    label = { Text("Soprannome in questo gruppo (opzionale)") },
                     placeholder = { Text("es. Il Capo, Speedy") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),

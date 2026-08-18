@@ -2637,6 +2637,18 @@ class FirebaseRepository private constructor(private val context: Context) {
 
     // ================== GROUP MEMBER CUSTOM PROFILE ==================
 
+    /**
+     * Profilo unico centralizzato + soprannome per-gruppo.
+     *
+     * Nome e foto sono globali: si scrivono su `users/{uid}` e si propagano al
+     * documento membro e alla posizione di OGNI gruppo di cui l'utente fa parte,
+     * cosi' appari uguale ovunque e subito. Il [nickname] invece e' l'unico dato
+     * per-gruppo: si scrive solo su `members/{uid}` (e sulla location) del
+     * [groupId] corrente.
+     *
+     * Il parametro [memberId] deve essere l'utente stesso: non si modifica il
+     * profilo altrui. Se non lo e', si aggiorna solo il gruppo corrente (difesa).
+     */
     suspend fun updateGroupMemberProfile(
         groupId: String,
         memberId: String,
@@ -2648,44 +2660,55 @@ class FirebaseRepository private constructor(private val context: Context) {
         val cleanNick = nickname?.trim()?.ifBlank { null }
         val cleanPhoto = photoBase64?.trim()?.ifBlank { null }
 
+        val currentUser = _currentUserState.value
+        val isSelf = currentUser != null && currentUser.uid == memberId
+
         try {
             if (firestore != null && groupId.isNotBlank() && memberId.isNotBlank()) {
-                val updateMap = hashMapOf<String, Any?>(
-                    "displayName" to cleanName,
-                    "nickname" to cleanNick,
-                    "photoBase64" to cleanPhoto
-                )
-                firestore.collection("groups").document(groupId)
-                    .collection("members").document(memberId)
-                    .set(updateMap, com.google.firebase.firestore.SetOptions.merge())
-                    .await()
-
-                // If updating self, also update user's profile and current location entry
-                val currentUser = _currentUserState.value
-                if (currentUser != null && currentUser.uid == memberId) {
-                    val updatedUser = currentUser.copy(
+                if (isSelf) {
+                    // 1. Profilo account (nome + foto globali).
+                    _currentUserState.value = currentUser!!.copy(
                         displayName = cleanName,
                         photoBase64 = cleanPhoto
                     )
-                    _currentUserState.value = updatedUser
-
                     firestore.collection("users").document(memberId).set(
-                        hashMapOf(
-                            "displayName" to cleanName,
-                            "photoBase64" to cleanPhoto
-                        ),
+                        hashMapOf("displayName" to cleanName, "photoBase64" to cleanPhoto),
                         com.google.firebase.firestore.SetOptions.merge()
                     )
 
+                    // 2. Nome + foto in TUTTI i gruppi; il soprannome solo in quello corrente.
+                    val allGroupIds = (_userGroupsState.value.map { it.id } + groupId).distinct()
+                    for (gid in allGroupIds) {
+                        val memberMap = hashMapOf<String, Any?>(
+                            "displayName" to cleanName,
+                            "photoBase64" to cleanPhoto
+                        )
+                        val locMap = hashMapOf<String, Any?>(
+                            "userName" to cleanName,
+                            "photoBase64" to cleanPhoto
+                        )
+                        if (gid == groupId) {
+                            memberMap["nickname"] = cleanNick
+                            locMap["nickname"] = cleanNick
+                        }
+                        firestore.collection("groups").document(gid)
+                            .collection("members").document(memberId)
+                            .set(memberMap, com.google.firebase.firestore.SetOptions.merge())
+                        firestore.collection("groups").document(gid)
+                            .collection("locations").document(memberId)
+                            .set(locMap, com.google.firebase.firestore.SetOptions.merge())
+                    }
+                } else {
+                    // Non e' il proprio profilo: si tocca solo il gruppo indicato.
                     firestore.collection("groups").document(groupId)
-                        .collection("locations").document(memberId).set(
-                            hashMapOf(
-                                "userName" to cleanName,
+                        .collection("members").document(memberId).set(
+                            hashMapOf<String, Any?>(
+                                "displayName" to cleanName,
                                 "nickname" to cleanNick,
                                 "photoBase64" to cleanPhoto
                             ),
                             com.google.firebase.firestore.SetOptions.merge()
-                        )
+                        ).await()
                 }
             }
         } catch (e: Exception) {
@@ -2693,7 +2716,7 @@ class FirebaseRepository private constructor(private val context: Context) {
             return Result.failure(e)
         }
 
-        // Update local members state
+        // Update local members state (gruppo corrente)
         val updatedMembers = _currentGroupMembers.value.map { m ->
             if (m.userId == memberId) {
                 m.copy(displayName = cleanName, nickname = cleanNick, photoBase64 = cleanPhoto)

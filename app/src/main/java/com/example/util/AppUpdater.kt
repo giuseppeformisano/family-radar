@@ -110,12 +110,14 @@ object AppUpdater {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             !context.packageManager.canRequestPackageInstalls()
         ) {
-            context.startActivity(
-                Intent(
-                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                    Uri.parse("package:${context.packageName}")
-                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
+            runCatching {
+                context.startActivity(
+                    Intent(
+                        android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:${context.packageName}")
+                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
             return
         }
 
@@ -123,43 +125,98 @@ object AppUpdater {
             context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
             "family-radar-update.apk"
         )
-        if (destFile.exists()) destFile.delete()
+        runCatching { if (destFile.exists()) destFile.delete() }
 
-        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        val downloadId = dm.enqueue(
-            DownloadManager.Request(Uri.parse(apkUrl))
-                .setTitle("Family Radar")
-                .setDescription("Scaricamento aggiornamento...")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-                .setDestinationInExternalFilesDir(
-                    context,
-                    Environment.DIRECTORY_DOWNLOADS,
-                    "family-radar-update.apk"
-                )
-        )
+        // Su molti Samsung il "Gestione download" di sistema puo' essere
+        // disattivato dall'utente: in quel caso getSystemService o enqueue lanciano
+        // e, senza questo try/catch, il pulsante "Aggiorna" non faceva assolutamente
+        // nulla. Se il DownloadManager non e' disponibile si ripiega sul browser,
+        // che scarica l'APK in ogni caso.
+        val dm = try {
+            context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
+        } catch (_: Exception) { null }
+
+        if (dm == null) {
+            openInBrowser(context, apkUrl)
+            return
+        }
+
+        val downloadId = try {
+            dm.enqueue(
+                DownloadManager.Request(Uri.parse(apkUrl))
+                    .setTitle("Family Radar")
+                    .setDescription("Scaricamento aggiornamento...")
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+                    .setMimeType("application/vnd.android.package-archive")
+                    .setDestinationInExternalFilesDir(
+                        context,
+                        Environment.DIRECTORY_DOWNLOADS,
+                        "family-radar-update.apk"
+                    )
+            )
+        } catch (e: Exception) {
+            Log.w("AppUpdater", "DownloadManager.enqueue fallito: ${e.message}")
+            openInBrowser(context, apkUrl)
+            return
+        }
 
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
                 val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
                 if (id != downloadId) return
-                ctx.unregisterReceiver(this)
+                runCatching { ctx.unregisterReceiver(this) }
+                // Avvia direttamente la schermata di installazione: non dipende
+                // dal permesso notifiche (su Android 13+ del S22 puo' essere negato,
+                // e allora la sola notifica non sarebbe mai comparsa). La notifica
+                // resta come rete di sicurezza se l'installer non parte da solo.
+                launchInstaller(ctx, destFile)
                 showInstallNotification(ctx, destFile)
             }
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(
-                receiver,
-                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                Context.RECEIVER_EXPORTED
-            )
-        } else {
-            @Suppress("UnspecifiedRegisterReceiverFlag")
-            context.registerReceiver(
-                receiver,
-                IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-            )
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(
+                    receiver,
+                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+                    Context.RECEIVER_EXPORTED
+                )
+            } else {
+                @Suppress("UnspecifiedRegisterReceiverFlag")
+                context.registerReceiver(
+                    receiver,
+                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+                )
+            }
         }
+    }
+
+    /** Apre l'URL dell'APK nel browser: fallback quando il DownloadManager non c'e'. */
+    private fun openInBrowser(context: Context, apkUrl: String) {
+        runCatching {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse(apkUrl))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }.onFailure { Log.w("AppUpdater", "openInBrowser fallito: ${it.message}") }
+    }
+
+    /** Lancia la schermata di installazione del pacchetto scaricato. */
+    private fun launchInstaller(context: Context, file: File) {
+        runCatching {
+            if (!file.exists()) return
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+        }.onFailure { Log.w("AppUpdater", "launchInstaller fallito: ${it.message}") }
     }
 
     private fun showInstallNotification(context: Context, file: File) {

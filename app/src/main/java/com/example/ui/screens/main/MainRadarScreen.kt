@@ -65,6 +65,7 @@ import com.example.ui.theme.*
 import com.example.BuildConfig
 import com.example.util.AppUpdater
 import com.example.util.ImageUtils
+import com.example.util.UpdateInfo
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -2923,19 +2924,19 @@ private fun SettingsPanel(
                 }
                 Spacer(Modifier.height(Spacing.sm))
                 var checking by remember { mutableStateOf(false) }
-                val updateScope = rememberCoroutineScope()
+                // null = nessun check completato; UpdateInfo = aggiornamento disponibile;
+                // "up_to_date" (stringa sentinella) = già aggiornato
+                var checkResult by remember { mutableStateOf<Any?>(null) }
+                val checkScope = rememberCoroutineScope()
+
                 OutlinedButton(
                     onClick = {
                         if (!checking) {
                             checking = true
-                            updateScope.launch {
-                                val update = AppUpdater.check()
+                            checkResult = null
+                            checkScope.launch {
+                                checkResult = AppUpdater.check() ?: "up_to_date"
                                 checking = false
-                                if (update != null) {
-                                    AppUpdater.downloadAndInstall(context, update.apkUrl)
-                                } else {
-                                    Toast.makeText(context, "Sei già aggiornato", Toast.LENGTH_SHORT).show()
-                                }
                             }
                         }
                     },
@@ -2950,7 +2951,33 @@ private fun SettingsPanel(
                         )
                         Spacer(Modifier.width(Spacing.sm))
                     }
-                    Text(if (checking) "Controllo..." else "Controlla aggiornamenti")
+                    Text(if (checking) "Controllo in corso..." else "Controlla aggiornamenti")
+                }
+
+                // Dialog risultato check aggiornamenti
+                when (val result = checkResult) {
+                    is UpdateInfo -> AlertDialog(
+                        onDismissRequest = { checkResult = null },
+                        title = { Text("Aggiornamento disponibile") },
+                        text = { Text("È disponibile la versione ${result.versionName}. Scaricala e installala ora.") },
+                        confirmButton = {
+                            Button(onClick = {
+                                checkResult = null
+                                AppUpdater.downloadAndInstall(context, result.apkUrl)
+                            }) { Text("Aggiorna") }
+                        },
+                        dismissButton = {
+                            OutlinedButton(onClick = { checkResult = null }) { Text("Dopo") }
+                        }
+                    )
+                    "up_to_date" -> AlertDialog(
+                        onDismissRequest = { checkResult = null },
+                        title = { Text("Sei aggiornato") },
+                        text = { Text("Stai usando la versione ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}), che è l'ultima disponibile.") },
+                        confirmButton = {
+                            Button(onClick = { checkResult = null }) { Text("OK") }
+                        }
+                    )
                 }
             }
         }

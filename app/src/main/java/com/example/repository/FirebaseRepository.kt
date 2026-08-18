@@ -2031,7 +2031,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         // pochissimi punti -- su una strada dritta, a due.
         // Il filtro dei 15 m dentro recordTripPoint basta a togliere il rumore.
         if (_activeTrip.value != null) {
-            recordTripPoint(location.latitude, location.longitude)
+            recordTripPoint(location)
         }
 
         // La valutazione geofence gira su OGNI fix, anche su quelli che non
@@ -2674,14 +2674,23 @@ class FirebaseRepository private constructor(private val context: Context) {
         applyEffectiveTrackingInterval()
     }
 
-    private fun recordTripPoint(lat: Double, lon: Double) {
+    private fun recordTripPoint(location: UserLocation) {
         val current = _activeTrip.value ?: return
+        val lat = location.latitude
+        val lon = location.longitude
+        val now = System.currentTimeMillis()
+
+        // Un fix con raggio d'incertezza enorme e' quello che fa "saltare" la
+        // traccia in punti dove non si e' mai stati: capita al chiuso, nelle
+        // gallerie e quando il GPS ripiega sulle celle telefoniche.
+        if (location.accuracy > TRIP_MAX_ACCURACY_METERS) return
+
         val lastLat = current.lastLat
         val lastLon = current.lastLon
 
         if (lastLat == 0.0 && lastLon == 0.0) {
             _activeTrip.value = current.copy(
-                points = current.points + TripPoint(lat, lon, System.currentTimeMillis()),
+                points = current.points + TripPoint(lat, lon, now),
                 lastLat = lat,
                 lastLon = lon
             )
@@ -2694,8 +2703,18 @@ class FirebaseRepository private constructor(private val context: Context) {
 
         if (distFromLast < 15.0) return
 
+        // Secondo filtro sugli spostamenti assurdi: se per coprire quella
+        // distanza servirebbe una velocita' impossibile, il fix e' sbagliato,
+        // non e' un movimento. Senza, un singolo fix ballerino piazza un picco
+        // nella traccia e gonfia i chilometri totali.
+        val lastAt = current.points.lastOrNull()?.timestamp
+        if (lastAt != null) {
+            val elapsedSec = (now - lastAt) / 1000.0
+            if (elapsedSec > 0.5 && distFromLast / elapsedSec > TRIP_MAX_SPEED_MS) return
+        }
+
         _activeTrip.value = current.copy(
-            points = current.points + TripPoint(lat, lon, System.currentTimeMillis()),
+            points = current.points + TripPoint(lat, lon, now),
             lastLat = lat,
             lastLon = lon,
             distanceMeters = current.distanceMeters + distFromLast
@@ -2774,20 +2793,42 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
     }
 
+    /**
+     * Distanza perpendicolare del punto dal SEGMENTO start-end, in metri.
+     *
+     * La versione precedente ricavava i due rilevamenti dalla stessa chiamata a
+     * distanceBetween, quindi la loro differenza era sempre zero e la funzione
+     * restituiva sempre 0: maxDist non superava mai epsilon e rdpSimplify
+     * finiva sempre nel ramo listOf(first, last). Ogni viaggio veniva salvato
+     * con due soli punti, qualunque percorso fosse stato fatto.
+     *
+     * Qui si proietta su un piano locale in metri: su tragitti di pochi
+     * chilometri l'errore e' trascurabile, e la formula e' molto piu' semplice
+     * e robusta della trigonometria sferica.
+     */
     private fun crossTrackDistance(point: TripPoint, start: TripPoint, end: TripPoint): Double {
-        val r = FloatArray(2)
-        android.location.Location.distanceBetween(start.latitude, start.longitude, end.latitude, end.longitude, r)
-        val lineLen = r[0].toDouble()
-        if (lineLen < 0.001) {
-            android.location.Location.distanceBetween(point.latitude, point.longitude, start.latitude, start.longitude, r)
-            return r[0].toDouble()
-        }
-        android.location.Location.distanceBetween(start.latitude, start.longitude, point.latitude, point.longitude, r)
-        val d = r[0].toDouble()
-        val brg12 = r[1].toDouble()
-        android.location.Location.distanceBetween(start.latitude, start.longitude, point.latitude, point.longitude, r)
-        val brg13 = r[1].toDouble()
-        return kotlin.math.abs(d * kotlin.math.sin(Math.toRadians(brg13 - brg12)))
+        val latRefRad = Math.toRadians((start.latitude + end.latitude) / 2.0)
+        val metersPerDegLat = 111_132.0
+        val metersPerDegLon = 111_320.0 * kotlin.math.cos(latRefRad)
+
+        val ax = start.longitude * metersPerDegLon
+        val ay = start.latitude * metersPerDegLat
+        val bx = end.longitude * metersPerDegLon
+        val by = end.latitude * metersPerDegLat
+        val px = point.longitude * metersPerDegLon
+        val py = point.latitude * metersPerDegLat
+
+        val dx = bx - ax
+        val dy = by - ay
+        val lenSq = dx * dx + dy * dy
+        if (lenSq < 1e-9) return kotlin.math.hypot(px - ax, py - ay)
+
+        // t limitato a [0,1]: la distanza e' dal segmento, non dalla retta
+        // infinita che lo contiene.
+        val t = (((px - ax) * dx + (py - ay) * dy) / lenSq).coerceIn(0.0, 1.0)
+        val cx = ax + t * dx
+        val cy = ay + t * dy
+        return kotlin.math.hypot(px - cx, py - cy)
     }
 
     companion object {
@@ -2817,6 +2858,12 @@ class FirebaseRepository private constructor(private val context: Context) {
          * all'intervallo dell'utente appena si ferma la registrazione.
          */
         const val TRIP_TRACKING_INTERVAL_SEC = 5
+
+        /** Oltre questo raggio d'incertezza il fix non entra nella traccia. */
+        const val TRIP_MAX_ACCURACY_METERS = 50f
+
+        /** ~200 km/h: oltre, non e' movimento ma un errore del sensore. */
+        const val TRIP_MAX_SPEED_MS = 55.0
 
         /** Variazione minima di batteria che giustifica una scrittura su members/{uid}. */
         const val BATTERY_WRITE_DELTA = 5

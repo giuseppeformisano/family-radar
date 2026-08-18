@@ -12,11 +12,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -206,39 +208,47 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
 
     updateInfo?.let { info ->
         Dialog(onDismissRequest = { updateInfo = null }) {
-            GlassSurface(
-                shape = RoundedCornerShape(Radius.lg),
-                contentPadding = Spacing.lg
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.lg)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                    Text(
-                        text = "Aggiornamento disponibile",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "Versione ${info.versionName}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(onClick = { updateInfo = null }) {
-                            Text("Dopo", style = MaterialTheme.typography.labelLarge)
-                        }
-                        Spacer(Modifier.width(Spacing.xs))
-                        TextButton(onClick = {
-                            AppUpdater.downloadAndInstall(context, info.apkUrl)
-                            updateInfo = null
-                        }) {
-                            Text(
-                                "Aggiornare",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                GlassSurface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(Radius.lg),
+                    contentPadding = Spacing.lg
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                        Text(
+                            text = "Aggiornamento disponibile",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Versione ${info.versionName}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(Spacing.xs))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { updateInfo = null }) {
+                                Text("Dopo", style = MaterialTheme.typography.labelLarge)
+                            }
+                            Spacer(Modifier.width(Spacing.xs))
+                            TextButton(onClick = {
+                                AppUpdater.downloadAndInstall(context, info.apkUrl)
+                                updateInfo = null
+                            }) {
+                                Text(
+                                    "Aggiornare",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
                 }

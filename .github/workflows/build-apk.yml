@@ -93,7 +93,7 @@ jobs:
       - name: Crea version.json
         run: |
           VERSION_CODE=$(grep 'versionCode = ' app/build.gradle.kts | grep -oE '[0-9]+')
-          VERSION_NAME=$(grep 'versionName = ' app/build.gradle.kts | grep -oE '"[0-9.]+"' | tr -d '"')
+          VERSION_NAME=$(grep 'versionName = ' app/build.gradle.kts | grep -oE '"[^"]+"' | tr -d '"')
           echo "{\"versionCode\": $VERSION_CODE, \"versionName\": \"$VERSION_NAME\"}" > version.json
           echo "Version $VERSION_NAME ($VERSION_CODE)"
 

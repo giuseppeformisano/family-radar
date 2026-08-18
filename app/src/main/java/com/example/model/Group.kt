@@ -8,5 +8,6 @@ data class GroupData(
     val createdAt: Long = System.currentTimeMillis(),
     val description: String = "",
     val requiresApproval: Boolean = true,
+    val photoBase64: String = "",
     val userMembershipStatus: String = "ACTIVE" // "ACTIVE", "PENDING"
 )

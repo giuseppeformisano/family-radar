@@ -2,6 +2,10 @@
 
 package com.example.ui.screens.groups
 
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,8 +14,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -20,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -27,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.example.model.GroupData
 import com.example.repository.FirebaseRepository
 import com.example.ui.components.EmptyState
+import com.example.ui.components.GroupPhotoPicker
 import com.example.ui.components.InfoBanner
 import com.example.ui.components.RadarBadge
 import com.example.ui.components.SectionHeader
@@ -34,6 +42,7 @@ import com.example.ui.theme.RadarTheme
 import com.example.ui.theme.Radius
 import com.example.ui.theme.Sizes
 import com.example.ui.theme.Spacing
+import com.example.util.ImageUtils
 import kotlinx.coroutines.launch
 
 @Composable
@@ -52,6 +61,7 @@ fun GroupSelectScreen(
     var newGroupName by remember { mutableStateOf("") }
     var newGroupDesc by remember { mutableStateOf("") }
     var newGroupRequiresApproval by remember { mutableStateOf(true) }
+    var newGroupPhotoBase64 by remember { mutableStateOf<String?>(null) }
     var pendingGroupInfoDialog by remember { mutableStateOf<GroupData?>(null) }
     var joinCodeInput by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -254,6 +264,8 @@ fun GroupSelectScreen(
             onDescriptionChange = { newGroupDesc = it },
             requiresApproval = newGroupRequiresApproval,
             onRequiresApprovalChange = { newGroupRequiresApproval = it },
+            photoBase64 = newGroupPhotoBase64,
+            onPhotoChange = { newGroupPhotoBase64 = it },
             isSubmitting = isSubmitting,
             onConfirm = {
                 if (newGroupName.isNotBlank()) {
@@ -262,7 +274,8 @@ fun GroupSelectScreen(
                         val result = repository.createGroup(
                             newGroupName.trim(),
                             newGroupDesc.trim(),
-                            newGroupRequiresApproval
+                            newGroupRequiresApproval,
+                            newGroupPhotoBase64 ?: ""
                         )
                         isSubmitting = false
                         showCreateDialog = false
@@ -472,10 +485,33 @@ private fun CreateGroupDialog(
     onDescriptionChange: (String) -> Unit,
     requiresApproval: Boolean,
     onRequiresApprovalChange: (Boolean) -> Unit,
+    photoBase64: String?,
+    onPhotoChange: (String?) -> Unit,
     isSubmitting: Boolean,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isProcessingImage by remember { mutableStateOf(false) }
+    val photoBitmap = remember(photoBase64) { ImageUtils.base64ToBitmap(photoBase64) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            isProcessingImage = true
+            scope.launch {
+                val base64 = ImageUtils.uriToBase64(context, uri, maxDimension = 300, quality = 80)
+                if (base64 == null) {
+                    Toast.makeText(context, "Errore nel caricamento immagine", Toast.LENGTH_SHORT).show()
+                }
+                onPhotoChange(base64)
+                isProcessingImage = false
+            }
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(Radius.xl),
@@ -491,12 +527,38 @@ private fun CreateGroupDialog(
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 Text(
                     text = "Una stanza privata per condividere posizione e messaggi.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    GroupPhotoPicker(
+                        bitmap = photoBitmap,
+                        fallbackLetter = name.firstOrNull()?.uppercaseChar()?.toString() ?: "G",
+                        isLoading = isProcessingImage,
+                        onClick = { photoPickerLauncher.launch("image/*") },
+                        size = Sizes.avatarLg
+                    )
+                    TextButton(
+                        onClick = { photoPickerLauncher.launch("image/*") },
+                        enabled = !isProcessingImage && !isSubmitting
+                    ) {
+                        Text(
+                            if (photoBitmap != null) "Cambia immagine" else "Aggiungi immagine",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+                }
+
                 OutlinedTextField(
                     value = name,
                     onValueChange = onNameChange,

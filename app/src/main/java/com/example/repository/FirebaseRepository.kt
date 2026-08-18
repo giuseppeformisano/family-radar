@@ -322,6 +322,45 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
     }
 
+    /**
+     * Aggiorna nome, descrizione e immagine del gruppo. Come per gli avatar dei
+     * membri l'immagine viaggia in Base64 dentro il documento: Firebase Storage
+     * non e' in uso e il limite vero e' il MB per documento di Firestore.
+     */
+    suspend fun updateGroupInfo(
+        groupId: String,
+        name: String,
+        description: String,
+        photoBase64: String?
+    ): Result<Unit> {
+        val cleanName = name.trim().ifBlank { "Gruppo" }
+        val cleanDesc = description.trim()
+        val cleanPhoto = photoBase64?.trim() ?: ""
+
+        return try {
+            if (firestore != null && groupId.isNotBlank()) {
+                firestore.collection("groups").document(groupId)
+                    .update(
+                        mapOf(
+                            "name" to cleanName,
+                            "description" to cleanDesc,
+                            "photoBase64" to cleanPhoto
+                        )
+                    )
+                    .await()
+            }
+            _userGroupsState.value = _userGroupsState.value.map {
+                if (it.id == groupId) {
+                    it.copy(name = cleanName, description = cleanDesc, photoBase64 = cleanPhoto)
+                } else it
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "updateGroupInfo failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
     suspend fun updateGroupAccessPolicy(groupId: String, requiresApproval: Boolean): Result<Unit> {
         return try {
             if (firestore != null) {
@@ -850,7 +889,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                                         joinCode = gDoc.getString("joinCode") ?: "---",
                                         ownerId = gDoc.getString("ownerId") ?: "",
                                         description = gDoc.getString("description") ?: "",
-                                        createdAt = gDoc.getLong("createdAt") ?: System.currentTimeMillis()
+                                        createdAt = gDoc.getLong("createdAt") ?: System.currentTimeMillis(),
+                                        photoBase64 = gDoc.getString("photoBase64") ?: ""
                                     )
                                     val updated = (_userGroupsState.value + gData).distinctBy { it.id }
                                     _userGroupsState.value = updated
@@ -887,6 +927,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                         description = doc.getString("description") ?: "",
                         createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
                         requiresApproval = reqApproval,
+                        photoBase64 = doc.getString("photoBase64") ?: "",
                         userMembershipStatus = currentStatus
                     )
 
@@ -987,7 +1028,8 @@ class FirebaseRepository private constructor(private val context: Context) {
     suspend fun createGroup(
         name: String,
         description: String = "",
-        requiresApproval: Boolean = true
+        requiresApproval: Boolean = true,
+        photoBase64: String = ""
     ): Result<GroupData> {
         val currentUser = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
         val groupId = "grp_${UUID.randomUUID().toString().take(8)}"
@@ -1001,6 +1043,7 @@ class FirebaseRepository private constructor(private val context: Context) {
             description = description,
             createdAt = System.currentTimeMillis(),
             requiresApproval = requiresApproval,
+            photoBase64 = photoBase64,
             userMembershipStatus = "ACTIVE"
         )
 
@@ -1013,7 +1056,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                     "ownerId" to newGroup.ownerId,
                     "description" to newGroup.description,
                     "createdAt" to newGroup.createdAt,
-                    "requiresApproval" to requiresApproval
+                    "requiresApproval" to requiresApproval,
+                    "photoBase64" to newGroup.photoBase64
                 )
                 firestore.collection("groups").document(groupId).set(groupMap).await()
 
@@ -1069,6 +1113,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                         description = doc.getString("description") ?: "",
                         createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
                         requiresApproval = reqApproval,
+                        photoBase64 = doc.getString("photoBase64") ?: "",
                         userMembershipStatus = "ACTIVE"
                     )
 

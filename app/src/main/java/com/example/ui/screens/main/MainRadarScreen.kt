@@ -144,6 +144,7 @@ fun MainRadarScreen(
     var placeToEdit by remember { mutableStateOf<SavedPlace?>(null) }
     var showAddPlaceDialog by remember { mutableStateOf(false) }
     var showEditProfileDialog by remember { mutableStateOf(false) }
+    var showEditGroupDialog by remember { mutableStateOf(false) }
     var memberToKick by remember { mutableStateOf<GroupMember?>(null) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showSosConfirmDialog by remember { mutableStateOf(false) }
@@ -436,6 +437,7 @@ fun MainRadarScreen(
                                 isAutoTripShared = isAutoTripShared,
                                 isSimulationRunning = isSimulationRunning,
                                 onEditProfileClick = { showEditProfileDialog = true },
+                                onEditGroupClick = { showEditGroupDialog = true },
                                 onSwitchGroup = onSwitchGroup,
                                 onUpdateInterval = { sec ->
                                     repository.setTrackingFrequencySeconds(sec)
@@ -809,6 +811,30 @@ fun MainRadarScreen(
                     Toast.makeText(
                         context,
                         if (res.isSuccess) "Profilo aggiornato"
+                        else "Errore salvataggio: ${res.exceptionOrNull()?.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        )
+    }
+
+    if (showEditGroupDialog && currentGroup != null) {
+        EditGroupDialog(
+            group = currentGroup,
+            onDismiss = { showEditGroupDialog = false },
+            onSave = { newName, newDescription, newPhotoBase64 ->
+                coroutineScope.launch {
+                    val res = repository.updateGroupInfo(
+                        groupId = currentGroup.id,
+                        name = newName,
+                        description = newDescription,
+                        photoBase64 = newPhotoBase64
+                    )
+                    showEditGroupDialog = false
+                    Toast.makeText(
+                        context,
+                        if (res.isSuccess) "Gruppo aggiornato"
                         else "Errore salvataggio: ${res.exceptionOrNull()?.message}",
                         Toast.LENGTH_SHORT
                     ).show()
@@ -2174,6 +2200,7 @@ private fun SettingsPanel(
     isAutoTripShared: Boolean,
     isSimulationRunning: Boolean,
     onEditProfileClick: () -> Unit,
+    onEditGroupClick: () -> Unit,
     onSwitchGroup: () -> Unit,
     onUpdateInterval: (Int) -> Unit,
     onToggleTracking: (Boolean) -> Unit,
@@ -2434,8 +2461,34 @@ private fun SettingsPanel(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md)
                 ) {
+                    val groupBitmap = remember(currentGroup?.photoBase64) {
+                        ImageUtils.base64ToBitmap(currentGroup?.photoBase64?.ifBlank { null })
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(Sizes.avatarMd)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (groupBitmap != null) {
+                            Image(
+                                bitmap = groupBitmap.asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Group,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(Sizes.iconMd)
+                            )
+                        }
+                    }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "GRUPPO ATTIVO",
@@ -2443,24 +2496,13 @@ private fun SettingsPanel(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(Modifier.height(Spacing.xxs))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
-                        ) {
-                            Icon(
-                                Icons.Default.Group,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(Sizes.iconMd)
-                            )
-                            Text(
-                                text = currentGroup?.name ?: "Nessun gruppo",
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                        Text(
+                            text = currentGroup?.name ?: "Nessun gruppo",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         Spacer(Modifier.height(Spacing.xxs))
                         Text(
                             text = "$activeMemberCount membri attivi" +
@@ -2469,22 +2511,40 @@ private fun SettingsPanel(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                }
+
+                Spacer(Modifier.height(Spacing.md))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
                     OutlinedButton(
                         onClick = onSwitchGroup,
                         shape = RoundedCornerShape(Radius.sm),
+                        modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)
                     ) {
                         Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                         Spacer(Modifier.width(Spacing.xs))
                         Text("Cambia")
                     }
+                    if (isOwnerOrAdmin && currentGroup != null) {
+                        OutlinedButton(
+                            onClick = onEditGroupClick,
+                            shape = RoundedCornerShape(Radius.sm),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("edit_group_button"),
+                            contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                            Spacer(Modifier.width(Spacing.xs))
+                            Text("Modifica")
+                        }
+                    }
                 }
 
-                // La riga sta QUI, fra il nome del gruppo e le sue impostazioni,
-                // non piu' in mezzo alle impostazioni stesse: e' il titolo che
-                // va staccato da cio' che governa.
-                Spacer(Modifier.height(Spacing.md))
-                HairlineDivider()
                 Spacer(Modifier.height(Spacing.md))
 
                 Surface(
@@ -2786,7 +2846,10 @@ private fun SettingsToggleRow(
             tint = iconTint,
             modifier = Modifier.size(Sizes.iconMd)
         )
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xxs)
+        ) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,

@@ -11,28 +11,27 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.window.Dialog
-import com.example.ui.components.GlassSurface
+import androidx.compose.ui.draw.clip
 import com.example.ui.theme.Radius
-import com.example.ui.theme.Spacing
+import com.example.ui.theme.Sizes
 import androidx.core.content.ContextCompat
 import com.example.model.DeepLinkTarget
 import com.example.repository.FirebaseRepository
@@ -208,53 +207,56 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
     }
 
     updateInfo?.let { info ->
-        Dialog(onDismissRequest = { updateInfo = null }) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Spacing.lg)
-            ) {
-                GlassSurface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(Radius.lg),
-                    contentPadding = Spacing.lg
+        AlertDialog(
+            onDismissRequest = { updateInfo = null },
+            shape = RoundedCornerShape(Radius.xl),
+            containerColor = MaterialTheme.colorScheme.surface,
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(Sizes.avatarLg)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                        Text(
-                            text = "Aggiornamento disponibile",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Versione ${info.versionName}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(Spacing.xs))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            TextButton(onClick = { updateInfo = null }) {
-                                Text("Dopo", style = MaterialTheme.typography.labelLarge)
-                            }
-                            Spacer(Modifier.width(Spacing.xs))
-                            TextButton(onClick = {
-                                AppUpdater.downloadAndInstall(context, info.apkUrl)
-                                updateInfo = null
-                            }) {
-                                Text(
-                                    "Aggiornare",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
+                    Icon(
+                        Icons.Default.SystemUpdate,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(Sizes.iconLg)
+                    )
                 }
+            },
+            title = {
+                Text(
+                    text = "Aggiornamento disponibile",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    text = "È disponibile la versione ${info.versionName}. Scaricala e installala ora.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        AppUpdater.downloadAndInstall(context, info.apkUrl)
+                        updateInfo = null
+                    },
+                    shape = RoundedCornerShape(Radius.sm)
+                ) { Text("Aggiornare") }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { updateInfo = null },
+                    shape = RoundedCornerShape(Radius.sm)
+                ) { Text("Dopo") }
             }
-        }
+        )
     }
 
     Crossfade(targetState = currentScreen, label = "screen_crossfade") { screen ->

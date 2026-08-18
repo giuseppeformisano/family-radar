@@ -621,14 +621,20 @@ fun OsmMapView(
                                 minLon = min(minLon, it.longitude)
                                 maxLon = max(maxLon, it.longitude)
                             }
-                            val margin = 0.005
+                            val latSpan = maxLat - minLat
+                            val lonSpan = maxLon - minLon
+                            // Margine proporzionale: 20% del lato maggiore, minimo 0.003°
+                            // (~330 m) per non incollare i marker agli angoli anche su
+                            // brevi distanze. Il secondo parametro di zoomToBoundingBox
+                            // aggiunge 80 px di bordo schermo sopra il bounding box calcolato.
+                            val margin = maxOf(0.003, maxOf(latSpan, lonSpan) * 0.20)
                             val boundingBox = BoundingBox(
                                 maxLat + margin,
                                 maxLon + margin,
                                 minLat - margin,
                                 minLon - margin
                             )
-                            mapViewInstance?.zoomToBoundingBox(boundingBox, true)
+                            mapViewInstance?.zoomToBoundingBox(boundingBox, true, 80)
                         }
                     }
                 },

@@ -586,8 +586,12 @@ fun MainRadarScreen(
                 memberCount = activeMembers.size,
                 // Stessa soglia del PresenceDot: con due valori separati il
                 // conteggio in intestazione poteva contraddire i pallini sotto.
-                onlineCount = locations.count {
-                    System.currentTimeMillis() - it.timestamp < PRESENCE_ONLINE_MS
+                // Solo i membri ACTIVE contano come "online": un membro PENDING
+                // puo' avere una posizione nella collection ma non e' ancora nel
+                // gruppo, e mostrarlo come online contraddirebbe il conteggio membri.
+                onlineCount = locations.count { loc ->
+                    System.currentTimeMillis() - loc.timestamp < PRESENCE_ONLINE_MS &&
+                        activeMembers.any { it.userId == loc.userId }
                 },
                 onSwitchGroup = onSwitchGroup,
                 onOpenSettings = { openPanel(RadarPanel.SETTINGS) },

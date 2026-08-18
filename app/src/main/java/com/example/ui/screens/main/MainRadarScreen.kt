@@ -1099,6 +1099,10 @@ fun MainRadarScreen(
     selectedSnapshotClusterForGallery?.let { cluster ->
         SnapshotClusterGalleryDialog(
             snapshots = cluster.snapshots,
+            currentUserId = currentUserId,
+            onDelete = { snapshot ->
+                coroutineScope.launch { repository.deletePlaceSnapshot(snapshot.id) }
+            },
             onDismiss = { selectedSnapshotClusterForGallery = null }
         )
     }

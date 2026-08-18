@@ -19,7 +19,8 @@ data class ChatMessage(
     val timestamp: Long = System.currentTimeMillis(),
     val type: MessageType = MessageType.TEXT,
     val latitude: Double? = null,
-    val longitude: Double? = null
+    val longitude: Double? = null,
+    val snapshotId: String = ""
 ) {
     /**
      * Returns the image model suitable for Coil AsyncImage.

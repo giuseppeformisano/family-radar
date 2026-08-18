@@ -2683,7 +2683,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                     "timestamp" to msg.timestamp,
                     "type" to msg.type.name,
                     "latitude" to (msg.latitude ?: 0.0),
-                    "longitude" to (msg.longitude ?: 0.0)
+                    "longitude" to (msg.longitude ?: 0.0),
+                    "snapshotId" to msg.snapshotId
                 )
                 firestore.collection("groups").document(groupId)
                     .collection("messages").document(msg.id).set(map)
@@ -2772,7 +2773,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                     timestamp = newSnapshot.timestamp,
                     type = MessageType.IMAGE,
                     latitude = newSnapshot.latitude,
-                    longitude = newSnapshot.longitude
+                    longitude = newSnapshot.longitude,
+                    snapshotId = newSnapshot.id
                 )
                 sendMessage(currentGroup, snapMsg)
             }
@@ -2790,6 +2792,20 @@ class FirebaseRepository private constructor(private val context: Context) {
             if (firestore != null && currentGroup.isNotBlank()) {
                 firestore.collection("groups").document(currentGroup)
                     .collection("snapshots").document(snapshotId).delete().await()
+
+                // Delete associated chat messages that reference this snapshot
+                val messageDocs = firestore.collection("groups").document(currentGroup)
+                    .collection("messages")
+                    .whereEqualTo("snapshotId", snapshotId)
+                    .get().await()
+                for (doc in messageDocs.documents) {
+                    runCatching { doc.reference.delete().await() }
+                }
+                // Also remove them from the local StateFlow
+                val deletedIds = messageDocs.documents.map { it.id }.toSet()
+                if (deletedIds.isNotEmpty()) {
+                    _currentGroupMessages.value = _currentGroupMessages.value.filterNot { it.id in deletedIds }
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "deletePlaceSnapshot firestore failed: ${e.message}")

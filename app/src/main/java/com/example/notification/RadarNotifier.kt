@@ -132,24 +132,6 @@ object RadarNotifier {
             requestCode = childId
         )
 
-        val child = NotificationCompat.Builder(context, CHANNEL_CHAT)
-            .setSmallIcon(R.drawable.ic_radar_notification)
-            .setContentTitle(senderName)
-            .setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setWhen(timestamp)
-            .setShowWhen(true)
-            .setAutoCancel(true)
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setGroup(groupKey)
-            // Solo il riepilogo suona e mostra il banner. Senza questa riga
-            // alertano anche i figli: due avvisi per messaggio, che e' esattamente
-            // l'effetto "non sono raggruppate".
-            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
-            .setContentIntent(intent)
-            .build()
-
         // Il conteggio non puo' basarsi solo sulla mappa in memoria: una push FCM
         // puo' risvegliare un processo nuovo, azzerandola, mentre in status bar le
         // notifiche precedenti ci sono ancora. Si prende il massimo fra i due.
@@ -185,7 +167,6 @@ object RadarNotifier {
             )
             .build()
 
-        post(context, childId, child)
         post(context, summaryNotificationId(groupId), summary)
     }
 

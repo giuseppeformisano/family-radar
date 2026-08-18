@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
@@ -227,6 +228,8 @@ fun FullScreenMediaViewer(
 fun SnapshotClusterGalleryDialog(
     snapshots: List<PlaceSnapshot>,
     initialIndex: Int = 0,
+    currentUserId: String = "",
+    onDelete: ((PlaceSnapshot) -> Unit)? = null,
     onDismiss: () -> Unit
 ) {
     if (snapshots.isEmpty()) return
@@ -238,6 +241,7 @@ fun SnapshotClusterGalleryDialog(
         pageCount = { snapshots.size }
     )
     var isDownloading by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     val currentSnapshot = snapshots.getOrNull(pagerState.currentPage) ?: snapshots.first()
 
@@ -298,37 +302,76 @@ fun SnapshotClusterGalleryDialog(
                         )
                     }
 
-                    IconButton(
-                        onClick = {
-                            if (isDownloading) return@IconButton
-                            coroutineScope.launch {
-                                isDownloading = true
-                                val success = ImageUtils.saveBase64ToGallery(context, currentSnapshot.photoBase64)
-                                isDownloading = false
-                                if (success) {
-                                    Toast.makeText(context, "Foto salvata nella Galleria!", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(context, "Errore durante il salvataggio", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        },
-                        modifier = Modifier.size(44.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (isDownloading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = "Salva",
-                                tint = Color.White
-                            )
+                        IconButton(
+                            onClick = {
+                                if (isDownloading) return@IconButton
+                                coroutineScope.launch {
+                                    isDownloading = true
+                                    val success = ImageUtils.saveBase64ToGallery(context, currentSnapshot.photoBase64)
+                                    isDownloading = false
+                                    if (success) {
+                                        Toast.makeText(context, "Foto salvata nella Galleria!", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        Toast.makeText(context, "Errore durante il salvataggio", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            modifier = Modifier.size(44.dp)
+                        ) {
+                            if (isDownloading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = "Salva",
+                                    tint = Color.White
+                                )
+                            }
+                        }
+
+                        if (onDelete != null) {
+                            IconButton(
+                                onClick = { showDeleteConfirm = true },
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Elimina istantanea",
+                                    tint = Color(0xFFFF6B6B)
+                                )
+                            }
                         }
                     }
                 }
+            }
+
+            if (showDeleteConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteConfirm = false },
+                    title = { Text("Elimina istantanea") },
+                    text = { Text("L'istantanea verrà rimossa dalla mappa e dalla chat.") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showDeleteConfirm = false
+                            onDelete?.invoke(currentSnapshot)
+                            if (snapshots.size == 1) onDismiss()
+                        }) {
+                            Text("Elimina")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteConfirm = false }) {
+                            Text("Annulla")
+                        }
+                    }
+                )
             }
 
             // Horizontal Pager for gallery browsing - fills central space safely

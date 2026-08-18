@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.model.GroupMember
+import com.example.ui.theme.Sizes
+import com.example.ui.theme.Spacing
 import com.example.util.ImageUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

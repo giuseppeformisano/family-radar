@@ -98,35 +98,45 @@ fun EditGroupProfileDialog(
                 )
 
                 // Avatar Preview
+                //
+                // Il contenitore esterno NON ritaglia: prima il badge della
+                // fotocamera era figlio del cerchio dell'avatar, che gli tagliava
+                // l'angolo in basso a destra e lo mostrava mozzato. Il ritaglio
+                // circolare resta solo sull'avatar.
                 Box(
-                    modifier = Modifier
-                        .size(96.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                        .clickable { photoPickerLauncher.launch("image/*") },
+                    modifier = Modifier.size(96.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (isProcessingImage) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(32.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            strokeWidth = 3.dp
-                        )
-                    } else if (avatarBitmap != null) {
-                        Image(
-                            bitmap = avatarBitmap!!.asImageBitmap(),
-                            contentDescription = "Avatar",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Text(
-                            text = displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U",
-                            fontSize = 36.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                            .clickable { photoPickerLauncher.launch("image/*") },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isProcessingImage) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(32.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 3.dp
+                            )
+                        } else if (avatarBitmap != null) {
+                            Image(
+                                bitmap = avatarBitmap!!.asImageBitmap(),
+                                contentDescription = "Avatar",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Text(
+                                text = displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U",
+                                fontSize = 36.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
                     }
 
                     // Camera overlay icon badge
@@ -135,7 +145,9 @@ fun EditGroupProfileDialog(
                             .align(Alignment.BottomEnd)
                             .size(28.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary),
+                            .background(MaterialTheme.colorScheme.primary)
+                            .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                            .clickable { photoPickerLauncher.launch("image/*") },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(

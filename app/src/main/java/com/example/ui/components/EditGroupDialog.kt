@@ -255,34 +255,43 @@ fun GroupPhotoPicker(
     onClick: () -> Unit,
     size: androidx.compose.ui.unit.Dp = Sizes.avatarXl
 ) {
+    // Il contenitore esterno NON ritaglia: prima il badge era figlio del cerchio
+    // dell'avatar, che gli tagliava l'angolo in basso a destra e mostrava una
+    // fotocamera mozzata. Qui il ritaglio circolare resta solo sull'avatar e il
+    // badge gli si appoggia sopra libero.
     Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
-            .clickable(onClick = onClick),
+        modifier = Modifier.size(size),
         contentAlignment = Alignment.Center
     ) {
-        when {
-            isLoading -> CircularProgressIndicator(
-                modifier = Modifier.size(Sizes.iconXl),
-                color = MaterialTheme.colorScheme.primary,
-                strokeWidth = 3.dp
-            )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer)
+                .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            when {
+                isLoading -> CircularProgressIndicator(
+                    modifier = Modifier.size(Sizes.iconXl),
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 3.dp
+                )
 
-            bitmap != null -> Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = "Immagine del gruppo",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
+                bitmap != null -> Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Immagine del gruppo",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
 
-            else -> Text(
-                text = fallbackLetter,
-                style = MaterialTheme.typography.displaySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+                else -> Text(
+                    text = fallbackLetter,
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
         }
 
         Box(
@@ -290,7 +299,11 @@ fun GroupPhotoPicker(
                 .align(Alignment.BottomEnd)
                 .size(Sizes.iconLg)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
+                .background(MaterialTheme.colorScheme.primary)
+                // Anello del colore della superficie: stacca il badge dal bordo
+                // dell'avatar, che altrimenti gli passa dietro e lo confonde.
+                .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             Icon(

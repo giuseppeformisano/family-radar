@@ -97,7 +97,7 @@ fun MainRadarScreen(
 
     val currentUser by repository.currentUserState.collectAsState()
     val userGroups by repository.userGroupsState.collectAsState()
-    val locations by repository.currentGroupLocations.collectAsState()
+    val rawLocations by repository.currentGroupLocations.collectAsState()
     val places by repository.currentGroupPlaces.collectAsState()
     val snapshots by repository.currentGroupSnapshots.collectAsState()
     val messages by repository.currentGroupMessages.collectAsState()
@@ -110,6 +110,26 @@ fun MainRadarScreen(
     val isAutoTripEnabled by repository.isAutoTripEnabled.collectAsState()
     val isAutoTripShared by repository.isAutoTripShared.collectAsState()
     val deepLinkTarget by repository.deepLinkTarget.collectAsState()
+
+    // Il nome da mostrare e' quello scelto PER QUESTO GRUPPO, non quello
+    // dell'account. updateLocation scrive user.displayName — cioe' il nome
+    // dell'account Google — dentro il documento della posizione, mentre il nome
+    // di gruppo e la sua foto vivono in members/{uid} e li cambia
+    // updateGroupMemberProfile. Sulla mappa e nel carosello si leggeva quindi
+    // "Giuseppe" anche dopo averlo rinominato "Giuseppe tablet".
+    // Si innesta qui, una volta sola: cosi' la correzione vale per la mappa, il
+    // carosello e ogni altro consumatore, e ha effetto subito invece di
+    // aspettare il prossimo fix del membro.
+    val locations = remember(rawLocations, members) {
+        rawLocations.map { loc ->
+            val member = members.find { it.userId == loc.userId } ?: return@map loc
+            loc.copy(
+                userName = member.displayName.ifBlank { loc.userName },
+                nickname = member.nickname?.ifBlank { null } ?: loc.nickname,
+                photoBase64 = member.photoBase64?.ifBlank { null } ?: loc.photoBase64
+            )
+        }
+    }
 
     val currentGroup = userGroups.find { it.id == currentUser?.currentGroupId } ?: userGroups.firstOrNull()
     val currentUserId = currentUser?.uid ?: ""
@@ -146,6 +166,7 @@ fun MainRadarScreen(
     var showEditGroupDialog by remember { mutableStateOf(false) }
     var memberToKick by remember { mutableStateOf<GroupMember?>(null) }
     var showLeaveDialog by remember { mutableStateOf(false) }
+    var showDeleteGroupDialog by remember { mutableStateOf(false) }
     var showSosConfirmDialog by remember { mutableStateOf(false) }
     var targetMapFocus by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     // Il token forza il ri-centraggio anche quando le coordinate non cambiano.
@@ -427,6 +448,7 @@ fun MainRadarScreen(
                             RadarPanel.SETTINGS -> SettingsPanel(
                                 currentUser = currentUser,
                                 currentGroup = currentGroup,
+                                currentUserId = currentUserId,
                                 myMember = members.find { it.userId == currentUserId },
                                 isOwnerOrAdmin = isOwnerOrAdmin,
                                 activeMemberCount = activeMembers.size,
@@ -495,6 +517,7 @@ fun MainRadarScreen(
                                 },
                                 onToggleSimulation = { isSimulationRunning = it },
                                 onRequestLeaveGroup = { showLeaveDialog = true },
+                                onRequestDeleteGroup = { showDeleteGroupDialog = true },
                                 onLogout = {
                                     LocationTrackingService.stop(context)
                                     repository.signOut()
@@ -933,6 +956,34 @@ fun MainRadarScreen(
                 }
             },
             onDismiss = { memberToKick = null }
+        )
+    }
+
+    if (showDeleteGroupDialog && currentGroup != null) {
+        ConfirmDialog(
+            icon = Icons.Default.DeleteForever,
+            iconTint = MaterialTheme.colorScheme.error,
+            title = "Elimina gruppo",
+            // Il messaggio elenca cosa sparisce: "sei sicuro?" non dice a
+            // nessuno che sta per perdere anche chat, luoghi e viaggi.
+            message = "Eliminare '${currentGroup.name}' per tutti i membri?\n\n" +
+                "Spariscono definitivamente messaggi, luoghi, istantanee e viaggi " +
+                "del gruppo. L'operazione non si può annullare.",
+            confirmLabel = "Elimina",
+            onConfirm = {
+                showDeleteGroupDialog = false
+                coroutineScope.launch {
+                    val res = repository.deleteGroup(currentGroup.id)
+                    Toast.makeText(
+                        context,
+                        if (res.isSuccess) "Gruppo eliminato"
+                        else "Errore: ${res.exceptionOrNull()?.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    if (res.isSuccess) onSwitchGroup()
+                }
+            },
+            onDismiss = { showDeleteGroupDialog = false }
         )
     }
 
@@ -2274,6 +2325,7 @@ private fun GeofenceAlertRow(alert: GeofenceEvent) {
 private fun SettingsPanel(
     currentUser: UserData?,
     currentGroup: GroupData?,
+    currentUserId: String,
     myMember: GroupMember?,
     isOwnerOrAdmin: Boolean,
     activeMemberCount: Int,
@@ -2298,6 +2350,7 @@ private fun SettingsPanel(
     onToggleAccessPolicy: (Boolean) -> Unit,
     onToggleSimulation: (Boolean) -> Unit,
     onRequestLeaveGroup: () -> Unit,
+    onRequestDeleteGroup: () -> Unit,
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
@@ -2601,6 +2654,10 @@ private fun SettingsPanel(
 
                 Spacer(Modifier.height(Spacing.md))
 
+                // Tutte le azioni sul gruppo stanno qui, dove si vede di quale
+                // gruppo si parla. Abbandona stava in "Account", cioe' in una
+                // sezione che parla dell'utente e non del gruppo: chi cercava
+                // come uscire da QUESTO gruppo non lo trovava dove guardava.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
@@ -2609,7 +2666,7 @@ private fun SettingsPanel(
                         onClick = onSwitchGroup,
                         shape = RoundedCornerShape(Radius.sm),
                         modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm)
                     ) {
                         Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                         Spacer(Modifier.width(Spacing.xs))
@@ -2622,11 +2679,56 @@ private fun SettingsPanel(
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag("edit_group_button"),
-                            contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)
+                            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm)
                         ) {
                             Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                             Spacer(Modifier.width(Spacing.xs))
                             Text("Modifica")
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(Spacing.sm))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
+                    // Il proprietario non abbandona: se ne andasse lascerebbe il
+                    // gruppo senza padrone. Per lui l'azione giusta e' eliminarlo.
+                    if (currentGroup != null && currentGroup.ownerId != currentUserId) {
+                        OutlinedButton(
+                            onClick = onRequestLeaveGroup,
+                            shape = RoundedCornerShape(Radius.sm),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("leave_group_button"),
+                            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm)
+                        ) {
+                            Icon(Icons.Default.ExitToApp, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                            Spacer(Modifier.width(Spacing.xs))
+                            Text("Abbandona")
+                        }
+                    }
+                    if (isOwnerOrAdmin && currentGroup != null) {
+                        Button(
+                            onClick = onRequestDeleteGroup,
+                            shape = RoundedCornerShape(Radius.sm),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("delete_group_button"),
+                            contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm)
+                        ) {
+                            Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                            Spacer(Modifier.width(Spacing.xs))
+                            Text("Elimina")
                         }
                     }
                 }
@@ -2721,32 +2823,16 @@ private fun SettingsPanel(
         }
 
         // ---- Account ----
-        // Un solo pulsante pieno e rosso: prima lo erano entrambi e gridavano
-        // allo stesso modo, mentre uscire da un gruppo e disconnettere l'account
-        // hanno conseguenze molto diverse.
+        // Qui resta solo cio' che riguarda l'ACCOUNT. Abbandona il gruppo e'
+        // passato alla scheda del gruppo, insieme alle altre azioni sul gruppo.
         item {
             SettingsCard {
                 SettingsSectionHeader(
                     title = "Account",
-                    subtitle = "Uscita dal gruppo e disconnessione",
+                    subtitle = "Disconnessione da questo dispositivo",
                     icon = Icons.Default.ManageAccounts
                 )
                 Spacer(Modifier.height(Spacing.xs))
-                OutlinedButton(
-                    onClick = onRequestLeaveGroup,
-                    shape = RoundedCornerShape(Radius.sm),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("leave_group_button")
-                ) {
-                    Icon(Icons.Default.ExitToApp, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
-                    Spacer(Modifier.width(Spacing.sm))
-                    Text("Abbandona il gruppo")
-                }
-                Spacer(Modifier.height(Spacing.sm))
                 Button(
                     onClick = onLogout,
                     shape = RoundedCornerShape(Radius.sm),

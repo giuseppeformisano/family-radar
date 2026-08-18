@@ -1355,6 +1355,79 @@ class FirebaseRepository private constructor(private val context: Context) {
     }
 
     /**
+     * Elimina il gruppo e tutto ciò che contiene. Irreversibile.
+     *
+     * Firestore non cancella le sottocollezioni insieme al documento padre: se si
+     * togliesse solo `groups/{id}`, membri, posizioni, messaggi, luoghi, eventi,
+     * istantanee e viaggi resterebbero orfani e continuerebbero a occupare spazio
+     * senza essere raggiungibili da nulla. Vanno svuotate una per una.
+     */
+    suspend fun deleteGroup(groupId: String): Result<Unit> {
+        val user = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
+        val group = _userGroupsState.value.find { it.id == groupId }
+        val myRole = _currentGroupMembers.value.find { it.userId == user.uid }?.role
+        if (group != null && group.ownerId != user.uid && myRole !in listOf("owner", "admin")) {
+            return Result.failure(Exception("Solo l'amministratore può eliminare il gruppo"))
+        }
+
+        return try {
+            val db = firestore
+            if (db != null) {
+                val groupRef = db.collection("groups").document(groupId)
+
+                for (name in listOf("members", "locations", "places", "messages", "events", "snapshots", "trips")) {
+                    try {
+                        val docs = groupRef.collection(name).get().await()
+                        for (doc in docs.documents) {
+                            // La traccia di un viaggio e' a sua volta in una
+                            // sottocollezione del viaggio: va tolta prima.
+                            if (name == "trips") {
+                                try {
+                                    doc.reference.collection("track").document("data").delete().await()
+                                } catch (_: Exception) {}
+                            }
+                            doc.reference.delete().await()
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "deleteGroup: pulizia '$name' fallita: ${e.message}")
+                    }
+                }
+
+                groupRef.delete().await()
+            }
+
+            unsubscribeFromGroupTopic(groupId)
+
+            val remaining = _userGroupsState.value.filterNot { it.id == groupId }
+            _userGroupsState.value = remaining
+
+            if (_currentUserState.value?.currentGroupId == groupId) {
+                cleanupGroupListeners()
+                _currentUserState.value = _currentUserState.value?.copy(currentGroupId = null)
+                groupIdDismissedByUser = groupId
+                // Persistita, altrimenti il documento utente si riemette e
+                // riporta dentro un gruppo che non esiste piu'.
+                try {
+                    db?.collection("users")?.document(user.uid)?.update(
+                        mapOf(
+                            "currentGroupId" to null,
+                            "lastApprovedGroupId" to null,
+                            "lastUpdated" to System.currentTimeMillis()
+                        )
+                    )?.await()
+                } catch (e: Exception) {
+                    Log.w(TAG, "deleteGroup: reset gruppo corrente fallito: ${e.message}")
+                }
+            }
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "deleteGroup failed: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Member leaves group: deletes member and location records, unsubscribes from FCM topic.
      */
     suspend fun leaveGroup(groupId: String): Result<Unit> {

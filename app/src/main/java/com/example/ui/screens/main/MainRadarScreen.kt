@@ -33,8 +33,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -55,6 +57,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.example.model.*
@@ -64,6 +67,7 @@ import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.BuildConfig
 import com.example.util.AppUpdater
+import com.example.util.CheckResult
 import com.example.util.ImageUtils
 import com.example.util.UpdateInfo
 import kotlinx.coroutines.delay
@@ -2924,9 +2928,7 @@ private fun SettingsPanel(
                 }
                 Spacer(Modifier.height(Spacing.sm))
                 var checking by remember { mutableStateOf(false) }
-                // null = nessun check completato; UpdateInfo = aggiornamento disponibile;
-                // "up_to_date" (stringa sentinella) = già aggiornato
-                var checkResult by remember { mutableStateOf<Any?>(null) }
+                var checkResult by remember { mutableStateOf<CheckResult?>(null) }
                 val checkScope = rememberCoroutineScope()
 
                 OutlinedButton(
@@ -2935,7 +2937,7 @@ private fun SettingsPanel(
                             checking = true
                             checkResult = null
                             checkScope.launch {
-                                checkResult = AppUpdater.check() ?: "up_to_date"
+                                checkResult = AppUpdater.checkDetailed()
                                 checking = false
                             }
                         }
@@ -2954,23 +2956,22 @@ private fun SettingsPanel(
                     Text(if (checking) "Controllo in corso..." else "Controlla aggiornamenti")
                 }
 
-                // Dialog risultato check aggiornamenti
                 when (val result = checkResult) {
-                    is UpdateInfo -> AlertDialog(
+                    is CheckResult.Available -> AlertDialog(
                         onDismissRequest = { checkResult = null },
                         title = { Text("Aggiornamento disponibile") },
-                        text = { Text("È disponibile la versione ${result.versionName}. Scaricala e installala ora.") },
+                        text = { Text("È disponibile la versione ${result.info.versionName}. Scaricala e installala ora.") },
                         confirmButton = {
                             Button(onClick = {
                                 checkResult = null
-                                AppUpdater.downloadAndInstall(context, result.apkUrl)
+                                AppUpdater.downloadAndInstall(context, result.info.apkUrl)
                             }) { Text("Aggiorna") }
                         },
                         dismissButton = {
                             OutlinedButton(onClick = { checkResult = null }) { Text("Dopo") }
                         }
                     )
-                    "up_to_date" -> AlertDialog(
+                    CheckResult.UpToDate -> AlertDialog(
                         onDismissRequest = { checkResult = null },
                         title = { Text("Sei aggiornato") },
                         text = { Text("Stai usando la versione ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}), che è l'ultima disponibile.") },
@@ -2978,6 +2979,15 @@ private fun SettingsPanel(
                             Button(onClick = { checkResult = null }) { Text("OK") }
                         }
                     )
+                    CheckResult.NetworkError -> AlertDialog(
+                        onDismissRequest = { checkResult = null },
+                        title = { Text("Impossibile verificare") },
+                        text = { Text("Controlla la connessione e riprova.") },
+                        confirmButton = {
+                            Button(onClick = { checkResult = null }) { Text("OK") }
+                        }
+                    )
+                    null -> Unit
                 }
             }
         }
@@ -3502,32 +3512,57 @@ private fun TripDetailDialog(
     val dateFormat = remember { SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.ITALY) }
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.ITALY) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = {
-            Icon(
-                if (trip.source == TripSource.AUTO) Icons.Default.AutoMode else Icons.Default.Route,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-        },
-        title = {
-            Column {
-                Text(
-                    text = listOfNotNull(trip.startPlaceName, trip.endPlaceName)
-                        .takeIf { it.size == 2 }?.joinToString(" → ")
-                        ?: "Viaggio di ${trip.userName}",
-                    style = MaterialTheme.typography.titleLarge
-                )
-                Text(
-                    text = dateFormat.format(Date(trip.startTime)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(Spacing.lg),
+            shape = RoundedCornerShape(Radius.xl),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(Spacing.xxl),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+            ) {
+                // Header: icon + title + close button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            if (trip.source == TripSource.AUTO) Icons.Default.AutoMode else Icons.Default.Route,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column {
+                            Text(
+                                text = listOfNotNull(trip.startPlaceName, trip.endPlaceName)
+                                    .takeIf { it.size == 2 }?.joinToString(" → ")
+                                    ?: "Viaggio di ${trip.userName}",
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Text(
+                                text = dateFormat.format(Date(trip.startTime)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Chiudi")
+                    }
+                }
+
+                // Stat tiles
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     TripStatTile(
                         label = "Distanza",
@@ -3569,27 +3604,31 @@ private fun TripDetailDialog(
                 trip.activityLabel?.let { TripDetailRow("Spostamento", it) }
                 TripDetailRow("Registrazione", trip.source.label)
                 TripDetailRow("Da", trip.userName)
-            }
-        },
-        confirmButton = {
-            if (isOnMap) {
-                OutlinedButton(onClick = onHideFromMap) {
-                    Icon(Icons.Default.LayersClear, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+
+                // Action buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Chiudi") }
                     Spacer(Modifier.width(Spacing.xs))
-                    Text("Togli dalla mappa")
-                }
-            } else {
-                Button(onClick = onShowOnMap) {
-                    Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
-                    Spacer(Modifier.width(Spacing.xs))
-                    Text("Mostra sulla mappa")
+                    if (isOnMap) {
+                        OutlinedButton(onClick = onHideFromMap) {
+                            Icon(Icons.Default.LayersClear, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                            Spacer(Modifier.width(Spacing.xs))
+                            Text("Togli dalla mappa")
+                        }
+                    } else {
+                        Button(onClick = onShowOnMap) {
+                            Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                            Spacer(Modifier.width(Spacing.xs))
+                            Text("Mostra sulla mappa")
+                        }
+                    }
                 }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Chiudi") }
         }
-    )
+    }
 }
 
 @Composable

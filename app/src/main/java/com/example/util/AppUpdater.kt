@@ -11,6 +11,7 @@ import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import com.example.BuildConfig
@@ -20,29 +21,56 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 data class UpdateInfo(val versionCode: Int, val versionName: String, val apkUrl: String)
+
+/** Risultato del check aggiornamenti: disponibile, già aggiornato, o errore rete. */
+sealed class CheckResult {
+    data class Available(val info: UpdateInfo) : CheckResult()
+    object UpToDate : CheckResult()
+    object NetworkError : CheckResult()
+}
 
 object AppUpdater {
 
     private const val RELEASES_URL =
         "https://api.github.com/repos/giuseppeformisano/family-radar/releases/tags/latest-debug"
     private const val CHANNEL_UPDATE = "radar_update"
-    private const val NOTIF_ID = 9001
+    private const val NOTIF_ID = 8_999  // era 9001 = conflitto con SOS_NOTIFICATION_ID
 
-    suspend fun check(): UpdateInfo? = withContext(Dispatchers.IO) {
+    // Timeout espliciti: OkHttpClient() senza configurazione ha timeout 0
+    // (aspetta indefinitamente). Su reti instabili il check si bloccava in
+    // silenzio e il dialog non compariva mai.
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .callTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+
+    /** Ritorna UpdateInfo se c'e' una versione piu' recente, null altrimenti. */
+    suspend fun check(): UpdateInfo? = checkDetailed().let {
+        if (it is CheckResult.Available) it.info else null
+    }
+
+    /** Come [check] ma distingue "gia' aggiornato" da "errore di rete". */
+    suspend fun checkDetailed(): CheckResult = withContext(Dispatchers.IO) {
         try {
-            val client = OkHttpClient()
-
             val releaseBody = client.newCall(
                 Request.Builder()
                     .url(RELEASES_URL)
                     .header("Accept", "application/vnd.github.v3+json")
                     .build()
-            ).execute().body?.string() ?: return@withContext null
+            ).execute().use { it.body?.string() } ?: return@withContext CheckResult.NetworkError
 
-            val assets = JSONObject(releaseBody).getJSONArray("assets")
+            val json = JSONObject(releaseBody)
+            // GitHub restituisce {"message":"..."} per errori (rate limit, 404…)
+            if (json.has("message") && !json.has("assets")) {
+                Log.w("AppUpdater", "GitHub API error: ${json.optString("message")}")
+                return@withContext CheckResult.NetworkError
+            }
 
+            val assets = json.getJSONArray("assets")
             var apkUrl: String? = null
             var versionCode: Int? = null
             var versionName: String? = null
@@ -55,7 +83,7 @@ object AppUpdater {
                             Request.Builder()
                                 .url(asset.getString("browser_download_url"))
                                 .build()
-                        ).execute().body?.string() ?: continue
+                        ).execute().use { it.body?.string() } ?: continue
                         val v = JSONObject(vBody)
                         versionCode = v.getInt("versionCode")
                         versionName = v.getString("versionName")
@@ -66,10 +94,16 @@ object AppUpdater {
                 }
             }
 
-            if (versionCode != null && versionCode > BuildConfig.VERSION_CODE && apkUrl != null) {
-                UpdateInfo(versionCode, versionName ?: "", apkUrl)
-            } else null
-        } catch (_: Exception) { null }
+            when {
+                versionCode == null || apkUrl == null -> CheckResult.NetworkError
+                versionCode > BuildConfig.VERSION_CODE ->
+                    CheckResult.Available(UpdateInfo(versionCode, versionName ?: "", apkUrl))
+                else -> CheckResult.UpToDate
+            }
+        } catch (e: Exception) {
+            Log.w("AppUpdater", "check() failed: ${e.message}")
+            CheckResult.NetworkError
+        }
     }
 
     fun downloadAndInstall(context: Context, apkUrl: String) {

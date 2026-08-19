@@ -23,6 +23,7 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.example.geofence.GeofenceHelper
+import com.example.R
 import com.example.model.*
 import com.example.model.Trip
 import com.example.model.TripPoint
@@ -302,7 +303,7 @@ class FirebaseRepository private constructor(private val context: Context) {
     }
 
     suspend fun updateMemberGroupTracking(groupId: String, isTrackingActive: Boolean): Result<Unit> {
-        val currentUser = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
+        val currentUser = _currentUserState.value ?: return Result.failure(Exception(str(R.string.err_not_authenticated)))
         return try {
             if (firestore != null) {
                 firestore.collection("groups").document(groupId)
@@ -561,7 +562,7 @@ class FirebaseRepository private constructor(private val context: Context) {
     }
 
     suspend fun sendFeedback(text: String): Result<Unit> {
-        val user = _currentUserState.value ?: return Result.failure(Exception("Non autenticato"))
+        val user = _currentUserState.value ?: return Result.failure(Exception(str(R.string.err_not_authenticated)))
         return try {
             val entry = hashMapOf(
                 "text" to text.trim(),
@@ -676,14 +677,14 @@ class FirebaseRepository private constructor(private val context: Context) {
                     Result.success(user)
                 }
             } else {
-                Result.failure(IllegalStateException("Tipo di credenziale Google non riconosciuto"))
+                Result.failure(IllegalStateException(str(R.string.err_google_credential_type)))
             }
         } catch (e: GetCredentialCancellationException) {
             Log.d(TAG, "Google Sign-In cancelled by user")
-            Result.failure(Exception("Accesso Google annullato"))
+            Result.failure(Exception(str(R.string.err_google_cancelled)))
         } catch (e: NoCredentialException) {
             Log.w(TAG, "No Google accounts available on this device: ${e.message}")
-            Result.failure(Exception("Nessun account Google trovato sul dispositivo/emulatore. Aggiungi un account Google nelle impostazioni di Android o usa l'accesso con Numero di Telefono o Email."))
+            Result.failure(Exception(str(R.string.err_google_no_account)))
         } catch (e: Exception) {
             Log.e(TAG, "signInWithGoogle failed: ${e.message}", e)
             val message = when {
@@ -704,7 +705,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         onVerificationFailed: (Exception) -> Unit
     ) {
         if (auth == null) {
-            onVerificationFailed(IllegalStateException("FirebaseAuth non inizializzato"))
+            onVerificationFailed(IllegalStateException(str(R.string.err_auth_not_initialized)))
             return
         }
 
@@ -780,7 +781,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                 loadUserGroupsFromFirestore(user.uid)
                 Result.success(user)
             } else {
-                Result.failure(IllegalStateException("FirebaseAuth non inizializzato"))
+                Result.failure(IllegalStateException(str(R.string.err_auth_not_initialized)))
             }
         } catch (e: Exception) {
             Log.e(TAG, "verifyPhoneCodeAndSignIn failed: ${e.message}", e)
@@ -1184,7 +1185,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         requiresApproval: Boolean = true,
         photoBase64: String = ""
     ): Result<GroupData> {
-        val currentUser = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
+        val currentUser = _currentUserState.value ?: return Result.failure(Exception(str(R.string.err_not_authenticated)))
         val groupId = "grp_${UUID.randomUUID().toString().take(8)}"
         val joinCode = generateJoinCode()
 
@@ -1244,7 +1245,7 @@ class FirebaseRepository private constructor(private val context: Context) {
      * Join group with access policy check (Direct access vs Pending approval).
      */
     suspend fun joinGroupByCode(joinCode: String): Result<String> {
-        val currentUser = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
+        val currentUser = _currentUserState.value ?: return Result.failure(Exception(str(R.string.err_not_authenticated)))
         val cleanCode = joinCode.trim().uppercase()
 
         try {
@@ -1371,7 +1372,7 @@ class FirebaseRepository private constructor(private val context: Context) {
             return Result.success("Accesso al gruppo '${existing.name}' confermato")
         }
 
-        return Result.failure(Exception("Codice invito non valido o gruppo inesistente"))
+        return Result.failure(Exception(str(R.string.err_invalid_join_code)))
     }
 
     /**
@@ -1471,11 +1472,11 @@ class FirebaseRepository private constructor(private val context: Context) {
      * senza essere raggiungibili da nulla. Vanno svuotate una per una.
      */
     suspend fun deleteGroup(groupId: String): Result<Unit> {
-        val user = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
+        val user = _currentUserState.value ?: return Result.failure(Exception(str(R.string.err_not_authenticated)))
         val group = _userGroupsState.value.find { it.id == groupId }
         val myRole = _currentGroupMembers.value.find { it.userId == user.uid }?.role
         if (group != null && group.ownerId != user.uid && myRole !in listOf("owner", "admin")) {
-            return Result.failure(Exception("Solo l'amministratore può eliminare il gruppo"))
+            return Result.failure(Exception(str(R.string.err_only_admin_can_delete_group)))
         }
 
         return try {
@@ -1539,7 +1540,7 @@ class FirebaseRepository private constructor(private val context: Context) {
      * Member leaves group: deletes member and location records, unsubscribes from FCM topic.
      */
     suspend fun leaveGroup(groupId: String): Result<Unit> {
-        val user = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
+        val user = _currentUserState.value ?: return Result.failure(Exception(str(R.string.err_not_authenticated)))
         return try {
             if (firestore != null) {
                 firestore.collection("groups").document(groupId)
@@ -1842,8 +1843,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                                         // TYPE 3: SOS Alert Message
                                         MessageType.SOS_ALERT -> {
                                             showLocalNotification(
-                                                title = "Allerta SOS",
-                                                body = "Richiesta di soccorso immediata inviata da $senderName",
+                                                title = str(R.string.notif_sos_title),
+                                                body = str(R.string.notif_sos_immediate_body, senderName),
                                                 isHighPriority = true,
                                                 notificationId = 999,
                                                 destination = "ALERT",
@@ -1927,8 +1928,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                                 val isAdmin = activeGroup?.ownerId == currentUid || targetAdminId == currentUid
                                 if (isAdmin && senderId != currentUid) {
                                     showLocalNotification(
-                                        title = "Nuova richiesta di adesione",
-                                        body = customMsg ?: "$userName ha richiesto di entrare nel gruppo",
+                                        title = str(R.string.notif_join_request_title),
+                                        body = customMsg ?: str(R.string.notif_join_request_body, userName),
                                         isHighPriority = false,
                                         notificationId = (timestamp % 100000).toInt(),
                                         destination = "MEMBERS",
@@ -1942,8 +1943,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     // TYPE 1: Geofence Entry
                                     "geofence_entry" -> {
                                         showLocalNotification(
-                                            title = "Arrivo a destinazione",
-                                            body = customMsg ?: "$userName è arrivato a $placeName",
+                                            title = str(R.string.notif_place_entry_title),
+                                            body = customMsg ?: str(R.string.msg_arrived_at, userName, placeName),
                                             isHighPriority = false,
                                             notificationId = (timestamp % 100000).toInt(),
                                             destination = "MAP",
@@ -1956,8 +1957,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     // TYPE 1: Geofence Exit
                                     "geofence_exit" -> {
                                         showLocalNotification(
-                                            title = "Partenza registrata",
-                                            body = customMsg ?: "$userName ha lasciato $placeName",
+                                            title = str(R.string.notif_place_exit_title),
+                                            body = customMsg ?: str(R.string.msg_left_place, userName, placeName),
                                             isHighPriority = false,
                                             notificationId = (timestamp % 100000).toInt(),
                                             destination = "MAP",
@@ -1970,8 +1971,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     // TYPE 3: SOS Alert Event
                                     "sos_alert" -> {
                                         showLocalNotification(
-                                            title = "Allerta di emergenza SOS",
-                                            body = customMsg ?: "$userName ha inviato una richiesta di soccorso",
+                                            title = str(R.string.notif_sos_emergency_title),
+                                            body = customMsg ?: str(R.string.notif_sos_emergency_body, userName),
                                             isHighPriority = true,
                                             notificationId = 999,
                                             destination = "ALERT",
@@ -2551,7 +2552,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                     id = UUID.randomUUID().toString(),
                     senderId = user.uid,
                     senderName = "Radar Alert",
-                    text = "$userName è arrivato a ${place.name}",
+                    text = str(R.string.msg_arrived_at, userName, place.name),
                     timestamp = System.currentTimeMillis(),
                     type = MessageType.GEOFENCE_ALERT
                 )
@@ -2600,7 +2601,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                     id = UUID.randomUUID().toString(),
                     senderId = user.uid,
                     senderName = "Radar Alert",
-                    text = "$userName ha lasciato $previousPlaceName",
+                    text = str(R.string.msg_left_place, userName, previousPlaceName),
                     timestamp = System.currentTimeMillis(),
                     type = MessageType.GEOFENCE_ALERT
                 )
@@ -2615,9 +2616,9 @@ class FirebaseRepository private constructor(private val context: Context) {
     // ================== PLACES / GEOFENCE ==================
 
     suspend fun addPlace(place: SavedPlace): Result<SavedPlace> {
-        val user = _currentUserState.value ?: return Result.failure(Exception("No user"))
+        val user = _currentUserState.value ?: return Result.failure(Exception(str(R.string.err_not_authenticated)))
         val currentGroup = user.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id
-            ?: return Result.failure(Exception("Nessun gruppo selezionato"))
+            ?: return Result.failure(Exception(str(R.string.err_no_group_selected)))
 
         val newPlace = place.copy(
             id = if (place.id.isBlank()) "plc_${UUID.randomUUID().toString().take(8)}" else place.id,
@@ -2663,10 +2664,10 @@ class FirebaseRepository private constructor(private val context: Context) {
      * creato il luogo.
      */
     suspend fun updatePlace(place: SavedPlace): Result<SavedPlace> {
-        val user = _currentUserState.value ?: return Result.failure(Exception("No user"))
+        val user = _currentUserState.value ?: return Result.failure(Exception(str(R.string.err_not_authenticated)))
         val currentGroup = user.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id
-            ?: return Result.failure(Exception("Nessun gruppo selezionato"))
-        if (place.id.isBlank()) return Result.failure(Exception("Luogo senza id"))
+            ?: return Result.failure(Exception(str(R.string.err_no_group_selected)))
+        if (place.id.isBlank()) return Result.failure(Exception(str(R.string.err_place_without_id)))
 
         // Se si spegne il geofence del luogo in cui ci si trova adesso, la
         // valutazione successiva non troverebbe più un luogo attivo e sparerebbe
@@ -2872,7 +2873,7 @@ class FirebaseRepository private constructor(private val context: Context) {
             if (!base64.isNullOrBlank()) {
                 Result.success(base64)
             } else {
-                Result.failure(Exception("Impossibile elaborare l'immagine"))
+                Result.failure(Exception(str(R.string.err_image_processing)))
             }
         } catch (e: Exception) {
             Log.e(TAG, "compressImageToBase64 error: ${e.message}", e)
@@ -2889,7 +2890,7 @@ class FirebaseRepository private constructor(private val context: Context) {
             if (!base64.isNullOrBlank()) {
                 Result.success(base64)
             } else {
-                Result.failure(Exception("Impossibile elaborare lo scatto fotografico"))
+                Result.failure(Exception(str(R.string.err_snapshot_processing)))
             }
         } catch (e: Exception) {
             Log.e(TAG, "compressBitmapToBase64 error: ${e.message}", e)
@@ -2900,9 +2901,9 @@ class FirebaseRepository private constructor(private val context: Context) {
     // ================== PLACE SNAPSHOTS (GEOREFERENCED PHOTOS) ==================
 
     suspend fun addPlaceSnapshot(snapshot: PlaceSnapshot): Result<PlaceSnapshot> {
-        val user = _currentUserState.value ?: return Result.failure(Exception("Utente non autenticato"))
+        val user = _currentUserState.value ?: return Result.failure(Exception(str(R.string.err_not_authenticated)))
         val currentGroup = user.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id
-            ?: return Result.failure(Exception("Nessun gruppo selezionato"))
+            ?: return Result.failure(Exception(str(R.string.err_no_group_selected)))
 
         val newSnapshot = snapshot.copy(
             id = if (snapshot.id.isBlank()) "snp_${UUID.randomUUID().toString().take(8)}" else snapshot.id,
@@ -2936,7 +2937,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                     senderId = user.uid,
                     senderName = user.displayName,
                     senderPhoto = user.photoBase64,
-                    text = if (newSnapshot.caption.isNotBlank()) "Nuova istantanea: ${newSnapshot.caption}" else "Ha pubblicato una nuova istantanea geolocalizzata",
+                    text = if (newSnapshot.caption.isNotBlank()) str(R.string.msg_new_snapshot_caption, newSnapshot.caption)
+                        else str(R.string.msg_new_snapshot),
                     imageBase64 = newSnapshot.photoBase64,
                     timestamp = newSnapshot.timestamp,
                     type = MessageType.IMAGE,
@@ -2996,7 +2998,7 @@ class FirebaseRepository private constructor(private val context: Context) {
             id = eventId,
             senderId = user.uid,
             senderName = user.displayName,
-            text = "Richiesta di assistenza immediata inviata",
+            text = str(R.string.msg_sos_sent),
             timestamp = timestamp,
             type = MessageType.SOS_ALERT
         )
@@ -3132,6 +3134,17 @@ class FirebaseRepository private constructor(private val context: Context) {
             it.timestamp > lastRead && it.senderId != myUid
         }
     }
+
+    /**
+     * Stringa localizzata secondo la scelta in Impostazioni.
+     *
+     * Il repository tiene l'application context, che ignora la lingua scelta
+     * nell'app: leggere da `context.getString` darebbe la lingua del dispositivo.
+     * Nome corto perche' compare decine di volte.
+     */
+    private fun str(resId: Int, vararg args: Any): String =
+        com.example.ui.theme.LanguagePreferences.localizedContext(context)
+            .getString(resId, *args)
 
     private fun generateJoinCode(): String {
         val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -3384,7 +3397,7 @@ class FirebaseRepository private constructor(private val context: Context) {
     }
 
     suspend fun stopAndSaveTrip(): Result<Unit> {
-        val trip = _activeTrip.value ?: return Result.failure(Exception("Nessun viaggio attivo"))
+        val trip = _activeTrip.value ?: return Result.failure(Exception(str(R.string.err_no_active_trip)))
 
         // La registrazione va chiusa e la cadenza ripristinata SUBITO, prima di
         // qualunque controllo che possa uscire con un errore: altrimenti un
@@ -3393,9 +3406,9 @@ class FirebaseRepository private constructor(private val context: Context) {
         _activeTrip.value = null
         applyEffectiveTrackingInterval()
 
-        val user = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
-        val groupId = user.currentGroupId ?: return Result.failure(Exception("Nessun gruppo"))
-        val db = firestore ?: return Result.failure(Exception("Firestore non disponibile"))
+        val user = _currentUserState.value ?: return Result.failure(Exception(str(R.string.err_not_authenticated)))
+        val groupId = user.currentGroupId ?: return Result.failure(Exception(str(R.string.err_no_group_selected)))
+        val db = firestore ?: return Result.failure(Exception(str(R.string.err_firestore_unavailable)))
 
         // Troppo corto per essere un viaggio: se era condiviso in diretta va
         // comunque rimosso, altrimenti resta un documento "in corso" per sempre.
@@ -3497,8 +3510,8 @@ class FirebaseRepository private constructor(private val context: Context) {
     }
 
     suspend fun deleteTrip(tripId: String): Result<Unit> {
-        val user = _currentUserState.value ?: return Result.failure(Exception("Utente non loggato"))
-        val groupId = user.currentGroupId ?: return Result.failure(Exception("Nessun gruppo"))
+        val user = _currentUserState.value ?: return Result.failure(Exception(str(R.string.err_not_authenticated)))
+        val groupId = user.currentGroupId ?: return Result.failure(Exception(str(R.string.err_no_group_selected)))
         return try {
             val tripRef = firestore?.collection("groups")?.document(groupId)
                 ?.collection("trips")?.document(tripId)

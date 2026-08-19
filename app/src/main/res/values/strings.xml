@@ -84,5 +84,28 @@
     <string name="update_failed_empty_response">Download non riuscito: risposta vuota</string>
     <string name="update_failed_empty_file">Download non riuscito: file vuoto</string>
     <string name="update_failed_reason">Download non riuscito: %1$s</string>
+    <!-- Errori e messaggi del repository -->
+    <string name="err_not_authenticated">Non sei autenticato</string>
+    <string name="err_no_group_selected">Nessun gruppo selezionato</string>
+    <string name="err_place_without_id">Luogo senza identificativo</string>
+    <string name="err_no_active_trip">Nessun viaggio attivo</string>
+    <string name="err_firestore_unavailable">Database non raggiungibile</string>
+    <string name="err_invalid_join_code">Codice invito non valido o gruppo inesistente</string>
+    <string name="err_only_admin_can_delete_group">Solo un amministratore può eliminare il gruppo</string>
+    <string name="err_image_processing">Impossibile elaborare la foto</string>
+    <string name="err_snapshot_processing">Impossibile elaborare lo scatto</string>
+    <string name="err_google_credential_type">Credenziale Google non riconosciuta</string>
+    <string name="err_google_cancelled">Accesso Google annullato</string>
+    <string name="err_google_no_account">Nessun account Google sul dispositivo. Aggiungine uno nelle impostazioni di Android, oppure accedi con telefono o email</string>
+    <string name="err_auth_not_initialized">Servizio di autenticazione non disponibile</string>
+    <string name="notif_sos_immediate_body">Richiesta di soccorso immediata inviata da %1$s</string>
+    <string name="notif_sos_emergency_title">Allerta di emergenza</string>
+    <string name="notif_sos_emergency_body">%1$s ha inviato una richiesta di soccorso</string>
+    <string name="msg_arrived_at">%1$s è arrivato a %2$s</string>
+    <string name="msg_left_place">%1$s ha lasciato %2$s</string>
+    <string name="msg_new_snapshot_caption">Nuova istantanea: %1$s</string>
+    <string name="msg_new_snapshot">Ha pubblicato una nuova istantanea geolocalizzata</string>
+    <string name="msg_sos_sent">Richiesta di assistenza immediata inviata</string>
 </resources>
+
 

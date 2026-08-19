@@ -67,5 +67,28 @@
     <string name="update_failed_empty_response">Download failed: empty response</string>
     <string name="update_failed_empty_file">Download failed: empty file</string>
     <string name="update_failed_reason">Download failed: %1$s</string>
+    <!-- Repository errors and messages -->
+    <string name="err_not_authenticated">You are not signed in</string>
+    <string name="err_no_group_selected">No group selected</string>
+    <string name="err_place_without_id">Place without an identifier</string>
+    <string name="err_no_active_trip">No active trip</string>
+    <string name="err_firestore_unavailable">Database unreachable</string>
+    <string name="err_invalid_join_code">Invalid invite code, or the group does not exist</string>
+    <string name="err_only_admin_can_delete_group">Only an administrator can delete the group</string>
+    <string name="err_image_processing">Could not process the photo</string>
+    <string name="err_snapshot_processing">Could not process the shot</string>
+    <string name="err_google_credential_type">Unrecognised Google credential</string>
+    <string name="err_google_cancelled">Google sign-in cancelled</string>
+    <string name="err_google_no_account">No Google account on this device. Add one in the Android settings, or sign in with phone or email</string>
+    <string name="err_auth_not_initialized">Authentication service unavailable</string>
+    <string name="notif_sos_immediate_body">Immediate help request sent by %1$s</string>
+    <string name="notif_sos_emergency_title">Emergency alert</string>
+    <string name="notif_sos_emergency_body">%1$s sent a help request</string>
+    <string name="msg_arrived_at">%1$s arrived at %2$s</string>
+    <string name="msg_left_place">%1$s left %2$s</string>
+    <string name="msg_new_snapshot_caption">New snapshot: %1$s</string>
+    <string name="msg_new_snapshot">Posted a new geotagged snapshot</string>
+    <string name="msg_sos_sent">Immediate assistance request sent</string>
 </resources>
+
 

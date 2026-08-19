@@ -7,5 +7,6 @@ data class FeedbackEntry(
     val userName: String = "",
     val timestamp: Long = 0L,
     val versionName: String = "",
-    val versionCode: Int = 0
+    val versionCode: Int = 0,
+    val status: String = "pending"
 )

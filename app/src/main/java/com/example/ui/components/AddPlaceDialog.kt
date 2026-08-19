@@ -486,6 +486,7 @@ fun AddPlaceDialog(
                     placeholder = { Text("Es. Casa di Marco") },
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp),
+                    keyboardOptions = KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Words),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("place_name_input")

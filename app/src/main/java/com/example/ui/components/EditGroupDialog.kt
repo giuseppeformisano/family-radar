@@ -199,6 +199,7 @@ fun EditGroupDialog(
                     singleLine = true,
                     shape = RoundedCornerShape(Radius.sm),
                     leadingIcon = { Icon(Icons.Default.Group, contentDescription = null) },
+                    keyboardOptions = KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Words),
                     modifier = Modifier.fillMaxWidth()
                 )
 

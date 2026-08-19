@@ -6,11 +6,15 @@
 package com.example.ui.screens.main
 
 import android.Manifest
+import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.pm.PackageManager
+import android.content.Intent
+import android.content.IntentFilter
+import android.location.LocationManager
 import android.net.Uri
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -65,6 +69,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -127,6 +132,26 @@ fun MainRadarScreen(
     val isAutoTripEnabled by repository.isAutoTripEnabled.collectAsState()
     val isAutoTripShared by repository.isAutoTripShared.collectAsState()
     val deepLinkTarget by repository.deepLinkTarget.collectAsState()
+
+    // GPS check — mostra dialog se GPS spento e non si è in risparmio batteria
+    val locationManager = remember { context.getSystemService(Context.LOCATION_SERVICE) as LocationManager }
+    var isGpsEnabled by remember {
+        mutableStateOf(locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER))
+    }
+    DisposableEffect(Unit) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context, intent: Intent) {
+                isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+            }
+        }
+        context.registerReceiver(receiver, IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION))
+        onDispose { runCatching { context.unregisterReceiver(receiver) } }
+    }
+    var showGpsDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(isGpsEnabled, isPowerSavingMode) {
+        if (!isGpsEnabled && !isPowerSavingMode) showGpsDialog = true
+        else if (isGpsEnabled) showGpsDialog = false
+    }
 
     // Il nome da mostrare e' quello scelto PER QUESTO GRUPPO, non quello
     // dell'account. updateLocation scrive user.displayName — cioe' il nome
@@ -554,12 +579,13 @@ fun MainRadarScreen(
                                 onToggleSimulation = { isSimulationRunning = it },
                                 onRequestLeaveGroup = { showLeaveDialog = true },
                                 onRequestDeleteGroup = { showDeleteGroupDialog = true },
-                                onLogout = {
+                                                onLogout = {
                                     LocationTrackingService.stop(context)
                                     repository.signOut()
                                 },
                                 onSendFeedback = { text -> repository.sendFeedback(text) },
-                                onFetchFeedback = { repository.fetchFeedback() }
+                                onFetchFeedback = { repository.fetchFeedback() },
+                                onUpdateFeedbackStatus = { id, status -> repository.updateFeedbackStatus(id, status) }
                             )
                         }
                     }
@@ -780,9 +806,12 @@ fun MainRadarScreen(
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
+                    .align(Alignment.TopStart)
                     .statusBarsPadding()
-                    .padding(top = if (!isSheetExpanded && locations.isNotEmpty()) 148.dp else 76.dp)
+                    .padding(
+                        start = Spacing.lg,
+                        top = if (!isSheetExpanded && locations.isNotEmpty()) 148.dp else 76.dp
+                    )
             ) {
                 val bannerName = followedLocation?.let {
                     if (!it.nickname.isNullOrBlank()) it.nickname!! else it.userName
@@ -796,8 +825,8 @@ fun MainRadarScreen(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                        modifier = Modifier.padding(start = Spacing.xs, end = Spacing.sm)
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                        modifier = Modifier.padding(start = Spacing.xs, end = Spacing.xs)
                     ) {
                         RadarAvatar(
                             name = bannerName,
@@ -805,20 +834,6 @@ fun MainRadarScreen(
                             size = Sizes.avatarSm,
                             ringColor = MaterialTheme.colorScheme.primary
                         )
-                        Column {
-                            Text(
-                                text = "Stai seguendo",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text(
-                                text = bannerName,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
                         Surface(
                             onClick = { followedUserId = null },
                             shape = RoundedCornerShape(Radius.pill),
@@ -827,10 +842,10 @@ fun MainRadarScreen(
                         ) {
                             Text(
                                 text = "Smetti",
-                                style = MaterialTheme.typography.labelMedium,
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.padding(
-                                    horizontal = Spacing.md,
+                                    horizontal = Spacing.sm,
                                     vertical = Spacing.xs
                                 )
                             )
@@ -1171,6 +1186,53 @@ fun MainRadarScreen(
     val isGroupDataLoading = currentGroup != null && currentUserId.isNotBlank() && members.isEmpty()
     if (isGroupDataLoading) {
         GroupLoadingOverlay()
+    }
+
+    if (showGpsDialog) {
+        Dialog(onDismissRequest = { showGpsDialog = false }) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(Radius.xl),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier.size(Sizes.avatarLg).clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.LocationOff, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(Sizes.iconLg))
+                    }
+                    Spacer(Modifier.height(Spacing.md))
+                    Text("GPS non attivo", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(Spacing.xs))
+                    Text(
+                        "Family Radar ha bisogno della posizione GPS per funzionare. Attiva il GPS nelle impostazioni.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(Spacing.xl))
+                    Button(
+                        onClick = {
+                            showGpsDialog = false
+                            context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(Radius.sm)
+                    ) { Text("Attiva GPS") }
+                    Spacer(Modifier.height(Spacing.sm))
+                    TextButton(
+                        onClick = { showGpsDialog = false },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Non adesso") }
+                }
+            }
+        }
     }
 }
 
@@ -2221,7 +2283,11 @@ private fun PlacesPanel(
                         onClick = onAddPlaceClick,
                         shape = RoundedCornerShape(Radius.sm),
                         contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
-                        modifier = Modifier.testTag("add_place_tab_fab")
+                        modifier = Modifier.testTag("add_place_tab_fab"),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiary,
+                            contentColor = MaterialTheme.colorScheme.onTertiary
+                        )
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                         Spacer(Modifier.width(Spacing.xs))
@@ -2446,7 +2512,8 @@ private fun SettingsPanel(
     onRequestDeleteGroup: () -> Unit,
     onLogout: () -> Unit,
     onSendFeedback: suspend (String) -> Unit,
-    onFetchFeedback: suspend () -> List<com.example.model.FeedbackEntry>
+    onFetchFeedback: suspend () -> List<com.example.model.FeedbackEntry>,
+    onUpdateFeedbackStatus: suspend (String, String) -> Unit
 ) {
     val context = LocalContext.current
     val currentThemeMode by ThemePreferences.themeModeFlow.collectAsState()
@@ -3117,8 +3184,14 @@ private fun SettingsPanel(
                         text = "Grazie per il tuo feedback!",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(vertical = Spacing.sm)
+                        modifier = Modifier.padding(vertical = Spacing.xs)
                     )
+                    Spacer(Modifier.height(Spacing.sm))
+                    OutlinedButton(
+                        onClick = { feedbackSent = false },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(Radius.sm)
+                    ) { Text("Invia altro feedback") }
                 } else {
                     OutlinedTextField(
                         value = feedbackText,
@@ -3128,7 +3201,8 @@ private fun SettingsPanel(
                         shape = RoundedCornerShape(Radius.sm),
                         minLines = 3,
                         maxLines = 6,
-                        enabled = !feedbackSending
+                        enabled = !feedbackSending,
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
                     )
                     Spacer(Modifier.height(Spacing.sm))
                     Button(
@@ -3178,69 +3252,147 @@ private fun SettingsPanel(
 
                 Spacer(Modifier.height(Spacing.md))
 
-                val devScope = rememberCoroutineScope()
-                var devPassword by remember { mutableStateOf("") }
-                var devUnlocked by remember { mutableStateOf(false) }
-                var feedbackList by remember { mutableStateOf<List<com.example.model.FeedbackEntry>>(emptyList()) }
-                var loadingFeedback by remember { mutableStateOf(false) }
-                val dateFormatFb = remember { java.text.SimpleDateFormat("dd/MM/yy HH:mm", java.util.Locale.ITALY) }
+                var showDevFeedbackDialog by remember { mutableStateOf(false) }
+                OutlinedButton(
+                    onClick = { showDevFeedbackDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(Radius.sm)
+                ) {
+                    Icon(Icons.Default.Feedback, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
+                    Spacer(Modifier.width(Spacing.xs))
+                    Text("Visualizza feedback")
+                }
 
-                if (!devUnlocked) {
+                if (showDevFeedbackDialog) {
+                    FeedbackDevDialog(
+                        onDismiss = { showDevFeedbackDialog = false },
+                        onFetchFeedback = onFetchFeedback,
+                        onUpdateFeedbackStatus = onUpdateFeedbackStatus
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeedbackDevDialog(
+    onDismiss: () -> Unit,
+    onFetchFeedback: suspend () -> List<com.example.model.FeedbackEntry>,
+    onUpdateFeedbackStatus: suspend (String, String) -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var password by remember { mutableStateOf("") }
+    var unlocked by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
+    var list by remember { mutableStateOf<List<com.example.model.FeedbackEntry>>(emptyList()) }
+    val dateFormat = remember { java.text.SimpleDateFormat("dd/MM/yy HH:mm", java.util.Locale.ITALY) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f),
+            shape = RoundedCornerShape(Radius.xl),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.fillMaxSize().padding(Spacing.xl)) {
+                Box(
+                    modifier = Modifier.size(Sizes.avatarLg).clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.AdminPanelSettings, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
+                }
+                Spacer(Modifier.height(Spacing.sm))
+                Text("Feedback sviluppatore", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(Spacing.md))
+
+                if (!unlocked) {
                     OutlinedTextField(
-                        value = devPassword,
-                        onValueChange = { devPassword = it },
-                        label = { Text("Password sviluppatore") },
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Password") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(Radius.sm),
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                if (devPassword == "radarfeedback") {
-                                    devUnlocked = true
-                                    loadingFeedback = true
-                                    devScope.launch {
-                                        feedbackList = onFetchFeedback()
-                                        loadingFeedback = false
-                                    }
+                        keyboardActions = KeyboardActions(onDone = {
+                            if (password == "radarfeedback") {
+                                unlocked = true
+                                loading = true
+                                scope.launch {
+                                    list = onFetchFeedback()
+                                    loading = false
                                 }
                             }
-                        )
+                        })
                     )
                 } else {
-                    Text(
-                        "Feedback ricevuti (${feedbackList.size})",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(Modifier.height(Spacing.sm))
-                    if (loadingFeedback) {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .size(Sizes.iconLg)
-                                .align(Alignment.CenterHorizontally)
-                        )
-                    } else if (feedbackList.isEmpty()) {
-                        Text("Nessun feedback ancora.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (loading) {
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    } else if (list.isEmpty()) {
+                        Text("Nessun feedback in analisi.", style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
-                        feedbackList.forEach { entry ->
-                            Surface(
-                                shape = RoundedCornerShape(Radius.md),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(Spacing.md)) {
-                                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                        Text(entry.userName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                                        Text(dateFormatFb.format(java.util.Date(entry.timestamp)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+                        ) {
+                            items(list, key = { it.id }) { entry ->
+                                Surface(
+                                    shape = RoundedCornerShape(Radius.md),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(Spacing.md)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(entry.userName, style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary)
+                                                Text(dateFormat.format(java.util.Date(entry.timestamp)),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                                                IconButton(onClick = {
+                                                    list = list.filter { it.id != entry.id }
+                                                    scope.launch { onUpdateFeedbackStatus(entry.id, "done") }
+                                                }) {
+                                                    Icon(Icons.Default.CheckCircle, contentDescription = "Completato",
+                                                        tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(Sizes.iconMd))
+                                                }
+                                                IconButton(onClick = {
+                                                    list = list.filter { it.id != entry.id }
+                                                    scope.launch { onUpdateFeedbackStatus(entry.id, "discarded") }
+                                                }) {
+                                                    Icon(Icons.Default.Cancel, contentDescription = "Scartato",
+                                                        tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(Sizes.iconMd))
+                                                }
+                                            }
+                                        }
+                                        Spacer(Modifier.height(Spacing.xs))
+                                        Text(entry.text, style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurface)
+                                        Text("v${entry.versionName} (${entry.versionCode})",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(top = 2.dp))
                                     }
-                                    Text(entry.text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 2.dp))
-                                    Text("v${entry.versionName} (${entry.versionCode})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
                     }
+                }
+                Spacer(Modifier.height(Spacing.md))
+                OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) {
+                    Text("Chiudi")
                 }
             }
         }

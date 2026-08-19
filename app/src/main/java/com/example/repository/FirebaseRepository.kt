@@ -583,7 +583,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         return try {
             firestore?.collection("feedback")
                 ?.orderBy("timestamp", Query.Direction.DESCENDING)
-                ?.limit(50)
+                ?.limit(100)
                 ?.get()
                 ?.await()
                 ?.documents
@@ -596,13 +596,25 @@ class FirebaseRepository private constructor(private val context: Context) {
                             userName = doc.getString("userName") ?: "Utente",
                             timestamp = doc.getLong("timestamp") ?: 0L,
                             versionName = doc.getString("versionName") ?: "",
-                            versionCode = doc.getLong("versionCode")?.toInt() ?: 0
+                            versionCode = doc.getLong("versionCode")?.toInt() ?: 0,
+                            status = doc.getString("status") ?: "pending"
                         )
                     } catch (_: Exception) { null }
-                } ?: emptyList()
+                }
+                ?.filter { it.status != "done" && it.status != "discarded" }
+                ?: emptyList()
         } catch (e: Exception) {
             Log.w(TAG, "fetchFeedback error: ${e.message}")
             emptyList()
+        }
+    }
+
+    suspend fun updateFeedbackStatus(id: String, status: String) {
+        try {
+            firestore?.collection("feedback")?.document(id)
+                ?.set(hashMapOf("status" to status), com.google.firebase.firestore.SetOptions.merge())?.await()
+        } catch (e: Exception) {
+            Log.w(TAG, "updateFeedbackStatus error: ${e.message}")
         }
     }
 

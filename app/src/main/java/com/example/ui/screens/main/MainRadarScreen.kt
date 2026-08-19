@@ -69,6 +69,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -97,18 +98,18 @@ import java.util.*
 import kotlin.random.Random
 
 /** I cinque pannelli del bottom sheet sopra la mappa. */
-private enum class RadarPanel(val label: String) {
-    MEMBERS("Membri"),
-    CHAT("Chat"),
-    PLACES("Luoghi"),
-    TRIPS("Viaggi"),
-    SETTINGS("Impostazioni")
+private enum class RadarPanel(@StringRes val labelRes: Int) {
+    MEMBERS(R.string.tab_members),
+    CHAT(R.string.tab_chat),
+    PLACES(R.string.tab_places),
+    TRIPS(R.string.tab_trips),
+    SETTINGS(R.string.tab_settings)
 }
 
-enum class TrackingTimeUnit(val label: String, val multiplier: Int) {
-    SECONDS("Secondi", 1),
-    MINUTES("Minuti", 60),
-    HOURS("Ore", 3600)
+enum class TrackingTimeUnit(@StringRes val labelRes: Int, val multiplier: Int) {
+    SECONDS(R.string.unit_seconds, 1),
+    MINUTES(R.string.unit_minutes, 60),
+    HOURS(R.string.unit_hours, 3600)
 }
 
 @Composable
@@ -119,6 +120,38 @@ fun MainRadarScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+
+    // Strings captured for use inside lambdas / coroutines
+    val strNoPhoto = stringResource(R.string.toast_no_photo)
+    val strCameraPermDenied = stringResource(R.string.toast_camera_permission_denied)
+    val strPhotoFileError = stringResource(R.string.toast_photo_file_error)
+    val strCameraError = stringResource(R.string.toast_camera_error)
+    val strRequestApproved = stringResource(R.string.toast_request_approved)
+    val strRequestRejected = stringResource(R.string.toast_request_rejected)
+    val strTripSaved = stringResource(R.string.toast_trip_saved)
+    val strBatterySaverOn = stringResource(R.string.toast_battery_saver_on)
+    val strGpsPrecisionRestored = stringResource(R.string.toast_gps_precision_restored)
+    val strAutoTripOn = stringResource(R.string.toast_trip_auto_on)
+    val strAutoTripOff = stringResource(R.string.toast_trip_auto_off)
+    val strBgTrackingOn = stringResource(R.string.toast_bg_tracking_on)
+    val strBgTrackingOff = stringResource(R.string.toast_bg_tracking_off)
+    val strGhostOn = stringResource(R.string.toast_ghost_on)
+    val strGhostOff = stringResource(R.string.toast_ghost_off)
+    val strFollowOff = stringResource(R.string.toast_follow_off)
+    val strFollowOn = stringResource(R.string.toast_follow_on)
+    val strFollowTargetUnavailable = stringResource(R.string.toast_follow_target_unavailable)
+    val strPositionUnavailable = stringResource(R.string.toast_position_unavailable)
+    val strTrackUnavailable = stringResource(R.string.toast_track_unavailable)
+    val strInvalidPlaceCoords = stringResource(R.string.toast_invalid_place_coords)
+    val strPlaceDeleted = stringResource(R.string.toast_place_deleted)
+    val strPlaceAdded = stringResource(R.string.toast_place_added)
+    val strPlaceUpdated = stringResource(R.string.toast_place_updated)
+    val strPlaceAlertsOn = stringResource(R.string.toast_place_alerts_on)
+    val strPlaceAlertsOff = stringResource(R.string.toast_place_alerts_off)
+    val strProfileUpdated = stringResource(R.string.toast_profile_updated)
+    val strGroupUpdated = stringResource(R.string.toast_group_updated)
+    val strGroupDeleted = stringResource(R.string.toast_group_deleted)
+    val strSosSent = stringResource(R.string.toast_sos_sent)
 
     val currentUser by repository.currentUserState.collectAsState()
     val userGroups by repository.userGroupsState.collectAsState()
@@ -279,7 +312,7 @@ fun MainRadarScreen(
         if (isSuccess && pendingMapCameraUri != null) {
             capturedSnapshotUri = pendingMapCameraUri
         } else {
-            Toast.makeText(context, "Nessuna foto acquisita", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, strNoPhoto, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -296,25 +329,25 @@ fun MainRadarScreen(
             pendingMapCameraUri = uri
             if (uri != null) {
                 runCatching { takeSnapshotLauncher.launch(uri) }.onFailure {
-                    Toast.makeText(context, "Impossibile aprire fotocamera: ${it.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, strCameraError.format(it.message ?: ""), Toast.LENGTH_SHORT).show()
                 }
             }
         } else if (!isGranted) {
             pendingMapCameraAction = false
-            Toast.makeText(context, "Permesso fotocamera non concesso", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, strCameraPermDenied, Toast.LENGTH_SHORT).show()
         }
     }
 
     fun launchMapCameraSafe() {
         val tempUri = ImageUtils.createTempImageUri(context)
         if (tempUri == null) {
-            Toast.makeText(context, "Impossibile creare il file per la foto", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, strPhotoFileError, Toast.LENGTH_SHORT).show()
             return
         }
         pendingMapCameraUri = tempUri
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             runCatching { takeSnapshotLauncher.launch(tempUri) }.onFailure {
-                Toast.makeText(context, "Impossibile aprire fotocamera: ${it.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, strCameraError.format(it.message ?: ""), Toast.LENGTH_SHORT).show()
             }
         } else {
             pendingMapCameraAction = true
@@ -444,7 +477,7 @@ fun MainRadarScreen(
                                         val res = repository.approveJoinRequest(gid, memberId)
                                         Toast.makeText(
                                             context,
-                                            if (res.isSuccess) "Richiesta approvata"
+                                            if (res.isSuccess) strRequestApproved
                                             else "Errore: ${res.exceptionOrNull()?.message}",
                                             Toast.LENGTH_SHORT
                                         ).show()
@@ -456,7 +489,7 @@ fun MainRadarScreen(
                                         val res = repository.rejectJoinRequest(gid, memberId)
                                         Toast.makeText(
                                             context,
-                                            if (res.isSuccess) "Richiesta rifiutata"
+                                            if (res.isSuccess) strRequestRejected
                                             else "Errore: ${res.exceptionOrNull()?.message}",
                                             Toast.LENGTH_SHORT
                                         ).show()
@@ -504,7 +537,7 @@ fun MainRadarScreen(
                                 onStopTrip = {
                                     coroutineScope.launch {
                                         repository.stopAndSaveTrip()
-                                        Toast.makeText(context, "Viaggio salvato", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, strTripSaved, Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             )
@@ -534,8 +567,7 @@ fun MainRadarScreen(
                                     repository.setPowerSavingMode(enabled)
                                     Toast.makeText(
                                         context,
-                                        if (enabled) "Risparmio energia attivo: posizione da WiFi e rete dati"
-                                        else "Precisione GPS ripristinata",
+                                        if (enabled) strBatterySaverOn else strGpsPrecisionRestored,
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 },
@@ -543,8 +575,7 @@ fun MainRadarScreen(
                                     repository.setAutoTripEnabled(enabled)
                                     Toast.makeText(
                                         context,
-                                        if (enabled) "L'app registrerà i viaggi da sola"
-                                        else "Rilevamento automatico disattivato",
+                                        if (enabled) strAutoTripOn else strAutoTripOff,
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 },
@@ -553,8 +584,7 @@ fun MainRadarScreen(
                                     repository.setBackgroundTrackingEnabled(enabled)
                                     Toast.makeText(
                                         context,
-                                        if (enabled) "Tracciamento in background attivato"
-                                        else "Tracciamento in background disattivato",
+                                        if (enabled) strBgTrackingOn else strBgTrackingOff,
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 },
@@ -562,8 +592,7 @@ fun MainRadarScreen(
                                     repository.setGlobalGhostMode(enabled)
                                     Toast.makeText(
                                         context,
-                                        if (enabled) "Modalità Fantasma attiva: sei invisibile"
-                                        else "Modalità Fantasma disattivata",
+                                        if (enabled) strGhostOn else strGhostOff,
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 },
@@ -647,7 +676,7 @@ fun MainRadarScreen(
             )
 
             MapTopBar(
-                groupName = currentGroup?.name ?: "Radar",
+                groupName = currentGroup?.name ?: stringResource(R.string.label_radar_fallback),
                 joinCode = currentGroup?.joinCode,
                 memberCount = activeMembers.size,
                 // Stessa soglia del PresenceDot: con due valori separati il
@@ -673,7 +702,7 @@ fun MainRadarScreen(
                 onToggleFollow = {
                     if (followedUserId != null) {
                         followedUserId = null
-                        Toast.makeText(context, "Inseguimento disattivato", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, strFollowOff, Toast.LENGTH_SHORT).show()
                     } else {
                         val targetId = focusTargetUserId ?: currentUserId
                         val target = locations.find { it.userId == targetId }
@@ -681,9 +710,9 @@ fun MainRadarScreen(
                             followedUserId = targetId
                             focusMapOn(target.latitude, target.longitude, collapse = false)
                             val label = if (targetId == currentUserId) "te" else (target.nickname ?: target.userName)
-                            Toast.makeText(context, "Inseguimento attivo su $label", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, strFollowOn.format(label), Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "Posizione del bersaglio non disponibile", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, strFollowTargetUnavailable, Toast.LENGTH_SHORT).show()
                         }
                     }
                 },
@@ -693,7 +722,7 @@ fun MainRadarScreen(
                         focusTargetUserId = currentUserId
                         focusMapOn(myLoc.latitude, myLoc.longitude, collapse = false)
                     } else {
-                        Toast.makeText(context, "Posizione non ancora disponibile", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, strPositionUnavailable, Toast.LENGTH_SHORT).show()
                     }
                 },
                 isRecording = activeTrip != null,
@@ -701,7 +730,7 @@ fun MainRadarScreen(
                     if (activeTrip != null) {
                         coroutineScope.launch {
                             repository.stopAndSaveTrip()
-                            Toast.makeText(context, "Viaggio salvato", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, strTripSaved, Toast.LENGTH_SHORT).show()
                         }
                     } else {
                         repository.startTrip()
@@ -844,7 +873,7 @@ fun MainRadarScreen(
                             modifier = Modifier.testTag("stop_following_button")
                         ) {
                             Text(
-                                text = "Smetti",
+                                text = stringResource(R.string.action_stop),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.padding(
@@ -885,13 +914,13 @@ fun MainRadarScreen(
                 if (it.latitude != 0.0 && it.longitude != 0.0 && !it.latitude.isNaN() && !it.longitude.isNaN()) {
                     focusMapOn(it.latitude, it.longitude)
                 } else {
-                    Toast.makeText(context, "Coordinate del luogo non valide", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, strInvalidPlaceCoords, Toast.LENGTH_SHORT).show()
                 }
             },
             onDeletePlace = { toDelete ->
                 coroutineScope.launch {
                     repository.deletePlace(toDelete.id)
-                    Toast.makeText(context, "Luogo '${toDelete.name}' eliminato", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, strPlaceDeleted.format(toDelete.name), Toast.LENGTH_SHORT).show()
                 }
             },
             onEditPlace = { toEdit ->
@@ -907,8 +936,8 @@ fun MainRadarScreen(
                         selectedPlaceForSheet = res.getOrNull()
                         Toast.makeText(
                             context,
-                            if (enabled) "Avvisi attivati per '${target.name}'"
-                            else "Avvisi disattivati per '${target.name}'",
+                            if (enabled) strPlaceAlertsOn.format(target.name)
+                            else strPlaceAlertsOff.format(target.name),
                             Toast.LENGTH_SHORT
                         ).show()
                     } else {
@@ -935,7 +964,7 @@ fun MainRadarScreen(
                     val res = repository.updatePlace(updated)
                     Toast.makeText(
                         context,
-                        if (res.isSuccess) "Luogo '${updated.name}' aggiornato"
+                        if (res.isSuccess) strPlaceUpdated.format(updated.name)
                         else "Errore salvataggio: ${res.exceptionOrNull()?.message}",
                         Toast.LENGTH_SHORT
                     ).show()
@@ -947,7 +976,7 @@ fun MainRadarScreen(
     if (showEditProfileDialog && currentGroup != null && currentUser != null) {
         val myMember = members.find { it.userId == currentUserId } ?: GroupMember(
             userId = currentUserId,
-            displayName = currentUser?.displayName ?: "Utente",
+            displayName = currentUser?.displayName ?: stringResource(R.string.label_user_name_fallback),
             role = "member"
         )
         EditGroupProfileDialog(
@@ -965,7 +994,7 @@ fun MainRadarScreen(
                     showEditProfileDialog = false
                     Toast.makeText(
                         context,
-                        if (res.isSuccess) "Profilo aggiornato"
+                        if (res.isSuccess) strProfileUpdated
                         else "Errore salvataggio: ${res.exceptionOrNull()?.message}",
                         Toast.LENGTH_SHORT
                     ).show()
@@ -989,7 +1018,7 @@ fun MainRadarScreen(
                     showEditGroupDialog = false
                     Toast.makeText(
                         context,
-                        if (res.isSuccess) "Gruppo aggiornato"
+                        if (res.isSuccess) strGroupUpdated
                         else "Errore salvataggio: ${res.exceptionOrNull()?.message}",
                         Toast.LENGTH_SHORT
                     ).show()
@@ -1017,7 +1046,7 @@ fun MainRadarScreen(
                         else repository.loadTripTrack(trip.id)
 
                     if (track.isEmpty()) {
-                        Toast.makeText(context, "Traccia non disponibile", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, strTrackUnavailable, Toast.LENGTH_SHORT).show()
                         return@launch
                     }
                     selectedTripTrack = track
@@ -1041,26 +1070,26 @@ fun MainRadarScreen(
                 showAddPlaceDialog = false
                 coroutineScope.launch {
                     repository.addPlace(place)
-                    Toast.makeText(context, "Luogo '${place.name}' aggiunto", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, strPlaceAdded.format(place.name), Toast.LENGTH_SHORT).show()
                 }
             }
         )
     }
 
     if (showSosConfirmDialog) {
+        val sosGroupName = currentGroup?.name ?: stringResource(R.string.label_radar_fallback)
         ConfirmDialog(
             icon = Icons.Default.CrisisAlert,
             iconTint = RadarSemantic.Sos,
-            title = "Invia allerta SOS",
-            message = "Tutti i membri di ${currentGroup?.name ?: "questo gruppo"} riceveranno " +
-                "una notifica di emergenza con la tua posizione attuale.",
-            confirmLabel = "Invia SOS",
+            title = stringResource(R.string.dialog_sos_title),
+            message = stringResource(R.string.dialog_sos_body, sosGroupName),
+            confirmLabel = stringResource(R.string.action_send_sos),
             onConfirm = {
                 showSosConfirmDialog = false
                 val gid = currentGroup?.id
                 if (!gid.isNullOrBlank()) {
                     repository.sendSosAlert(gid)
-                    Toast.makeText(context, "Allerta SOS inviata al gruppo", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, strSosSent, Toast.LENGTH_SHORT).show()
                 }
             },
             onDismiss = { showSosConfirmDialog = false }
@@ -1071,10 +1100,9 @@ fun MainRadarScreen(
         ConfirmDialog(
             icon = Icons.Default.PersonRemove,
             iconTint = MaterialTheme.colorScheme.error,
-            title = "Espelli membro",
-            message = "Vuoi rimuovere '${target.displayName}' dal gruppo? " +
-                "Non avrà più accesso a mappa, posizioni e messaggi.",
-            confirmLabel = "Espelli",
+            title = stringResource(R.string.dialog_kick_title),
+            message = stringResource(R.string.dialog_kick_body, target.displayName),
+            confirmLabel = stringResource(R.string.action_kick),
             onConfirm = {
                 memberToKick = null
                 if (currentGroup != null) {
@@ -1091,20 +1119,16 @@ fun MainRadarScreen(
         ConfirmDialog(
             icon = Icons.Default.DeleteForever,
             iconTint = MaterialTheme.colorScheme.error,
-            title = "Elimina gruppo",
-            // Il messaggio elenca cosa sparisce: "sei sicuro?" non dice a
-            // nessuno che sta per perdere anche chat, luoghi e viaggi.
-            message = "Eliminare '${currentGroup.name}' per tutti i membri?\n\n" +
-                "Spariscono definitivamente messaggi, luoghi, istantanee e viaggi " +
-                "del gruppo. L'operazione non si può annullare.",
-            confirmLabel = "Elimina",
+            title = stringResource(R.string.dialog_delete_group_title),
+            message = stringResource(R.string.dialog_delete_group_body, currentGroup.name),
+            confirmLabel = stringResource(R.string.action_delete),
             onConfirm = {
                 showDeleteGroupDialog = false
                 coroutineScope.launch {
                     val res = repository.deleteGroup(currentGroup.id)
                     Toast.makeText(
                         context,
-                        if (res.isSuccess) "Gruppo eliminato"
+                        if (res.isSuccess) strGroupDeleted
                         else "Errore: ${res.exceptionOrNull()?.message}",
                         Toast.LENGTH_SHORT
                     ).show()
@@ -1119,10 +1143,9 @@ fun MainRadarScreen(
         ConfirmDialog(
             icon = Icons.Default.ExitToApp,
             iconTint = MaterialTheme.colorScheme.error,
-            title = "Abbandona gruppo",
-            message = "Vuoi uscire da '${currentGroup.name}'? La tua posizione non sarà " +
-                "più condivisa e non riceverai più notifiche.",
-            confirmLabel = "Abbandona",
+            title = stringResource(R.string.dialog_leave_title),
+            message = stringResource(R.string.dialog_leave_body, currentGroup.name),
+            confirmLabel = stringResource(R.string.action_leave),
             onConfirm = {
                 showLeaveDialog = false
                 coroutineScope.launch {
@@ -1211,10 +1234,10 @@ fun MainRadarScreen(
                             tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(Sizes.iconLg))
                     }
                     Spacer(Modifier.height(Spacing.md))
-                    Text("GPS non attivo", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.dialog_gps_title), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(Spacing.xs))
                     Text(
-                        "Family Radar ha bisogno della posizione GPS per funzionare. Attiva il GPS nelle impostazioni.",
+                        stringResource(R.string.dialog_gps_body),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
@@ -1227,12 +1250,12 @@ fun MainRadarScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(Radius.sm)
-                    ) { Text("Attiva GPS") }
+                    ) { Text(stringResource(R.string.action_enable_gps)) }
                     Spacer(Modifier.height(Spacing.sm))
                     TextButton(
                         onClick = { showGpsDialog = false },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Non adesso") }
+                    ) { Text(stringResource(R.string.action_not_now)) }
                 }
             }
         }
@@ -1284,9 +1307,9 @@ private fun MapTopBar(
                             .clip(CircleShape)
                             .background(RadarSemantic.Online)
                     )
+                    val subtitle = stringResource(R.string.map_topbar_subtitle, onlineCount, memberCount)
                     Text(
-                        text = "$onlineCount online · $memberCount membri" +
-                            if (!joinCode.isNullOrBlank()) " · $joinCode" else "",
+                        text = if (!joinCode.isNullOrBlank()) "$subtitle · $joinCode" else subtitle,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -1301,7 +1324,7 @@ private fun MapTopBar(
             ) {
                 Icon(
                     Icons.Default.SwapHoriz,
-                    contentDescription = "Cambia gruppo",
+                    contentDescription = stringResource(R.string.action_change_group),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -1319,7 +1342,7 @@ private fun MapTopBar(
             ) {
                 Icon(
                     Icons.Default.Settings,
-                    contentDescription = "Impostazioni",
+                    contentDescription = stringResource(R.string.tab_settings),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -1336,7 +1359,7 @@ private fun MapTopBar(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.Default.Warning,
-                        contentDescription = "Invia SOS",
+                        contentDescription = stringResource(R.string.action_send_sos),
                         tint = Color.White,
                         modifier = Modifier.size(Sizes.iconLg)
                     )
@@ -1366,7 +1389,7 @@ private fun MapActionRail(
         // minuscola e in mezzo agli altri pulsanti, quindi non si notava.
         RailButton(
             icon = if (isFollowing) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed,
-            contentDescription = if (isFollowing) "Disattiva inseguimento" else "Attiva inseguimento",
+            contentDescription = if (isFollowing) stringResource(R.string.action_follow_off) else stringResource(R.string.action_follow_on_label),
             onClick = onToggleFollow,
             container = if (isFollowing) MaterialTheme.colorScheme.primary
             else RadarTheme.palette.gradients.glassTint,
@@ -1376,13 +1399,13 @@ private fun MapActionRail(
         )
         RailButton(
             icon = Icons.Default.MyLocation,
-            contentDescription = "Centra sulla mia posizione",
+            contentDescription = stringResource(R.string.action_center_my_location),
             onClick = onLocateSelf,
             testTag = "locate_self_fab"
         )
         RailButton(
             icon = if (isRecording) Icons.Default.Stop else Icons.Default.DirectionsCar,
-            contentDescription = if (isRecording) "Stop viaggio" else "Registra viaggio",
+            contentDescription = if (isRecording) stringResource(R.string.action_stop_trip) else stringResource(R.string.action_record_trip),
             onClick = onToggleTrip,
             container = if (isRecording) MaterialTheme.colorScheme.error else RadarTheme.palette.gradients.glassTint,
             content = if (isRecording) Color.White else MaterialTheme.colorScheme.onSurface,
@@ -1390,13 +1413,13 @@ private fun MapActionRail(
         )
         RailButton(
             icon = Icons.Default.AddLocationAlt,
-            contentDescription = "Aggiungi luogo",
+            contentDescription = stringResource(R.string.action_add_place),
             onClick = onAddPlace,
             testTag = "add_place_fab"
         )
         RailButton(
             icon = Icons.Default.AddAPhoto,
-            contentDescription = "Scatta istantanea",
+            contentDescription = stringResource(R.string.action_take_snapshot),
             onClick = onTakeSnapshot,
             container = RadarSemantic.Snapshot,
             content = Color.White,
@@ -1485,7 +1508,7 @@ private fun MemberCarousel(
                     }
                     Column {
                         Text(
-                            text = if (isSelf) "Tu" else name,
+                            text = if (isSelf) stringResource(R.string.label_you) else name,
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
@@ -1600,7 +1623,7 @@ private fun PanelSelectorItem(
             )
             Icon(
                 imageVector = entry.icon,
-                contentDescription = entry.panel.label,
+                contentDescription = stringResource(entry.panel.labelRes),
                 tint = contentColor,
                 modifier = Modifier.size(Sizes.iconSm)
             )
@@ -1616,8 +1639,9 @@ private fun PanelSelectorItem(
             }
         }
         Spacer(Modifier.height(2.dp))
+        val panelLabel = stringResource(entry.panel.labelRes)
         Text(
-            text = if (entry.count != null) "${entry.panel.label} ${entry.count}" else entry.panel.label,
+            text = if (entry.count != null) "$panelLabel ${entry.count}" else panelLabel,
             style = MaterialTheme.typography.labelSmall,
             color = contentColor,
             maxLines = 1,
@@ -1662,8 +1686,8 @@ private fun MembersPanel(
         if (isOwnerOrAdmin && pendingMembers.isNotEmpty()) {
             item {
                 SectionHeader(
-                    title = "In attesa di approvazione",
-                    subtitle = "Hanno inserito il codice invito e aspettano il tuo via libera",
+                    title = stringResource(R.string.status_awaiting_approval),
+                    subtitle = stringResource(R.string.pending_members_desc),
                     icon = Icons.Default.PendingActions
                 )
             }
@@ -1680,9 +1704,8 @@ private fun MembersPanel(
         if (members.isEmpty()) {
             item {
                 EmptyState(
-                    title = "Nessun membro attivo",
-                    description = "Condividi il codice invito del gruppo per far entrare " +
-                        "familiari e amici nel radar.",
+                    title = stringResource(R.string.empty_members_title),
+                    description = stringResource(R.string.empty_members_body),
                     icon = Icons.Default.GroupAdd,
                     lottieAsset = "empty_members"
                 )
@@ -1714,6 +1737,7 @@ private fun MemberRow(
     onFocus: () -> Unit,
     onKick: () -> Unit
 ) {
+    val context = LocalContext.current
     Surface(
         onClick = onClick,
         enabled = location != null,
@@ -1747,7 +1771,7 @@ private fun MemberRow(
                     horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
                 ) {
                     Text(
-                        text = if (isSelf) "${member.displayName} (tu)" else member.displayName,
+                        text = if (isSelf) stringResource(R.string.member_name_self, member.displayName) else member.displayName,
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
@@ -1755,9 +1779,9 @@ private fun MemberRow(
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     when (member.role) {
-                        "owner" -> RadarBadge("Proprietario")
+                        "owner" -> RadarBadge(stringResource(R.string.role_owner))
                         "admin" -> RadarBadge(
-                            text = "Admin",
+                            text = stringResource(R.string.role_admin),
                             containerColor = MaterialTheme.colorScheme.secondary,
                             contentColor = MaterialTheme.colorScheme.onSecondary
                         )
@@ -1767,10 +1791,10 @@ private fun MemberRow(
                 val subtitle = buildString {
                     if (!member.nickname.isNullOrBlank()) append("${member.nickname} · ")
                     if (location != null) {
-                        append(location.currentPlaceName?.takeIf { it.isNotBlank() } ?: "In movimento")
+                        append(location.currentPlaceName?.takeIf { it.isNotBlank() } ?: context.getString(R.string.status_moving))
                         append(" · ${formatShortTime(location.timestamp)}")
                     } else {
-                        append("Posizione non condivisa")
+                        append(context.getString(R.string.status_not_sharing))
                     }
                 }
                 Text(
@@ -1791,7 +1815,7 @@ private fun MemberRow(
                 IconButton(onClick = onFocus) {
                     Icon(
                         Icons.Default.NearMe,
-                        contentDescription = "Mostra sulla mappa",
+                        contentDescription = stringResource(R.string.action_show_on_map),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(Sizes.iconMd)
                     )
@@ -1801,7 +1825,7 @@ private fun MemberRow(
                 IconButton(onClick = onKick) {
                     Icon(
                         Icons.Default.PersonRemove,
-                        contentDescription = "Rimuovi membro",
+                        contentDescription = stringResource(R.string.action_remove_member),
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(Sizes.iconMd)
                     )
@@ -1843,7 +1867,7 @@ private fun PendingMemberRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Richiesta di accesso",
+                    text = stringResource(R.string.label_access_request),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1855,7 +1879,7 @@ private fun PendingMemberRow(
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             ) {
-                Icon(Icons.Default.Check, contentDescription = "Approva")
+                Icon(Icons.Default.Check, contentDescription = stringResource(R.string.action_approve))
             }
             FilledTonalIconButton(
                 onClick = onReject,
@@ -1864,7 +1888,7 @@ private fun PendingMemberRow(
                     contentColor = MaterialTheme.colorScheme.onErrorContainer
                 )
             ) {
-                Icon(Icons.Default.Close, contentDescription = "Rifiuta")
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_reject))
             }
         }
     }
@@ -1887,6 +1911,11 @@ private fun ChatPanel(
     val listState = rememberLazyListState()
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+
+    val strNoPhoto = stringResource(R.string.toast_no_photo)
+    val strCameraError = stringResource(R.string.toast_camera_error)
+    val strCameraPermNeeded = stringResource(R.string.toast_camera_permission_needed)
+    val strPhotoFileError = stringResource(R.string.toast_photo_file_error)
 
     var inputText by remember { mutableStateOf("") }
     var isUploading by remember { mutableStateOf(false) }
@@ -1918,7 +1947,7 @@ private fun ChatPanel(
         if (isSuccess && uri != null) {
             sendImage(uri, "Foto scattata in chat")
         } else {
-            Toast.makeText(context, "Nessuna foto acquisita", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, strNoPhoto, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1931,25 +1960,25 @@ private fun ChatPanel(
             pendingChatCameraUri = uri
             if (uri != null) {
                 runCatching { cameraPhotoLauncher.launch(uri) }.onFailure {
-                    Toast.makeText(context, "Impossibile avviare fotocamera: ${it.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, strCameraError.format(it.message ?: ""), Toast.LENGTH_SHORT).show()
                 }
             }
         } else if (!isGranted) {
             pendingChatCamera = false
-            Toast.makeText(context, "Permesso fotocamera necessario", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, strCameraPermNeeded, Toast.LENGTH_SHORT).show()
         }
     }
 
     fun launchChatCameraSafe() {
         val tempUri = ImageUtils.createTempImageUri(context)
         if (tempUri == null) {
-            Toast.makeText(context, "Impossibile creare il file per la foto", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, strPhotoFileError, Toast.LENGTH_SHORT).show()
             return
         }
         pendingChatCameraUri = tempUri
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             runCatching { cameraPhotoLauncher.launch(tempUri) }.onFailure {
-                Toast.makeText(context, "Impossibile avviare fotocamera: ${it.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, strCameraError.format(it.message ?: ""), Toast.LENGTH_SHORT).show()
             }
         } else {
             pendingChatCamera = true
@@ -2419,7 +2448,7 @@ private fun PlaceRow(
             IconButton(onClick = onFocus) {
                 Icon(
                     Icons.Default.NearMe,
-                    contentDescription = "Mostra sulla mappa",
+                    contentDescription = stringResource(R.string.action_show_on_map),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(Sizes.iconMd)
                 )
@@ -2570,13 +2599,13 @@ private fun SettingsPanel(
                     horizontalArrangement = Arrangement.spacedBy(Spacing.md)
                 ) {
                     RadarAvatar(
-                        name = currentUser?.displayName ?: "Utente",
+                        name = currentUser?.displayName ?: stringResource(R.string.label_user_name_fallback),
                         photoBase64 = currentUser?.photoBase64,
                         size = Sizes.avatarLg
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = currentUser?.displayName ?: "Utente Radar",
+                            text = currentUser?.displayName ?: stringResource(R.string.label_user_name_fallback),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
@@ -2700,7 +2729,7 @@ private fun SettingsPanel(
                     )
                     TrackingTimeUnit.entries.forEach { unit ->
                         PillChip(
-                            label = unit.label.take(3),
+                            label = stringResource(unit.labelRes).take(3),
                             selected = intervalUnit == unit,
                             onClick = {
                                 intervalUnit = unit
@@ -4208,7 +4237,7 @@ private fun TripDetailDialog(
                         Button(onClick = onShowOnMap) {
                             Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                             Spacer(Modifier.width(Spacing.xs))
-                            Text("Mostra sulla mappa")
+                            Text(stringResource(R.string.action_show_on_map))
                         }
                     }
                 }

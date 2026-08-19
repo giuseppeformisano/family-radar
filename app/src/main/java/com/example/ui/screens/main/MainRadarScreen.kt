@@ -3254,16 +3254,12 @@ private fun SettingsPanel(
                 Spacer(Modifier.height(Spacing.md))
 
                 var showDevFeedbackDialog by remember { mutableStateOf(false) }
-                OutlinedButton(
-                    onClick = { showDevFeedbackDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(Radius.sm)
-                ) {
-                    Icon(Icons.Default.Feedback, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
-                    Spacer(Modifier.width(Spacing.xs))
-                    Text("Visualizza feedback")
-                }
-
+                SettingsClickRow(
+                    title = "Visualizza feedback",
+                    description = "Accesso protetto da password sviluppatore",
+                    icon = Icons.Default.Feedback,
+                    onClick = { showDevFeedbackDialog = true }
+                )
                 if (showDevFeedbackDialog) {
                     FeedbackDevDialog(
                         onDismiss = { showDevFeedbackDialog = false },
@@ -3284,64 +3280,104 @@ private fun FeedbackDevDialog(
 ) {
     val scope = rememberCoroutineScope()
     var password by remember { mutableStateOf("") }
-    var unlocked by remember { mutableStateOf(false) }
+    var wrongPassword by remember { mutableStateOf(false) }
+    var showList by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
     var list by remember { mutableStateOf<List<com.example.model.FeedbackEntry>>(emptyList()) }
-    val dateFormat = remember { java.text.SimpleDateFormat("dd/MM/yy HH:mm", java.util.Locale.ITALY) }
 
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f),
-            shape = RoundedCornerShape(Radius.xl),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            Column(modifier = Modifier.fillMaxSize().padding(Spacing.xl)) {
-                Box(
-                    modifier = Modifier.size(Sizes.avatarLg).clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
+    fun tryUnlock() {
+        if (password == "radarfeedback") {
+            wrongPassword = false
+            showList = true
+            loading = true
+            scope.launch { list = onFetchFeedback(); loading = false }
+        } else {
+            wrongPassword = true
+        }
+    }
+
+    // Dialog password
+    if (!showList) {
+        Dialog(onDismissRequest = onDismiss) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(Radius.xl),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(Icons.Default.AdminPanelSettings, contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
-                }
-                Spacer(Modifier.height(Spacing.sm))
-                Text("Feedback sviluppatore", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(Spacing.md))
-
-                if (!unlocked) {
+                    Box(
+                        modifier = Modifier.size(Sizes.avatarLg).clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Lock, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
+                    }
+                    Spacer(Modifier.height(Spacing.sm))
+                    Text("Area sviluppatore", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(Spacing.xs))
+                    Text("Inserisci la password per visualizzare i feedback",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(Spacing.lg))
                     OutlinedTextField(
                         value = password,
-                        onValueChange = { password = it },
+                        onValueChange = { password = it; wrongPassword = false },
                         label = { Text("Password") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(Radius.sm),
+                        isError = wrongPassword,
+                        supportingText = if (wrongPassword) {{ Text("Password errata", color = MaterialTheme.colorScheme.error) }} else null,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = {
-                            if (password == "radarfeedback") {
-                                unlocked = true
-                                loading = true
-                                scope.launch {
-                                    list = onFetchFeedback()
-                                    loading = false
-                                }
-                            }
-                        })
+                        keyboardActions = KeyboardActions(onDone = { tryUnlock() })
                     )
-                } else {
+                    Spacer(Modifier.height(Spacing.lg))
+                    Button(onClick = { tryUnlock() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) {
+                        Text("Accedi")
+                    }
+                    Spacer(Modifier.height(Spacing.sm))
+                    TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Annulla") }
+                }
+            }
+        }
+    } else {
+        // Dialog lista feedback
+        val dateFormat = remember { java.text.SimpleDateFormat("dd/MM/yy HH:mm", java.util.Locale.ITALY) }
+        Dialog(onDismissRequest = onDismiss) {
+            Card(
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f),
+                shape = RoundedCornerShape(Radius.xl),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.fillMaxSize().padding(Spacing.xl)) {
+                    Box(
+                        modifier = Modifier.size(Sizes.avatarLg).clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.AdminPanelSettings, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
+                    }
+                    Spacer(Modifier.height(Spacing.sm))
+                    Text("Feedback ricevuti", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(Spacing.md))
                     if (loading) {
-                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()
                         }
                     } else if (list.isEmpty()) {
-                        Text("Nessun feedback in analisi.", style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            Text("Nessun feedback da analizzare 🎉", style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                        }
                     } else {
-                        LazyColumn(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(Spacing.sm)
-                        ) {
+                        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             items(list, key = { it.id }) { entry ->
                                 Surface(
                                     shape = RoundedCornerShape(Radius.md),
@@ -3349,19 +3385,19 @@ private fun FeedbackDevDialog(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(modifier = Modifier.padding(Spacing.md)) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
+                                        Row(modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
+                                            verticalAlignment = Alignment.CenterVertically) {
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(entry.userName, style = MaterialTheme.typography.labelMedium,
                                                     color = MaterialTheme.colorScheme.primary)
                                                 Text(dateFormat.format(java.util.Date(entry.timestamp)),
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text("v${entry.versionName}", style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
-                                            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                                            Row {
                                                 IconButton(onClick = {
                                                     list = list.filter { it.id != entry.id }
                                                     scope.launch { onUpdateFeedbackStatus(entry.id, "done") }
@@ -3381,19 +3417,15 @@ private fun FeedbackDevDialog(
                                         Spacer(Modifier.height(Spacing.xs))
                                         Text(entry.text, style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurface)
-                                        Text("v${entry.versionName} (${entry.versionCode})",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(top = 2.dp))
                                     }
                                 }
                             }
                         }
                     }
-                }
-                Spacer(Modifier.height(Spacing.md))
-                OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) {
-                    Text("Chiudi")
+                    Spacer(Modifier.height(Spacing.md))
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) {
+                        Text("Chiudi")
+                    }
                 }
             }
         }
@@ -3510,6 +3542,33 @@ private fun SettingsToggleRow(
             onCheckedChange = onCheckedChange,
             modifier = if (testTag != null) Modifier.testTag(testTag) else Modifier
         )
+    }
+}
+
+@Composable
+private fun SettingsClickRow(
+    title: String,
+    description: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    iconTint: Color = MaterialTheme.colorScheme.primary
+) {
+    Surface(
+        onClick = onClick,
+        color = Color.Transparent
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md)
+        ) {
+            Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(Sizes.iconMd))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconMd))
+        }
     }
 }
 

@@ -569,7 +569,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                 "userName" to (user.displayName.ifBlank { "Utente" }),
                 "timestamp" to System.currentTimeMillis(),
                 "versionName" to com.example.BuildConfig.VERSION_NAME,
-                "versionCode" to com.example.BuildConfig.VERSION_CODE
+                "versionCode" to com.example.BuildConfig.VERSION_CODE,
+                "status" to "pending"
             )
             firestore?.collection("feedback")?.add(entry)?.await()
             Result.success(Unit)

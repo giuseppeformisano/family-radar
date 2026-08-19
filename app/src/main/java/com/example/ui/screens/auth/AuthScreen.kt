@@ -34,12 +34,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.repository.FirebaseRepository
 import com.example.ui.components.InfoBanner
 import com.example.ui.components.PillChip
@@ -146,7 +148,7 @@ fun AuthScreen(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "La tua famiglia sulla mappa, in tempo reale",
+                text = stringResource(R.string.auth_tagline),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -180,7 +182,7 @@ fun AuthScreen(
                                     onAuthSuccess()
                                 } else {
                                     errorMessage = result.exceptionOrNull()?.localizedMessage
-                                        ?: "Accesso Google non riuscito"
+                                        ?: context.getString(R.string.auth_google_failed)
                                 }
                             }
                         },
@@ -198,19 +200,19 @@ fun AuthScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Spacer(Modifier.width(Spacing.md))
-                            Text("Connessione…", style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(R.string.auth_connecting), style = MaterialTheme.typography.labelLarge)
                         } else {
                             GoogleIcon(modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(Spacing.md))
                             Text(
-                                text = "Continua con Google",
+                                text = stringResource(R.string.auth_google_button),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
 
-                    LabeledDivider("oppure")
+                    LabeledDivider(stringResource(R.string.label_or))
 
                     // Selettore metodo
                     Row(
@@ -218,14 +220,14 @@ fun AuthScreen(
                         horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
                     ) {
                         PillChip(
-                            label = "Telefono",
+                            label = stringResource(R.string.auth_method_phone),
                             icon = Icons.Default.PhoneAndroid,
                             selected = selectedMethod == AuthMethod.PHONE,
                             onClick = { selectedMethod = AuthMethod.PHONE; clearFeedback() },
                             modifier = Modifier.weight(1f)
                         )
                         PillChip(
-                            label = "Email",
+                            label = stringResource(R.string.auth_method_email),
                             icon = Icons.Default.Email,
                             selected = selectedMethod == AuthMethod.EMAIL,
                             onClick = { selectedMethod = AuthMethod.EMAIL; clearFeedback() },
@@ -260,9 +262,9 @@ fun AuthScreen(
                                     val cleaned = phoneNumber.trim().replace(" ", "")
                                     when {
                                         cleaned.length < 8 ->
-                                            errorMessage = "Inserisci un numero valido con prefisso"
+                                            errorMessage = context.getString(R.string.err_invalid_phone)
                                         activity == null ->
-                                            errorMessage = "Errore di contesto Activity"
+                                            errorMessage = context.getString(R.string.err_activity_context)
                                         else -> {
                                             isLoading = true
                                             repository.sendPhoneVerificationCode(
@@ -272,7 +274,7 @@ fun AuthScreen(
                                                     isLoading = false
                                                     verificationId = vId
                                                     isCodeSent = true
-                                                    successMessage = "Codice SMS inviato a $cleaned"
+                                                    successMessage = context.getString(R.string.toast_sms_sent, cleaned)
                                                 },
                                                 onVerificationCompleted = {
                                                     isLoading = false
@@ -281,7 +283,7 @@ fun AuthScreen(
                                                 onVerificationFailed = { e ->
                                                     isLoading = false
                                                     errorMessage = e.localizedMessage
-                                                        ?: "Errore invio SMS di verifica"
+                                                        ?: context.getString(R.string.err_sms_send)
                                                 }
                                             )
                                         }
@@ -291,7 +293,7 @@ fun AuthScreen(
                                     clearFeedback()
                                     val vId = verificationId
                                     if (vId == null || smsCode.length < 6) {
-                                        errorMessage = "Inserisci il codice completo a 6 cifre"
+                                        errorMessage = context.getString(R.string.err_incomplete_code)
                                     } else {
                                         isLoading = true
                                         coroutineScope.launch {
@@ -306,7 +308,7 @@ fun AuthScreen(
                                                 onAuthSuccess()
                                             } else {
                                                 errorMessage = result.exceptionOrNull()?.localizedMessage
-                                                    ?: "Codice non valido o scaduto"
+                                                    ?: context.getString(R.string.err_invalid_code)
                                             }
                                         }
                                     }
@@ -334,7 +336,7 @@ fun AuthScreen(
                                 onSubmit = {
                                     clearFeedback()
                                     if (email.isBlank() || password.isBlank()) {
-                                        errorMessage = "Inserisci email e password per continuare"
+                                        errorMessage = context.getString(R.string.err_email_password_required)
                                     } else {
                                         isLoading = true
                                         coroutineScope.launch {
@@ -350,7 +352,7 @@ fun AuthScreen(
                                                 onAuthSuccess()
                                             } else {
                                                 errorMessage = result.exceptionOrNull()?.localizedMessage
-                                                    ?: "Errore di autenticazione"
+                                                    ?: context.getString(R.string.err_auth_generic)
                                             }
                                         }
                                     }
@@ -382,8 +384,7 @@ fun AuthScreen(
             Spacer(Modifier.height(Spacing.xl))
 
             Text(
-                text = "La posizione è condivisa solo con i gruppi a cui appartieni " +
-                    "e puoi interromperla in qualsiasi momento.",
+                text = stringResource(R.string.auth_privacy_note),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -419,8 +420,8 @@ private fun PhoneAuthForm(
             OutlinedTextField(
                 value = phoneNumber,
                 onValueChange = onPhoneChange,
-                label = { Text("Numero di telefono") },
-                placeholder = { Text("+39 333 1234567") },
+                label = { Text(stringResource(R.string.label_phone_number)) },
+                placeholder = { Text(stringResource(R.string.placeholder_phone)) },
                 leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Phone,
@@ -435,7 +436,7 @@ private fun PhoneAuthForm(
             )
 
             PrimaryActionButton(
-                label = "Invia codice SMS",
+                label = stringResource(R.string.action_send_sms),
                 icon = Icons.Default.Sms,
                 isLoading = isLoading,
                 onClick = onSendCode,
@@ -443,7 +444,7 @@ private fun PhoneAuthForm(
             )
         } else {
             Text(
-                text = "Abbiamo inviato un codice a $phoneNumber",
+                text = stringResource(R.string.auth_code_sent, phoneNumber),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -451,7 +452,7 @@ private fun PhoneAuthForm(
             OutlinedTextField(
                 value = smsCode,
                 onValueChange = onSmsCodeChange,
-                label = { Text("Codice a 6 cifre") },
+                label = { Text(stringResource(R.string.label_sms_code)) },
                 leadingIcon = { Icon(Icons.Default.Pin, contentDescription = null) },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Number,
@@ -467,7 +468,7 @@ private fun PhoneAuthForm(
             OutlinedTextField(
                 value = displayName,
                 onValueChange = onDisplayNameChange,
-                label = { Text("Come ti chiami") },
+                label = { Text(stringResource(R.string.label_display_name)) },
                 leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { onImeDone() }),
@@ -479,7 +480,7 @@ private fun PhoneAuthForm(
             )
 
             PrimaryActionButton(
-                label = "Verifica e accedi",
+                label = stringResource(R.string.action_verify_and_login),
                 icon = Icons.Default.LockOpen,
                 isLoading = isLoading,
                 onClick = onVerify,
@@ -490,7 +491,7 @@ private fun PhoneAuthForm(
                 onClick = onEditNumber,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             ) {
-                Text("Cambia numero")
+                Text(stringResource(R.string.action_change_number))
             }
         }
     }
@@ -518,13 +519,13 @@ private fun EmailAuthForm(
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
             PillChip(
-                label = "Accedi",
+                label = stringResource(R.string.action_sign_in),
                 selected = isLoginMode,
                 onClick = { onModeChange(true) },
                 modifier = Modifier.weight(1f)
             )
             PillChip(
-                label = "Registrati",
+                label = stringResource(R.string.action_register),
                 selected = !isLoginMode,
                 onClick = { onModeChange(false) },
                 modifier = Modifier.weight(1f)
@@ -535,7 +536,7 @@ private fun EmailAuthForm(
             OutlinedTextField(
                 value = displayName,
                 onValueChange = onDisplayNameChange,
-                label = { Text("Nome completo") },
+                label = { Text(stringResource(R.string.label_full_name)) },
                 leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                 singleLine = true,
                 shape = RoundedCornerShape(Radius.sm),
@@ -546,7 +547,7 @@ private fun EmailAuthForm(
         OutlinedTextField(
             value = email,
             onValueChange = onEmailChange,
-            label = { Text("Email") },
+            label = { Text(stringResource(R.string.auth_method_email)) },
             leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Email,
@@ -566,7 +567,10 @@ private fun EmailAuthForm(
                 IconButton(onClick = onTogglePasswordVisibility) {
                     Icon(
                         if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = if (passwordVisible) "Nascondi password" else "Mostra password"
+                        contentDescription = if (passwordVisible)
+                            stringResource(R.string.action_hide_password)
+                        else
+                            stringResource(R.string.action_show_password)
                     )
                 }
             },
@@ -583,7 +587,8 @@ private fun EmailAuthForm(
         )
 
         PrimaryActionButton(
-            label = if (isLoginMode) "Accedi" else "Crea account",
+            label = if (isLoginMode) stringResource(R.string.action_sign_in)
+                    else stringResource(R.string.action_create_account),
             icon = if (isLoginMode) Icons.Default.Login else Icons.Default.PersonAdd,
             isLoading = isLoading,
             onClick = onSubmit

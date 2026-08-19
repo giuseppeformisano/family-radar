@@ -19,6 +19,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import com.example.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -88,7 +90,7 @@ fun PlaceDetailSheet(
                 Spacer(modifier = Modifier.height(Spacing.md))
 
                 Text(
-                    text = place.name.ifBlank { "Luogo di Gruppo" },
+                    text = place.name.ifBlank { stringResource(R.string.place_fallback_name) },
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -129,7 +131,7 @@ fun PlaceDetailSheet(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Coordinate GPS",
+                                text = stringResource(R.string.label_gps_coordinates),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -149,12 +151,12 @@ fun PlaceDetailSheet(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Geofencing Notifiche",
+                                text = stringResource(R.string.label_geofencing),
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = "Attivo (Entrata/Uscita)",
+                                text = stringResource(R.string.geofence_active_status),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = RadarSemantic.BatteryOk
@@ -183,7 +185,7 @@ fun PlaceDetailSheet(
                                     val uri = Uri.parse("geo:${place.latitude},${place.longitude}?q=${place.latitude},${place.longitude}(${Uri.encode(place.name)})")
                                     context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                                 } catch (e2: Exception) {
-                                    Toast.makeText(context, "Nessuna app di navigazione installata", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.toast_no_navigation_app), Toast.LENGTH_SHORT).show()
                                 }
                             }
                         },
@@ -193,7 +195,7 @@ fun PlaceDetailSheet(
                     ) {
                         Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(Spacing.sm))
-                        Text("Indicazioni")
+                        Text(stringResource(R.string.action_directions))
                     }
 
                     Button(
@@ -207,7 +209,7 @@ fun PlaceDetailSheet(
                     ) {
                         Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(Spacing.sm))
-                        Text("Vedi Mappa")
+                        Text(stringResource(R.string.action_view_map))
                     }
                 }
 
@@ -237,12 +239,12 @@ fun PlaceDetailSheet(
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                "Avvisi arrivo e partenza",
+                                stringResource(R.string.place_geofence_toggle_label),
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
                             )
                             Text(
-                                if (place.geofenceEnabled) "Attivi per questo luogo"
-                                else "Disattivati: nessuna notifica",
+                                if (place.geofenceEnabled) stringResource(R.string.place_geofence_on_desc)
+                                else stringResource(R.string.place_geofence_off_desc),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -273,7 +275,7 @@ fun PlaceDetailSheet(
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(Spacing.sm))
-                        Text("Modifica")
+                        Text(stringResource(R.string.action_edit))
                     }
 
                     OutlinedButton(
@@ -284,7 +286,7 @@ fun PlaceDetailSheet(
                     ) {
                         Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(Spacing.sm))
-                        Text("Elimina")
+                        Text(stringResource(R.string.action_delete))
                     }
                 }
 
@@ -315,14 +317,14 @@ fun PlaceDetailSheet(
             },
             title = {
                 Text(
-                    "Eliminare questo luogo?",
+                    stringResource(R.string.dialog_delete_place_title),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             },
             text = {
                 Text(
-                    "Sei sicuro di voler rimuovere '${place.name}' dai luoghi sicuri del gruppo? I membri non riceveranno più notifiche di arrivo e partenza.",
+                    stringResource(R.string.dialog_delete_place_body, place.name),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -338,7 +340,7 @@ fun PlaceDetailSheet(
                     shape = RoundedCornerShape(Radius.md),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Elimina")
+                    Text(stringResource(R.string.action_delete))
                 }
             },
             dismissButton = {
@@ -346,7 +348,7 @@ fun PlaceDetailSheet(
                     onClick = { showDeleteConfirm = false },
                     shape = RoundedCornerShape(Radius.md)
                 ) {
-                    Text("Annulla")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )

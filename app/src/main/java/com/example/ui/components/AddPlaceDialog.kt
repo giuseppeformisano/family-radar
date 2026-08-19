@@ -30,6 +30,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import com.example.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -79,6 +81,7 @@ fun AddPlaceDialog(
     var searchQuery by remember { mutableStateOf("") }
     var isSearching by remember { mutableStateOf(false) }
     var searchFeedback by remember { mutableStateOf<String?>(null) }
+    var searchSuccess by remember { mutableStateOf(false) }
 
     var placeName by remember { mutableStateOf(existingPlace?.name ?: "") }
     var selectedCategory by remember { mutableStateOf(existingPlace?.category ?: PlaceCategory.HOME) }
@@ -93,7 +96,7 @@ fun AddPlaceDialog(
         ?: if (initialLon != 0.0) initialLon else 12.4964
     var currentPinLat by remember { mutableStateOf(startLat) }
     var currentPinLon by remember { mutableStateOf(startLon) }
-    var resolvedAddress by remember { mutableStateOf("Posizione sulla mappa...") }
+    var resolvedAddress by remember { mutableStateOf(context.getString(R.string.map_position_placeholder)) }
 
     var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
 
@@ -161,12 +164,14 @@ fun AddPlaceDialog(
                                     mapViewInstance?.controller?.setZoom(17.0)
                                     currentPinLat = addr.latitude
                                     currentPinLon = addr.longitude
-                                    searchFeedback = "Trovato: ${addr.getAddressLine(0) ?: searchQuery}"
+                                    searchFeedback = context.getString(R.string.toast_address_found, addr.getAddressLine(0) ?: searchQuery)
+                                    searchSuccess = true
                                     if (placeName.isBlank()) {
                                         placeName = addr.featureName ?: addr.thoroughfare ?: searchQuery
                                     }
                                 } else {
-                                    searchFeedback = "Nessun indirizzo trovato per '$searchQuery'"
+                                    searchFeedback = context.getString(R.string.toast_address_not_found, searchQuery)
+                                    searchSuccess = false
                                 }
                             }
                         }
@@ -194,7 +199,8 @@ fun AddPlaceDialog(
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
                         isSearching = false
-                        searchFeedback = "Errore durante la ricerca: ${e.localizedMessage}"
+                        searchFeedback = context.getString(R.string.toast_search_error, e.localizedMessage)
+                        searchSuccess = false
                     }
                 }
             }
@@ -247,12 +253,12 @@ fun AddPlaceDialog(
                         }
                         Column {
                             Text(
-                                if (isEditing) "Modifica Luogo" else "Nuovo Luogo Sicuro",
+                                if (isEditing) stringResource(R.string.dialog_place_edit_title) else stringResource(R.string.dialog_place_new_title),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                             )
                             Text(
-                                if (isEditing) "Aggiorna nome, posizione, raggio e avvisi"
-                                else "Posiziona il pin sulla mappa o cerca",
+                                if (isEditing) stringResource(R.string.dialog_place_edit_subtitle)
+                                else stringResource(R.string.dialog_place_new_subtitle),
                                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                             )
                         }
@@ -261,7 +267,7 @@ fun AddPlaceDialog(
                         onClick = onDismiss,
                         modifier = Modifier.size(32.dp)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = "Chiudi", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_close), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
 
@@ -269,16 +275,16 @@ fun AddPlaceDialog(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Cerca via, piazza o città...", fontSize = 14.sp) },
+                    placeholder = { Text(stringResource(R.string.search_place_hint), fontSize = 14.sp) },
                     leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = "Cerca", tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.action_search), tint = MaterialTheme.colorScheme.primary)
                     },
                     trailingIcon = {
                         if (isSearching) {
                             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         } else if (searchQuery.isNotBlank()) {
-                            IconButton(onClick = { searchQuery = ""; searchFeedback = null }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Cancella")
+                            IconButton(onClick = { searchQuery = ""; searchFeedback = null; searchSuccess = false }) {
+                                Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.action_clear))
                             }
                         }
                     },
@@ -296,7 +302,7 @@ fun AddPlaceDialog(
                     Text(
                         text = searchFeedback ?: "",
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (searchFeedback?.startsWith("Trovato") == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        color = if (searchSuccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -419,7 +425,7 @@ fun AddPlaceDialog(
                                 tint = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                "Scorri la mappa per posizionare il pin",
+                                stringResource(R.string.map_pin_hint),
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium)
                             )
                         }
@@ -468,7 +474,7 @@ fun AddPlaceDialog(
                                 ) {
                                     Icon(
                                         Icons.Default.MyLocation,
-                                        contentDescription = "Posizione Attuale",
+                                        contentDescription = stringResource(R.string.action_current_location),
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -482,8 +488,8 @@ fun AddPlaceDialog(
                 OutlinedTextField(
                     value = placeName,
                     onValueChange = { placeName = it },
-                    label = { Text("Nome Luogo (es. Casa, Ufficio)") },
-                    placeholder = { Text("Es. Casa di Marco") },
+                    label = { Text(stringResource(R.string.place_name_label)) },
+                    placeholder = { Text(stringResource(R.string.place_name_placeholder)) },
                     singleLine = true,
                     shape = RoundedCornerShape(14.dp),
                     keyboardOptions = KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Words),
@@ -494,7 +500,7 @@ fun AddPlaceDialog(
 
                 // Category Chips
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Categoria", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold))
+                    Text(stringResource(R.string.label_category), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold))
                     // Cinque colonne di uguale larghezza, icona sopra ed etichetta
                     // sotto. Con le FilterChip a icona+testo affiancati la quinta
                     // categoria non ci stava e andava a capo, lasciando una riga
@@ -559,7 +565,7 @@ fun AddPlaceDialog(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Raggio Notifica Geofence", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.label_geofence_radius), style = MaterialTheme.typography.labelMedium)
                         Text(
                             "${radiusMeters.roundToInt()} metri",
                             style = MaterialTheme.typography.labelMedium.copy(
@@ -596,14 +602,14 @@ fun AddPlaceDialog(
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            "Avvisi di arrivo e partenza",
+                            stringResource(R.string.place_alerts_toggle_label),
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
                         )
                         Text(
                             if (geofenceEnabled)
-                                "Il gruppo riceve una notifica quando qualcuno entra o esce"
+                                stringResource(R.string.place_alerts_on_desc)
                             else
-                                "Il luogo resta sulla mappa ma non genera notifiche",
+                                stringResource(R.string.place_alerts_off_desc),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -625,7 +631,7 @@ fun AddPlaceDialog(
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Annulla")
+                        Text(stringResource(R.string.action_cancel))
                     }
                     Button(
                         onClick = {
@@ -649,7 +655,7 @@ fun AddPlaceDialog(
                     ) {
                         Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(if (isEditing) "Salva Modifiche" else "Salva Luogo")
+                        Text(if (isEditing) stringResource(R.string.action_save_changes) else stringResource(R.string.action_save_place))
                     }
                 }
             }

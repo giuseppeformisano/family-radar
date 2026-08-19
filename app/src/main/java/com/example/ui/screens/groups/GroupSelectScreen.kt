@@ -31,9 +31,11 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.model.GroupData
 import com.example.repository.FirebaseRepository
 import com.example.ui.components.EmptyState
@@ -71,6 +73,8 @@ fun GroupSelectScreen(
     var infoMessage by remember { mutableStateOf<String?>(null) }
     var isSubmitting by remember { mutableStateOf(false) }
 
+    val errInvalidJoinCode = stringResource(R.string.err_invalid_join_code)
+
     // Non appena l'admin approva, il listener del repository aggiorna lo stato
     // e la schermata passa da sola al radar: nessun refresh manuale.
     LaunchedEffect(currentUser?.currentGroupId, userGroups) {
@@ -100,7 +104,7 @@ fun GroupSelectScreen(
                     showCreateDialog = true
                 },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Nuovo gruppo") },
+                text = { Text(stringResource(R.string.action_new_group)) },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = RoundedCornerShape(Radius.md),
@@ -137,14 +141,17 @@ fun GroupSelectScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Ciao, ${currentUser?.displayName ?: "utente"}",
+                            text = stringResource(
+                                R.string.greeting_user,
+                                currentUser?.displayName ?: stringResource(R.string.label_user_fallback)
+                            ),
                             style = MaterialTheme.typography.headlineMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "Scegli un gruppo da seguire sul radar",
+                            text = stringResource(R.string.group_select_subtitle),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -155,7 +162,7 @@ fun GroupSelectScreen(
                     ) {
                         Icon(
                             Icons.Default.Logout,
-                            contentDescription = "Disconnetti",
+                            contentDescription = stringResource(R.string.action_sign_out),
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
@@ -198,12 +205,12 @@ fun GroupSelectScreen(
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Hai un codice invito?",
+                                text = stringResource(R.string.join_code_prompt),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
-                                text = "Sei caratteri e sei dentro al radar del gruppo",
+                                text = stringResource(R.string.join_code_hint),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                             )
@@ -221,8 +228,8 @@ fun GroupSelectScreen(
             if (userGroups.isNotEmpty()) {
                 item {
                     SectionHeader(
-                        title = "I tuoi gruppi",
-                        subtitle = "${userGroups.size} in totale",
+                        title = stringResource(R.string.section_your_groups),
+                        subtitle = stringResource(R.string.group_count_total, userGroups.size),
                         modifier = Modifier.padding(top = Spacing.sm)
                     )
                 }
@@ -245,9 +252,8 @@ fun GroupSelectScreen(
             } else {
                 item {
                     EmptyState(
-                        title = "Nessun gruppo",
-                        description = "Crea un gruppo o inserisci un codice invito per " +
-                            "iniziare a condividere la posizione in tempo reale.",
+                        title = stringResource(R.string.empty_groups_title),
+                        description = stringResource(R.string.empty_groups_body),
                         icon = Icons.Default.GroupAdd,
                         lottieAsset = "empty_groups",
                         modifier = Modifier.padding(top = Spacing.xxl)
@@ -315,7 +321,7 @@ fun GroupSelectScreen(
                                 ?.let(onGroupSelected)
                         } else {
                             val msg = result.exceptionOrNull()?.message
-                                ?: "Codice non valido o gruppo inesistente"
+                                ?: errInvalidJoinCode
                             // Il repository segnala l'attesa di approvazione come errore:
                             // qui lo distinguiamo per mostrarlo come informazione, non come fallimento.
                             if (msg.contains("approvazione") || msg.contains("inviata")) {
@@ -438,19 +444,19 @@ private fun GroupCard(
                     )
                     when {
                         isPending -> RadarBadge(
-                            text = "In attesa",
+                            text = stringResource(R.string.status_pending),
                             containerColor = MaterialTheme.colorScheme.tertiary,
                             contentColor = MaterialTheme.colorScheme.onTertiary
                         )
-                        isCurrent -> RadarBadge("Attivo")
+                        isCurrent -> RadarBadge(stringResource(R.string.status_active))
                     }
                 }
 
                 Text(
                     text = when {
-                        isPending -> "Richiesta inviata, in attesa dell'amministratore"
+                        isPending -> stringResource(R.string.status_pending_desc)
                         group.description.isNotBlank() -> group.description
-                        else -> "Nessuna descrizione"
+                        else -> stringResource(R.string.label_no_description)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = if (isPending) MaterialTheme.colorScheme.tertiary
@@ -520,7 +526,7 @@ private fun CreateGroupDialog(
             scope.launch {
                 val base64 = ImageUtils.uriToBase64(context, uri, maxDimension = 300, quality = 80)
                 if (base64 == null) {
-                    Toast.makeText(context, "Errore nel caricamento immagine", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.toast_image_load_error), Toast.LENGTH_SHORT).show()
                 }
                 onPhotoChange(base64)
                 isProcessingImage = false
@@ -537,7 +543,7 @@ private fun CreateGroupDialog(
         },
         title = {
             Text(
-                text = "Crea un gruppo",
+                text = stringResource(R.string.dialog_create_group_title),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -548,7 +554,7 @@ private fun CreateGroupDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState())
             ) {
                 Text(
-                    text = "Una stanza privata per condividere posizione e messaggi.",
+                    text = stringResource(R.string.dialog_create_group_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -569,7 +575,8 @@ private fun CreateGroupDialog(
                         enabled = !isProcessingImage && !isSubmitting
                     ) {
                         Text(
-                            if (photoBitmap != null) "Cambia immagine" else "Aggiungi immagine",
+                            if (photoBitmap != null) stringResource(R.string.action_change_image)
+                            else stringResource(R.string.action_add_image),
                             style = MaterialTheme.typography.labelLarge
                         )
                     }
@@ -578,8 +585,8 @@ private fun CreateGroupDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = onNameChange,
-                    label = { Text("Nome del gruppo") },
-                    placeholder = { Text("es. Famiglia Rossi") },
+                    label = { Text(stringResource(R.string.label_group_name)) },
+                    placeholder = { Text(stringResource(R.string.placeholder_group_name)) },
                     singleLine = true,
                     shape = RoundedCornerShape(Radius.sm),
                     modifier = Modifier
@@ -589,28 +596,28 @@ private fun CreateGroupDialog(
                 OutlinedTextField(
                     value = description,
                     onValueChange = onDescriptionChange,
-                    label = { Text("Descrizione (facoltativa)") },
+                    label = { Text(stringResource(R.string.label_group_description)) },
                     singleLine = true,
                     shape = RoundedCornerShape(Radius.sm),
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 Text(
-                    text = "Chi può entrare",
+                    text = stringResource(R.string.label_who_can_join),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
                 AccessPolicyOption(
                     selected = requiresApproval,
-                    title = "Con approvazione",
-                    description = "Approvi tu ogni richiesta. Consigliato.",
+                    title = stringResource(R.string.join_mode_approval),
+                    description = stringResource(R.string.join_mode_approval_desc),
                     onClick = { onRequiresApprovalChange(true) }
                 )
                 AccessPolicyOption(
                     selected = !requiresApproval,
-                    title = "Accesso diretto",
-                    description = "Chi ha il codice entra subito.",
+                    title = stringResource(R.string.join_mode_direct),
+                    description = stringResource(R.string.join_mode_direct_desc),
                     onClick = { onRequiresApprovalChange(false) }
                 )
             }
@@ -629,7 +636,7 @@ private fun CreateGroupDialog(
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                 } else {
-                    Text("Crea")
+                    Text(stringResource(R.string.action_create))
                 }
             }
         },
@@ -638,7 +645,7 @@ private fun CreateGroupDialog(
                 onClick = onDismiss,
                 enabled = !isSubmitting,
                 shape = RoundedCornerShape(Radius.sm)
-            ) { Text("Annulla") }
+            ) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }
@@ -697,7 +704,7 @@ private fun JoinGroupDialog(
         icon = { DialogIcon(Icons.Default.VpnKey, MaterialTheme.colorScheme.secondary) },
         title = {
             Text(
-                text = "Unisciti con il codice",
+                text = stringResource(R.string.dialog_join_title),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -705,15 +712,15 @@ private fun JoinGroupDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 Text(
-                    text = "Inserisci i sei caratteri ricevuti dal proprietario del gruppo.",
+                    text = stringResource(R.string.dialog_join_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 OutlinedTextField(
                     value = code,
                     onValueChange = onCodeChange,
-                    label = { Text("Codice invito") },
-                    placeholder = { Text("FAM982") },
+                    label = { Text(stringResource(R.string.label_invite_code)) },
+                    placeholder = { Text(stringResource(R.string.placeholder_invite_code)) },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.headlineSmall.copy(
                         textAlign = TextAlign.Center
@@ -771,7 +778,7 @@ private fun JoinGroupDialog(
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                 } else {
-                    Text("Invia richiesta")
+                    Text(stringResource(R.string.action_send_request))
                 }
             }
         },
@@ -780,7 +787,7 @@ private fun JoinGroupDialog(
                 onClick = onDismiss,
                 enabled = !isSubmitting,
                 shape = RoundedCornerShape(Radius.sm)
-            ) { Text("Chiudi") }
+            ) { Text(stringResource(R.string.action_close)) }
         }
     )
 }
@@ -798,7 +805,7 @@ private fun PendingRequestDialog(
         icon = { DialogIcon(Icons.Default.HourglassTop, MaterialTheme.colorScheme.tertiary) },
         title = {
             Text(
-                text = "Richiesta in sospeso",
+                text = stringResource(R.string.dialog_pending_title),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -806,13 +813,12 @@ private fun PendingRequestDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                 Text(
-                    text = "Hai chiesto di entrare in \"$groupName\".",
+                    text = stringResource(R.string.dialog_pending_body, groupName),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 InfoBanner(
-                    text = "Appena l'amministratore approva, il radar si sblocca da solo. " +
-                        "Non serve riaprire l'app.",
+                    text = stringResource(R.string.dialog_pending_note),
                     icon = Icons.Default.Schedule,
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -822,7 +828,7 @@ private fun PendingRequestDialog(
         },
         confirmButton = {
             Button(onClick = onAcknowledge, shape = RoundedCornerShape(Radius.sm)) {
-                Text("Ho capito")
+                Text(stringResource(R.string.action_got_it))
             }
         },
         dismissButton = {
@@ -832,7 +838,7 @@ private fun PendingRequestDialog(
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = MaterialTheme.colorScheme.error
                 )
-            ) { Text("Annulla richiesta") }
+            ) { Text(stringResource(R.string.action_cancel_request)) }
         }
     )
 }

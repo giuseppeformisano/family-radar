@@ -22,6 +22,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import com.example.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -71,7 +73,7 @@ fun MemberDetailSheet(
                     if (avatarBitmap != null) {
                         Image(
                             bitmap = avatarBitmap.asImageBitmap(),
-                            contentDescription = "Avatar di ${location.userName}",
+                            contentDescription = stringResource(R.string.member_avatar_desc, location.userName),
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
                         )
@@ -89,7 +91,7 @@ fun MemberDetailSheet(
                 Spacer(modifier = Modifier.height(Spacing.md))
 
                 Text(
-                    text = if (isSelf) "Tu (${location.userName})" else location.userName,
+                    text = if (isSelf) stringResource(R.string.member_self_label, location.userName) else location.userName,
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 )
 
@@ -123,7 +125,7 @@ fun MemberDetailSheet(
                                 tint = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "Presso ${location.currentPlaceName}",
+                                text = stringResource(R.string.member_at_place, location.currentPlaceName ?: ""),
                                 style = MaterialTheme.typography.labelLarge.copy(
                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     fontWeight = FontWeight.SemiBold
@@ -142,7 +144,7 @@ fun MemberDetailSheet(
                 ) {
                     MetricCard(
                         icon = Icons.Default.BatteryChargingFull,
-                        label = "Batteria",
+                        label = stringResource(R.string.label_battery),
                         value = "${location.batteryLevel}%",
                         iconColor = when {
                             location.batteryLevel > 50 -> RadarSemantic.BatteryOk
@@ -154,8 +156,8 @@ fun MemberDetailSheet(
 
                     MetricCard(
                         icon = Icons.Default.Speed,
-                        label = "Velocità",
-                        value = if (speedKmH > 2) "$speedKmH km/h" else "Fermo",
+                        label = stringResource(R.string.label_speed),
+                        value = if (speedKmH > 2) "$speedKmH km/h" else stringResource(R.string.speed_stationary),
                         iconColor = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.weight(1f)
                     )
@@ -169,7 +171,7 @@ fun MemberDetailSheet(
                 ) {
                     MetricCard(
                         icon = Icons.Default.GpsFixed,
-                        label = "Accuratezza",
+                        label = stringResource(R.string.label_accuracy),
                         value = "±${location.accuracy.toInt()} m",
                         iconColor = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.weight(1f)
@@ -177,7 +179,7 @@ fun MemberDetailSheet(
 
                     MetricCard(
                         icon = Icons.Default.AccessTime,
-                        label = "Ultimo fix",
+                        label = stringResource(R.string.label_last_fix),
                         value = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(location.timestamp)),
                         iconColor = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.weight(1f)
@@ -213,7 +215,7 @@ fun MemberDetailSheet(
                     ) {
                         Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Indicazioni", maxLines = 1)
+                        Text(stringResource(R.string.action_directions), maxLines = 1)
                     }
 
                     // Chat with member / group
@@ -229,7 +231,7 @@ fun MemberDetailSheet(
                     ) {
                         Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Messaggia", maxLines = 1)
+                        Text(stringResource(R.string.action_message), maxLines = 1)
                     }
                 }
 
@@ -245,7 +247,7 @@ fun MemberDetailSheet(
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(Spacing.sm))
-                        Text("Modifica il mio profilo nel gruppo")
+                        Text(stringResource(R.string.action_edit_my_profile))
                     }
                 }
 

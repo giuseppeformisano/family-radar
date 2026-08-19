@@ -10,6 +10,8 @@ import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
+import com.example.R
+import com.example.ui.theme.LanguagePreferences
 import com.example.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -125,18 +127,22 @@ object AppUpdater {
             }
             android.widget.Toast.makeText(
                 context,
-                "Abilita 'Installa app sconosciute' per Family Radar, poi premi di nuovo Aggiorna",
+                res(context).getString(R.string.update_allow_unknown_sources),
                 android.widget.Toast.LENGTH_LONG
             ).show()
             return
         }
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        ensureChannel(manager)
+        ensureChannel(context, manager)
 
         // Notifica di progresso indeterminato mentre parte il download
         manager.notify(NOTIF_ID, progressNotification(context, -1, 0).build())
-        android.widget.Toast.makeText(context, "Download in corso…", android.widget.Toast.LENGTH_SHORT).show()
+        android.widget.Toast.makeText(
+            context,
+            res(context).getString(R.string.update_download_started),
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -150,7 +156,7 @@ object AppUpdater {
                 val body = response.body ?: run {
                     Log.w("AppUpdater", "Download: body nullo")
                     manager.cancel(NOTIF_ID)
-                    showErrorToast(context, "Download fallito: risposta vuota")
+                    showErrorToast(context, res(context).getString(R.string.update_failed_empty_response))
                     return@launch
                 }
 
@@ -175,7 +181,7 @@ object AppUpdater {
                 if (!dest.exists() || dest.length() == 0L) {
                     Log.w("AppUpdater", "APK vuoto dopo download")
                     manager.cancel(NOTIF_ID)
-                    showErrorToast(context, "Download fallito: file vuoto")
+                    showErrorToast(context, res(context).getString(R.string.update_failed_empty_file))
                     return@launch
                 }
 
@@ -193,10 +199,17 @@ object AppUpdater {
             } catch (e: Exception) {
                 Log.w("AppUpdater", "downloadAndInstall errore: ${e.message}")
                 manager.cancel(NOTIF_ID)
-                showErrorToast(context, "Download fallito: ${e.message}")
+                showErrorToast(context, res(context).getString(R.string.update_failed_reason, e.message ?: ""))
             }
         }
     }
+
+    /**
+     * Context da cui leggere le stringhe: quello che arriva qui e' l'application
+     * context, che ignora la lingua scelta in Impostazioni. Senza questo passaggio
+     * la notifica di download resterebbe in italiano con l'app in inglese.
+     */
+    private fun res(context: Context): Context = LanguagePreferences.localizedContext(context)
 
     private fun progressNotification(
         context: Context,
@@ -204,10 +217,14 @@ object AppUpdater {
         progress: Int
     ): NotificationCompat.Builder {
         val indeterminate = max < 0
+        val res = res(context)
         return NotificationCompat.Builder(context, CHANNEL_UPDATE)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("Family Radar — download aggiornamento")
-            .setContentText(if (indeterminate) "Avvio download…" else "Download in corso ($progress%)")
+            .setContentTitle(res.getString(R.string.update_downloading_title))
+            .setContentText(
+                if (indeterminate) res.getString(R.string.update_download_starting)
+                else res.getString(R.string.update_download_progress, progress)
+            )
             .setProgress(if (indeterminate) 0 else max, progress, indeterminate)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -254,8 +271,8 @@ object AppUpdater {
                 NOTIF_ID,
                 NotificationCompat.Builder(context, CHANNEL_UPDATE)
                     .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                    .setContentTitle("Download completato!")
-                    .setContentText("Tocca qui per installare Family Radar")
+                    .setContentTitle(res(context).getString(R.string.update_ready_title))
+                    .setContentText(res(context).getString(R.string.update_ready_body))
                     .setAutoCancel(true)
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setContentIntent(pending)
@@ -266,10 +283,14 @@ object AppUpdater {
         }
     }
 
-    private fun ensureChannel(manager: NotificationManager) {
+    private fun ensureChannel(context: Context, manager: NotificationManager) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_UPDATE, "Aggiornamenti", NotificationManager.IMPORTANCE_HIGH)
+                NotificationChannel(
+                    CHANNEL_UPDATE,
+                    res(context).getString(R.string.channel_update_name),
+                    NotificationManager.IMPORTANCE_HIGH
+                )
             )
         }
     }

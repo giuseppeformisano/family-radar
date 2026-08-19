@@ -55,4 +55,17 @@
     <string name="service_title">Family Radar active</string>
     <string name="service_last_fix">Last position at %1$s</string>
     <string name="service_waiting_gps">Waiting for the first GPS signal…</string>
+    <!-- In-app update -->
+    <string name="channel_update_name">Updates</string>
+    <string name="update_downloading_title">Update in progress</string>
+    <string name="update_download_starting">Starting download</string>
+    <string name="update_download_progress">Download %1$d%%</string>
+    <string name="update_ready_title">Update ready</string>
+    <string name="update_ready_body">Tap to install</string>
+    <string name="update_download_started">Download started</string>
+    <string name="update_allow_unknown_sources">Allow installing apps from Family Radar, then press Update again</string>
+    <string name="update_failed_empty_response">Download failed: empty response</string>
+    <string name="update_failed_empty_file">Download failed: empty file</string>
+    <string name="update_failed_reason">Download failed: %1$s</string>
 </resources>
+

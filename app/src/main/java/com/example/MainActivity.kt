@@ -212,7 +212,11 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
         while (attempt < UPDATE_CHECK_ATTEMPTS) {
             when (val result = AppUpdater.checkDetailed()) {
                 is CheckResult.Available -> {
-                    updateInfo = result.info
+                    val dismissed = context.getSharedPreferences("family_radar_settings_prefs", android.content.Context.MODE_PRIVATE)
+                        .getInt("dismissed_update_version_code", 0)
+                    if (result.info.versionCode != dismissed) {
+                        updateInfo = result.info
+                    }
                     return@LaunchedEffect
                 }
                 CheckResult.UpToDate -> {
@@ -301,7 +305,11 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
                     )
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(
-                            onClick = { updateInfo = null },
+                            onClick = {
+                                context.getSharedPreferences("family_radar_settings_prefs", android.content.Context.MODE_PRIVATE)
+                                    .edit().putInt("dismissed_update_version_code", info.versionCode).apply()
+                                updateInfo = null
+                            },
                             modifier = Modifier.weight(1f),
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
                         ) { Text("Dopo") }

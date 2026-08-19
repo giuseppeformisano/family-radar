@@ -9,8 +9,16 @@
          inglese ricade sull'italiano senza segnalare nulla.
 
          Segnaposto: %1$s, %2$s... sono POSIZIONALI. Nelle traduzioni
-         l'ordine delle parole cambia, e senza indice non si potrebbero
-         invertire.
+         la posizione delle parole cambia, e senza indice non si
+         potrebbero invertire.
+
+         NIENTE APOSTROFI nel testo delle stringhe. Andrebbero scritti
+         come \' e un apostrofo nudo fa fallire aapt2 con un messaggio
+         fuorviante ("invalid unicode escape sequence"). Il problema e'
+         che i formattatori XML normalizzano via il backslash, e la
+         build si rompe di nuovo. Meglio riformulare la frase: al posto
+         di "Consenti l'installazione" scrivere "Consenti a X di
+         installare". Vale anche per values-en.
          ============================================================ -->
 
     <!-- Selettore lingua e aspetto -->
@@ -72,7 +80,7 @@
     <string name="update_ready_title">Aggiornamento pronto</string>
     <string name="update_ready_body">Tocca per installare</string>
     <string name="update_download_started">Download avviato</string>
-    <string name="update_allow_unknown_sources">Consenti l'installazione di app da Family Radar, poi premi di nuovo Aggiorna</string>
+    <string name="update_allow_unknown_sources">Consenti a Family Radar di installare app, poi premi di nuovo Aggiorna</string>
     <string name="update_failed_empty_response">Download non riuscito: risposta vuota</string>
     <string name="update_failed_empty_file">Download non riuscito: file vuoto</string>
     <string name="update_failed_reason">Download non riuscito: %1$s</string>

@@ -16,7 +16,7 @@
 
     <!-- Notification channels -->
     <string name="channel_chat_name">Group messages</string>
-    <string name="channel_chat_desc">New messages in your groups\' chat</string>
+    <string name="channel_chat_desc">New messages in your group chats</string>
     <string name="channel_places_name">Arrivals and departures</string>
     <string name="channel_places_desc">Alerts when a member enters or leaves a saved place</string>
     <string name="channel_sos_name">SOS alerts</string>

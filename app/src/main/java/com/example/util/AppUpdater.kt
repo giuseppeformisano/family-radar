@@ -148,12 +148,14 @@ object AppUpdater {
             return
         }
 
+        android.widget.Toast.makeText(context, "Download in corso…", android.widget.Toast.LENGTH_SHORT).show()
+
         val downloadId = try {
             dm.enqueue(
                 DownloadManager.Request(Uri.parse(apkUrl))
-                    .setTitle("Family Radar")
-                    .setDescription("Scaricamento aggiornamento...")
-                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+                    .setTitle("Family Radar — aggiornamento")
+                    .setDescription("Tocca per installare al termine del download")
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                     .setMimeType("application/vnd.android.package-archive")
                     .setDestinationInExternalFilesDir(
                         context,
@@ -173,11 +175,6 @@ object AppUpdater {
                 if (id != downloadId) return
                 runCatching { ctx.unregisterReceiver(this) }
 
-                // Il percorso va chiesto al DownloadManager, non ricostruito: e' lui
-                // a decidere dove ha scritto davvero, e qui si scopre anche se il
-                // download e' andato a buon fine. Prima si dava per scontato che
-                // fosse riuscito, quindi un download fallito mostrava comunque
-                // "Tocca per installare" e il tocco non poteva fare nulla.
                 val file = resolveDownloadedFile(dm, id)
                 if (file == null) {
                     Log.w("AppUpdater", "APK non disponibile dopo il download: apro il browser")
@@ -185,11 +182,9 @@ object AppUpdater {
                     return
                 }
 
-                // Avvia direttamente la schermata di installazione: non dipende
-                // dal permesso notifiche (su Android 13+ del S22 puo' essere negato,
-                // e allora la sola notifica non sarebbe mai comparsa). La notifica
-                // resta come rete di sicurezza se l'installer non parte da solo.
-                launchInstaller(ctx, file)
+                // Android 10+: startActivity() da BroadcastReceiver (background) è bloccato.
+                // Si usa la notifica come unico punto di ingresso: l'utente la tocca
+                // e il PendingIntent parte in foreground senza restrizioni.
                 showInstallNotification(ctx, file)
             }
         }

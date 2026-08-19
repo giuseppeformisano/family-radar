@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.example.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,6 +53,16 @@ fun AddPlaceSnapshotDialog(
     val coroutineScope = rememberCoroutineScope()
     var caption by remember { mutableStateOf("") }
     var isPublishing by remember { mutableStateOf(false) }
+
+    // Strings captured at composable scope for use inside coroutine lambdas
+    val strSnapshotPublished = stringResource(R.string.toast_snapshot_published)
+    val strSnapshotCompressError = stringResource(R.string.toast_snapshot_compress_error)
+    val strPhotoContentDesc = stringResource(R.string.snapshot_photo_content_desc)
+    val strGeolocationLabel = stringResource(R.string.snapshot_geolocation_label)
+    val strCaptionLabel = stringResource(R.string.snapshot_caption_label)
+    val strCaptionPlaceholder = stringResource(R.string.snapshot_caption_placeholder)
+    val strPublishing = stringResource(R.string.snapshot_publishing)
+    val strShareOnMap = stringResource(R.string.snapshot_share_on_map)
 
     val previewBitmap = remember(imageUri, bitmap) {
         if (bitmap != null) bitmap
@@ -109,14 +121,14 @@ fun AddPlaceSnapshotDialog(
                     if (previewBitmap != null) {
                         Image(
                             bitmap = previewBitmap.asImageBitmap(),
-                            contentDescription = "Foto scattata",
+                            contentDescription = strPhotoContentDesc,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
                     } else if (imageUri != null) {
                         AsyncImage(
                             model = imageUri,
-                            contentDescription = "Foto scattata",
+                            contentDescription = strPhotoContentDesc,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -142,7 +154,7 @@ fun AddPlaceSnapshotDialog(
                         )
                         Column {
                             Text(
-                                text = "Geolocalizzazione rilevata",
+                                text = strGeolocationLabel,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.secondary
                             )
@@ -159,8 +171,8 @@ fun AddPlaceSnapshotDialog(
                 OutlinedTextField(
                     value = caption,
                     onValueChange = { caption = it },
-                    label = { Text("Descrizione o nota (opzionale)") },
-                    placeholder = { Text("Es: Pausa caffè qui, Vista panoramica...") },
+                    label = { Text(strCaptionLabel) },
+                    placeholder = { Text(strCaptionPlaceholder) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp),
                     maxLines = 3,
@@ -178,7 +190,7 @@ fun AddPlaceSnapshotDialog(
                             } else if (previewBitmap != null) {
                                 repository.compressBitmapToBase64(previewBitmap, maxDimension = 1280, quality = 85)
                             } else {
-                                Result.failure(Exception("Nessuna immagine disponibile"))
+                                Result.failure(Exception("no image"))
                             }
 
                             if (base64Result.isSuccess) {
@@ -192,14 +204,14 @@ fun AddPlaceSnapshotDialog(
                                 val result = repository.addPlaceSnapshot(snapshot)
                                 isPublishing = false
                                 if (result.isSuccess) {
-                                    Toast.makeText(context, "Istantanea pubblicata sulla mappa del gruppo!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, strSnapshotPublished, Toast.LENGTH_SHORT).show()
                                     onPublished()
                                 } else {
-                                    Toast.makeText(context, "Errore salvataggio istantanea: ${result.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, context.getString(R.string.toast_snapshot_save_error, result.exceptionOrNull()?.message ?: ""), Toast.LENGTH_LONG).show()
                                 }
                             } else {
                                 isPublishing = false
-                                Toast.makeText(context, "Errore compressione immagine", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, strSnapshotCompressError, Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -216,7 +228,7 @@ fun AddPlaceSnapshotDialog(
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(10.dp))
-                        Text("Pubblicazione in corso...")
+                        Text(strPublishing)
                     } else {
                         Icon(
                             imageVector = Icons.Default.Send,
@@ -224,7 +236,7 @@ fun AddPlaceSnapshotDialog(
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Condividi sulla Mappa", fontWeight = FontWeight.SemiBold)
+                        Text(strShareOnMap, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

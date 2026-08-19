@@ -53,6 +53,8 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.max
 import kotlin.math.min
+import androidx.compose.ui.res.stringResource
+import com.example.R
 
 // In-memory cache for generated marker drawables to ensure 60 FPS layer switching
 private val markerDrawableCache = LruCache<String, Drawable>(120)
@@ -114,6 +116,15 @@ fun OsmMapView(
 
     // Floating Expandable Layer Menu State
     var isLayerMenuExpanded by remember { mutableStateOf(false) }
+
+    // String resources captured at composable scope for use inside AndroidView lambdas
+    val strShowMembers = stringResource(R.string.map_layer_show_members)
+    val strShowSnapshots = stringResource(R.string.map_layer_show_snapshots)
+    val strShowPlaces = stringResource(R.string.map_layer_show_places)
+    val strLayerManage = stringResource(R.string.map_layer_manage)
+    val strGroupView = stringResource(R.string.map_group_view)
+    val strZoomIn = stringResource(R.string.map_zoom_in)
+    val strZoomOut = stringResource(R.string.map_zoom_out)
 
     // Pre-allocated overlay cache lists
     val memberOverlays = remember { mutableListOf<Overlay>() }
@@ -343,7 +354,7 @@ fun OsmMapView(
                             val placeMarker = Marker(mapView).apply {
                                 position = placeCenter
                                 title = place.name
-                                snippet = "Zona: ${place.category.label} (${place.radiusMeters.toInt()}m)"
+                                snippet = mapView.context.getString(R.string.map_marker_place_zone, place.category.label, place.radiusMeters.toInt())
                                 icon = createPlaceMarkerDrawable(ctx = mapView.context, place = place)
                                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                                 setOnMarkerClickListener { _, _ ->
@@ -371,8 +382,9 @@ fun OsmMapView(
                             val snapMarker = Marker(mapView).apply {
                                 position = snapPoint
                                 val latest = cluster.latestSnapshot
-                                title = if (cluster.count > 1) "${cluster.count} Istantanee" else (latest?.userName ?: "Istantanea")
-                                snippet = latest?.caption?.ifBlank { "Tocca per visualizzare la foto" } ?: "Istantanea del gruppo"
+                                val ctx = mapView.context
+                                title = if (cluster.count > 1) ctx.getString(R.string.map_marker_snapshot_cluster, cluster.count) else (latest?.userName ?: ctx.getString(R.string.map_marker_snapshot))
+                                snippet = latest?.caption?.ifBlank { ctx.getString(R.string.map_marker_snapshot_tap) } ?: ctx.getString(R.string.map_marker_snapshot_group)
                                 icon = createSnapshotMarkerDrawable(mapView.context, cluster)
                                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                                 setOnMarkerClickListener { _, _ ->
@@ -400,10 +412,12 @@ fun OsmMapView(
                             val isSelf = userLoc.userId == currentUserId
                             val memberMarker = Marker(mapView).apply {
                                 position = memberPoint
-                                title = if (isSelf) "Tu (${userLoc.userName})" else userLoc.userName
-                                val timeStr = formatRelativeTime(userLoc.timestamp)
+                                val markerCtx = mapView.context
+                                title = if (isSelf) markerCtx.getString(R.string.map_marker_member_self, userLoc.userName) else userLoc.userName
+                                val timeStr = formatRelativeTime(markerCtx, userLoc.timestamp)
                                 val speedKmH = (userLoc.speed * 3.6f).toInt()
-                                snippet = "Batteria: ${userLoc.batteryLevel}% • $timeStr" + if (speedKmH > 2) " • $speedKmH km/h" else ""
+                                val batteryBase = markerCtx.getString(R.string.map_marker_battery_info, userLoc.batteryLevel, timeStr)
+                                snippet = if (speedKmH > 2) batteryBase + markerCtx.getString(R.string.map_marker_speed_suffix, speedKmH) else batteryBase
                                 val displayName = if (!userLoc.nickname.isNullOrBlank()) "${userLoc.userName} (${userLoc.nickname})" else userLoc.userName
                                 icon = createMemberMarkerDrawable(
                                     ctx = mapView.context,
@@ -470,7 +484,7 @@ fun OsmMapView(
                     tripOverlays.add(
                         Marker(mapView).apply {
                             position = geo.first()
-                            title = "Partenza"
+                            title = mapView.context.getString(R.string.map_trip_start)
                             icon = createTripEndpointDrawable(mapView.context, isStart = true)
                             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                             setOnMarkerClickListener { _, _ -> true }
@@ -480,7 +494,7 @@ fun OsmMapView(
                         tripOverlays.add(
                             Marker(mapView).apply {
                                 position = geo.last()
-                                title = "Arrivo"
+                                title = mapView.context.getString(R.string.map_trip_end)
                                 icon = createTripEndpointDrawable(mapView.context, isStart = false)
                                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                                 setOnMarkerClickListener { _, _ -> true }
@@ -552,7 +566,7 @@ fun OsmMapView(
                             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
                             .testTag("layer_toggle_members")
                     ) {
-                        Icon(Icons.Default.People, contentDescription = "Mostra Membri", tint = if (showMembers) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.People, contentDescription = strShowMembers, tint = if (showMembers) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                     }
                     IconButton(
                         onClick = { showSnapshots = !showSnapshots },
@@ -563,7 +577,7 @@ fun OsmMapView(
                             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
                             .testTag("layer_toggle_snapshots")
                     ) {
-                        Icon(Icons.Default.PhotoCamera, contentDescription = "Mostra Istantanee", tint = if (showSnapshots) Color(0xFFEA580C) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.PhotoCamera, contentDescription = strShowSnapshots, tint = if (showSnapshots) Color(0xFFEA580C) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                     }
                     IconButton(
                         onClick = { showPlaces = !showPlaces },
@@ -574,7 +588,7 @@ fun OsmMapView(
                             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
                             .testTag("layer_toggle_places")
                     ) {
-                        Icon(Icons.Default.Place, contentDescription = "Mostra Luoghi", tint = if (showPlaces) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Place, contentDescription = strShowPlaces, tint = if (showPlaces) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                     }
                 } else {
                     // 3 * 40dp + 2 * 8dp di gap: stessa larghezza dei pulsanti,
@@ -593,7 +607,7 @@ fun OsmMapView(
                     contentColor = if (isLayerMenuExpanded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
                     shape = CircleShape
                 ) {
-                    Icon(Icons.Default.Layers, contentDescription = "Gestione Layer Mappa", modifier = Modifier.size(24.dp))
+                    Icon(Icons.Default.Layers, contentDescription = strLayerManage, modifier = Modifier.size(24.dp))
                 }
             }
 
@@ -646,7 +660,7 @@ fun OsmMapView(
                 contentColor = MaterialTheme.colorScheme.primary,
                 shape = CircleShape
             ) {
-                Icon(Icons.Default.Group, contentDescription = "Vista Gruppo")
+                Icon(Icons.Default.Group, contentDescription = strGroupView)
             }
 
             // Zoom In
@@ -659,7 +673,7 @@ fun OsmMapView(
                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
                     .testTag("zoom_in_button")
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Zoom In")
+                Icon(Icons.Default.Add, contentDescription = strZoomIn)
             }
 
             // Zoom Out
@@ -672,7 +686,7 @@ fun OsmMapView(
                     .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
                     .testTag("zoom_out_button")
             ) {
-                Icon(Icons.Default.Remove, contentDescription = "Zoom Out")
+                Icon(Icons.Default.Remove, contentDescription = strZoomOut)
             }
         }
     }
@@ -844,12 +858,12 @@ fun clusterSnapshots(snapshots: List<PlaceSnapshot>, thresholdMeters: Double = 3
     }
 }
 
-private fun formatRelativeTime(timestamp: Long): String {
+private fun formatRelativeTime(ctx: Context, timestamp: Long): String {
     val diff = System.currentTimeMillis() - timestamp
     return when {
-        diff < 30_000 -> "Adesso"
-        diff < 60_000 -> "${diff / 1000}s fa"
-        diff < 3600_000 -> "${diff / 60_000}m fa"
+        diff < 30_000 -> ctx.getString(R.string.map_time_just_now)
+        diff < 60_000 -> ctx.getString(R.string.map_time_seconds_ago, (diff / 1000).toInt())
+        diff < 3600_000 -> ctx.getString(R.string.map_time_minutes_ago, (diff / 60_000).toInt())
         else -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
     }
 }

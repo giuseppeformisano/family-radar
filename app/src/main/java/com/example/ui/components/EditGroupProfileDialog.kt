@@ -23,6 +23,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.example.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +46,21 @@ fun EditGroupProfileDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    // Strings captured at composable scope for use inside lambdas/coroutines
+    val strImageLoadError = stringResource(R.string.toast_image_load_error)
+    val strProfileTitle = stringResource(R.string.dialog_profile_title)
+    val strProfileSubtitle = stringResource(R.string.dialog_profile_subtitle)
+    val strChangePhoto = stringResource(R.string.action_change_photo)
+    val strChoosePhoto = stringResource(R.string.action_choose_photo)
+    val strRemove = stringResource(R.string.action_remove)
+    val strLabelName = stringResource(R.string.label_name)
+    val strPlaceholderName = stringResource(R.string.placeholder_name_examples)
+    val strLabelNickname = stringResource(R.string.label_nickname)
+    val strPlaceholderNickname = stringResource(R.string.placeholder_nickname_examples)
+    val strCancel = stringResource(R.string.action_cancel)
+    val strSave = stringResource(R.string.action_save)
+    val strEnterValidName = stringResource(R.string.toast_enter_valid_name)
+
     var displayName by remember { mutableStateOf(currentMember.displayName) }
     var nickname by remember { mutableStateOf(currentMember.nickname ?: "") }
     var photoBase64 by remember { mutableStateOf(currentMember.photoBase64) }
@@ -63,7 +80,7 @@ fun EditGroupProfileDialog(
                     avatarBitmap = ImageUtils.base64ToBitmap(base64)
                 } else {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Errore nel caricamento immagine", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, strImageLoadError, Toast.LENGTH_SHORT).show()
                     }
                 }
                 isProcessingImage = false
@@ -101,14 +118,14 @@ fun EditGroupProfileDialog(
                 }
                 Spacer(Modifier.height(Spacing.sm))
                 Text(
-                    text = "Il tuo profilo",
+                    text = strProfileTitle,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Text(
-                    text = "Nome e foto valgono in tutti i tuoi gruppi",
+                    text = strProfileSubtitle,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
@@ -170,7 +187,7 @@ fun EditGroupProfileDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.CameraAlt,
-                            contentDescription = "Cambia foto",
+                            contentDescription = strChangePhoto,
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(16.dp)
                         )
@@ -189,7 +206,7 @@ fun EditGroupProfileDialog(
                     ) {
                         Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Scegli Foto", fontSize = 13.sp)
+                        Text(strChoosePhoto, fontSize = 13.sp)
                     }
 
                     if (avatarBitmap != null) {
@@ -201,7 +218,7 @@ fun EditGroupProfileDialog(
                             enabled = !isProcessingImage && !isSaving,
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                         ) {
-                            Text("Rimuovi", fontSize = 13.sp)
+                            Text(strRemove, fontSize = 13.sp)
                         }
                     }
                 }
@@ -212,8 +229,8 @@ fun EditGroupProfileDialog(
                 OutlinedTextField(
                     value = displayName,
                     onValueChange = { displayName = it },
-                    label = { Text("Nome") },
-                    placeholder = { Text("es. Papà, Mamma, Marco") },
+                    label = { Text(strLabelName) },
+                    placeholder = { Text(strPlaceholderName) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -229,8 +246,8 @@ fun EditGroupProfileDialog(
                 OutlinedTextField(
                     value = nickname,
                     onValueChange = { nickname = it },
-                    label = { Text("Soprannome in questo gruppo (opzionale)") },
-                    placeholder = { Text("es. Il Capo, Speedy") },
+                    label = { Text(strLabelNickname) },
+                    placeholder = { Text(strPlaceholderNickname) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -252,13 +269,13 @@ fun EditGroupProfileDialog(
                         shape = RoundedCornerShape(12.dp),
                         enabled = !isSaving
                     ) {
-                        Text("Annulla")
+                        Text(strCancel)
                     }
 
                     Button(
                         onClick = {
                             if (displayName.isBlank()) {
-                                Toast.makeText(context, "Inserisci un nome valido", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, strEnterValidName, Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
                             isSaving = true
@@ -279,7 +296,7 @@ fun EditGroupProfileDialog(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Text("Salva")
+                            Text(strSave)
                         }
                     }
                 }

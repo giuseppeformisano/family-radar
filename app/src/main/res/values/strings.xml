@@ -310,6 +310,62 @@
     <string name="toast_address_found">Trovato: %1$s</string>
     <string name="toast_address_not_found">Nessun indirizzo trovato per %1$s</string>
     <string name="toast_search_error">Errore durante la ricerca: %1$s</string>
+
+    <!-- Mappa, snapshot, media, profilo -->
+    <string name="map_layer_show_members">Mostra Membri</string>
+    <string name="map_layer_show_snapshots">Mostra Istantanee</string>
+    <string name="map_layer_show_places">Mostra Luoghi</string>
+    <string name="map_layer_manage">Gestione Layer Mappa</string>
+    <string name="map_group_view">Vista Gruppo</string>
+    <string name="map_zoom_in">Zoom In</string>
+    <string name="map_zoom_out">Zoom Out</string>
+    <string name="map_marker_snapshot_cluster">%1$d Istantanee</string>
+    <string name="map_marker_snapshot">Istantanea</string>
+    <string name="map_marker_snapshot_tap">Tocca per visualizzare la foto</string>
+    <string name="map_marker_snapshot_group">Istantanea del gruppo</string>
+    <string name="map_marker_member_self">Tu (%1$s)</string>
+    <string name="map_marker_battery_info">Batteria: %1$d%% • %2$s</string>
+    <string name="map_marker_speed_suffix"> • %1$d km/h</string>
+    <string name="map_marker_place_zone">Zona: %1$s (%2$dm)</string>
+    <string name="map_trip_start">Partenza</string>
+    <string name="map_trip_end">Arrivo</string>
+    <string name="map_time_just_now">Adesso</string>
+    <string name="map_time_seconds_ago">%1$ds fa</string>
+    <string name="map_time_minutes_ago">%1$dm fa</string>
+    <string name="snapshot_photo_content_desc">Foto scattata</string>
+    <string name="snapshot_geolocation_label">Geolocalizzazione rilevata</string>
+    <string name="snapshot_caption_label">Descrizione o nota (opzionale)</string>
+    <string name="snapshot_caption_placeholder">Es: Pausa caffe qui, Vista panoramica...</string>
+    <string name="snapshot_publishing">Pubblicazione in corso...</string>
+    <string name="snapshot_share_on_map">Condividi sulla Mappa</string>
+    <string name="toast_snapshot_published">Istantanea pubblicata sulla mappa del gruppo!</string>
+    <string name="toast_snapshot_save_error">Errore salvataggio istantanea: %1$s</string>
+    <string name="toast_snapshot_compress_error">Errore compressione immagine</string>
+    <string name="snapshot_geographic_title">Istantanea Geografica</string>
+    <string name="snapshot_page_of">%1$d di %2$d</string>
+    <string name="toast_snapshot_saved_gallery">Foto salvata nella Galleria!</string>
+    <string name="toast_save_error">Errore durante il salvataggio</string>
+    <string name="dialog_delete_snapshot_title">Elimina istantanea</string>
+    <string name="dialog_delete_snapshot_body">Questa istantanea verrà rimossa dalla mappa e dalla chat.</string>
+    <string name="snapshot_content_desc_page">Istantanea %1$d di %2$d</string>
+    <string name="snapshot_position">Posizione: %1$.4f, %2$.4f</string>
+    <string name="action_close_viewer">Chiudi visualizzatore</string>
+    <string name="label_photo">Foto</string>
+    <string name="toast_photo_saved_gallery">Foto salvata nella Galleria del dispositivo!</string>
+    <string name="toast_photo_save_failed">Impossibile salvare la foto</string>
+    <string name="action_save_to_gallery">Salva nella galleria</string>
+    <string name="content_desc_fullscreen_image">Visualizzazione immagine a schermo intero</string>
+    <string name="dialog_profile_title">Il tuo profilo</string>
+    <string name="dialog_profile_subtitle">Nome e foto valgono in tutti i tuoi gruppi</string>
+    <string name="action_change_photo">Cambia foto</string>
+    <string name="action_choose_photo">Scegli Foto</string>
+    <string name="action_remove">Rimuovi</string>
+    <string name="label_name">Nome</string>
+    <string name="placeholder_name_examples">es. Papa, Mamma, Marco</string>
+    <string name="label_nickname">Soprannome in questo gruppo (opzionale)</string>
+    <string name="placeholder_nickname_examples">es. Il Capo, Speedy</string>
+    <string name="action_save">Salva</string>
+    <string name="toast_enter_valid_name">Inserisci un nome valido</string>
 </resources>
 
 

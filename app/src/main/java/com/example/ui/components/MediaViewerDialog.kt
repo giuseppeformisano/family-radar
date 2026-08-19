@@ -26,6 +26,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.example.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -55,6 +57,14 @@ fun FullScreenMediaViewer(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var isDownloading by remember { mutableStateOf(false) }
+
+    // Strings captured at composable scope for use inside coroutine lambdas
+    val strCloseViewer = stringResource(R.string.action_close_viewer)
+    val strPhotoFallback = stringResource(R.string.label_photo)
+    val strPhotoSavedGallery = stringResource(R.string.toast_photo_saved_gallery)
+    val strPhotoSaveFailed = stringResource(R.string.toast_photo_save_failed)
+    val strSaveToGallery = stringResource(R.string.action_save_to_gallery)
+    val strFullscreenImage = stringResource(R.string.content_desc_fullscreen_image)
 
     // Decode in-memory bitmap if it is a Base64 string for flawless rendering
     val decodedBitmap = remember(imageSource) {
@@ -98,7 +108,7 @@ fun FullScreenMediaViewer(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Chiudi visualizzatore",
+                            contentDescription = strCloseViewer,
                             tint = Color.White
                         )
                     }
@@ -110,7 +120,7 @@ fun FullScreenMediaViewer(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = title ?: authorName ?: "Foto",
+                            text = title ?: authorName ?: strPhotoFallback,
                             color = Color.White,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
@@ -145,9 +155,9 @@ fun FullScreenMediaViewer(
                                 }
                                 isDownloading = false
                                 if (success) {
-                                    Toast.makeText(context, "Foto salvata nella Galleria del dispositivo!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, strPhotoSavedGallery, Toast.LENGTH_SHORT).show()
                                 } else {
-                                    Toast.makeText(context, "Impossibile salvare la foto", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, strPhotoSaveFailed, Toast.LENGTH_SHORT).show()
                                 }
                             }
                         },
@@ -162,7 +172,7 @@ fun FullScreenMediaViewer(
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Download,
-                                contentDescription = "Salva nella galleria",
+                                contentDescription = strSaveToGallery,
                                 tint = Color.White
                             )
                         }
@@ -181,7 +191,7 @@ fun FullScreenMediaViewer(
                 if (decodedBitmap != null) {
                     Image(
                         bitmap = decodedBitmap.asImageBitmap(),
-                        contentDescription = "Visualizzazione immagine a schermo intero",
+                        contentDescription = strFullscreenImage,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -191,7 +201,7 @@ fun FullScreenMediaViewer(
                             .data(imageSource)
                             .crossfade(true)
                             .build(),
-                        contentDescription = "Visualizzazione immagine a schermo intero",
+                        contentDescription = strFullscreenImage,
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -245,6 +255,16 @@ fun SnapshotClusterGalleryDialog(
 
     val currentSnapshot = snapshots.getOrNull(pagerState.currentPage) ?: snapshots.first()
 
+    // Strings captured at composable scope for use inside coroutine/click lambdas
+    val strClose = stringResource(R.string.action_close)
+    val strGeoTitle = stringResource(R.string.snapshot_geographic_title)
+    val strSnapshotSavedGallery = stringResource(R.string.toast_snapshot_saved_gallery)
+    val strSaveError = stringResource(R.string.toast_save_error)
+    val strSaveToGallery2 = stringResource(R.string.action_save_to_gallery)
+    val strDeleteSnapshotTitle = stringResource(R.string.dialog_delete_snapshot_title)
+    val strDeleteSnapshotBody = stringResource(R.string.dialog_delete_snapshot_body)
+    val strPositionFmt = stringResource(R.string.snapshot_position)
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -278,7 +298,7 @@ fun SnapshotClusterGalleryDialog(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
-                            contentDescription = "Chiudi",
+                            contentDescription = strClose,
                             tint = Color.White
                         )
                     }
@@ -290,13 +310,13 @@ fun SnapshotClusterGalleryDialog(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "Istantanea Geografica",
+                            text = strGeoTitle,
                             color = Color.White,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "${pagerState.currentPage + 1} di ${snapshots.size}",
+                            text = stringResource(R.string.snapshot_page_of, pagerState.currentPage + 1, snapshots.size),
                             color = MaterialTheme.colorScheme.primaryContainer,
                             style = MaterialTheme.typography.labelMedium
                         )
@@ -313,9 +333,9 @@ fun SnapshotClusterGalleryDialog(
                                     val success = ImageUtils.saveBase64ToGallery(context, currentSnapshot.photoBase64)
                                     isDownloading = false
                                     if (success) {
-                                        Toast.makeText(context, "Foto salvata nella Galleria!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, strSnapshotSavedGallery, Toast.LENGTH_SHORT).show()
                                     } else {
-                                        Toast.makeText(context, "Errore durante il salvataggio", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, strSaveError, Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
@@ -330,7 +350,7 @@ fun SnapshotClusterGalleryDialog(
                             } else {
                                 Icon(
                                     imageVector = Icons.Default.Download,
-                                    contentDescription = "Salva",
+                                    contentDescription = strSaveToGallery2,
                                     tint = Color.White
                                 )
                             }
@@ -343,7 +363,7 @@ fun SnapshotClusterGalleryDialog(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Delete,
-                                    contentDescription = "Elimina istantanea",
+                                    contentDescription = strDeleteSnapshotTitle,
                                     tint = Color(0xFFFF6B6B)
                                 )
                             }
@@ -355,20 +375,20 @@ fun SnapshotClusterGalleryDialog(
             if (showDeleteConfirm) {
                 AlertDialog(
                     onDismissRequest = { showDeleteConfirm = false },
-                    title = { Text("Elimina istantanea") },
-                    text = { Text("L'istantanea verrà rimossa dalla mappa e dalla chat.") },
+                    title = { Text(strDeleteSnapshotTitle) },
+                    text = { Text(strDeleteSnapshotBody) },
                     confirmButton = {
                         TextButton(onClick = {
                             showDeleteConfirm = false
                             onDelete?.invoke(currentSnapshot)
                             if (snapshots.size == 1) onDismiss()
                         }) {
-                            Text("Elimina")
+                            Text(stringResource(R.string.action_delete))
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { showDeleteConfirm = false }) {
-                            Text("Annulla")
+                            Text(stringResource(R.string.action_cancel))
                         }
                     }
                 )
@@ -394,7 +414,7 @@ fun SnapshotClusterGalleryDialog(
                     if (decoded != null) {
                         Image(
                             bitmap = decoded.asImageBitmap(),
-                            contentDescription = "Istantanea ${page + 1} di ${snapshots.size}",
+                            contentDescription = stringResource(R.string.snapshot_content_desc_page, page + 1, snapshots.size),
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .fillMaxSize()
@@ -406,7 +426,7 @@ fun SnapshotClusterGalleryDialog(
                                 .data("data:image/jpeg;base64,${item.photoBase64}")
                                 .crossfade(true)
                                 .build(),
-                            contentDescription = "Istantanea ${page + 1} di ${snapshots.size}",
+                            contentDescription = stringResource(R.string.snapshot_content_desc_page, page + 1, snapshots.size),
                             contentScale = ContentScale.Fit,
                             modifier = Modifier
                                 .fillMaxSize()
@@ -513,7 +533,7 @@ fun SnapshotClusterGalleryDialog(
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
-                            text = "Posizione: %.4f, %.4f".format(Locale.US, currentSnapshot.latitude, currentSnapshot.longitude),
+                            text = String.format(Locale.US, strPositionFmt, currentSnapshot.latitude, currentSnapshot.longitude),
                             color = Color.White.copy(alpha = 0.6f),
                             style = MaterialTheme.typography.labelSmall
                         )

@@ -293,6 +293,62 @@
     <string name="toast_address_found">Found: %1$s</string>
     <string name="toast_address_not_found">No address found for %1$s</string>
     <string name="toast_search_error">Search error: %1$s</string>
+
+    <!-- Map, snapshot, media, profile -->
+    <string name="map_layer_show_members">Show Members</string>
+    <string name="map_layer_show_snapshots">Show Snapshots</string>
+    <string name="map_layer_show_places">Show Places</string>
+    <string name="map_layer_manage">Manage Map Layers</string>
+    <string name="map_group_view">Group View</string>
+    <string name="map_zoom_in">Zoom In</string>
+    <string name="map_zoom_out">Zoom Out</string>
+    <string name="map_marker_snapshot_cluster">%1$d Snapshots</string>
+    <string name="map_marker_snapshot">Snapshot</string>
+    <string name="map_marker_snapshot_tap">Tap to view the photo</string>
+    <string name="map_marker_snapshot_group">Group snapshot</string>
+    <string name="map_marker_member_self">You (%1$s)</string>
+    <string name="map_marker_battery_info">Battery: %1$d%% · %2$s</string>
+    <string name="map_marker_speed_suffix"> · %1$d km/h</string>
+    <string name="map_marker_place_zone">Zone: %1$s (%2$dm)</string>
+    <string name="map_trip_start">Start</string>
+    <string name="map_trip_end">End</string>
+    <string name="map_time_just_now">Just now</string>
+    <string name="map_time_seconds_ago">%1$ds ago</string>
+    <string name="map_time_minutes_ago">%1$dm ago</string>
+    <string name="snapshot_photo_content_desc">Photo taken</string>
+    <string name="snapshot_geolocation_label">Geolocation detected</string>
+    <string name="snapshot_caption_label">Description or note (optional)</string>
+    <string name="snapshot_caption_placeholder">e.g. Coffee break here, Panoramic view...</string>
+    <string name="snapshot_publishing">Publishing...</string>
+    <string name="snapshot_share_on_map">Share on Map</string>
+    <string name="toast_snapshot_published">Snapshot published to the group map!</string>
+    <string name="toast_snapshot_save_error">Error saving snapshot: %1$s</string>
+    <string name="toast_snapshot_compress_error">Image compression error</string>
+    <string name="snapshot_geographic_title">Geographic Snapshot</string>
+    <string name="snapshot_page_of">%1$d of %2$d</string>
+    <string name="toast_snapshot_saved_gallery">Photo saved to Gallery!</string>
+    <string name="toast_save_error">Error saving</string>
+    <string name="dialog_delete_snapshot_title">Delete snapshot</string>
+    <string name="dialog_delete_snapshot_body">This snapshot will be removed from the map and the chat.</string>
+    <string name="snapshot_content_desc_page">Snapshot %1$d of %2$d</string>
+    <string name="snapshot_position">Position: %1$.4f, %2$.4f</string>
+    <string name="action_close_viewer">Close viewer</string>
+    <string name="label_photo">Photo</string>
+    <string name="toast_photo_saved_gallery">Photo saved to the device Gallery!</string>
+    <string name="toast_photo_save_failed">Could not save the photo</string>
+    <string name="action_save_to_gallery">Save to gallery</string>
+    <string name="content_desc_fullscreen_image">Full-screen image view</string>
+    <string name="dialog_profile_title">Your profile</string>
+    <string name="dialog_profile_subtitle">Name and photo apply across all your groups</string>
+    <string name="action_change_photo">Change photo</string>
+    <string name="action_choose_photo">Choose Photo</string>
+    <string name="action_remove">Remove</string>
+    <string name="label_name">Name</string>
+    <string name="placeholder_name_examples">e.g. Dad, Mum, Marco</string>
+    <string name="label_nickname">Nickname in this group (optional)</string>
+    <string name="placeholder_nickname_examples">e.g. The Boss, Speedy</string>
+    <string name="action_save">Save</string>
+    <string name="toast_enter_valid_name">Enter a valid name</string>
 </resources>
 
 

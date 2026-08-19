@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Elenco delle lingue supportate.
+
+  Su Android 13+ permette al sistema di mostrare Family Radar in
+  Impostazioni > App > Lingua, con la sua lista. Non sostituisce il selettore
+  interno, che serve per le versioni precedenti: le due strade convivono e la
+  scelta in-app ha comunque la precedenza, perche' viene applicata in
+  attachBaseContext.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="it" />
+    <locale android:name="en" />
+</locale-config>

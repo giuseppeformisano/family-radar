@@ -43,6 +43,7 @@ import com.example.repository.FirebaseRepository
 import com.example.ui.screens.auth.AuthScreen
 import com.example.ui.screens.groups.GroupSelectScreen
 import com.example.ui.screens.main.MainRadarScreen
+import com.example.ui.theme.LanguagePreferences
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.ThemePreferences
 import com.example.util.AppUpdater
@@ -65,10 +66,23 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var repository: FirebaseRepository
 
+    /**
+     * Applica la lingua scelta prima che venga creata qualsiasi risorsa.
+     *
+     * È il punto giusto perché da qui la locale vale per tutto l'albero Compose e
+     * per ogni `getString` fatto dall'Activity, senza dover fornire a mano
+     * `LocalContext`. Gira una volta per istanza: cambiare lingua richiede
+     * `recreate()`, che è quello che fa il selettore in Impostazioni.
+     */
+    override fun attachBaseContext(newBase: android.content.Context) {
+        super.attachBaseContext(LanguagePreferences.localizedContext(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         ThemePreferences.init(this)
+        LanguagePreferences.init(this)
         repository = FirebaseRepository.getInstance(this)
 
         handleIntent(intent)

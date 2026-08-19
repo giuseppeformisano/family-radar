@@ -2,6 +2,8 @@ package com.example.service
 
 import android.content.Context
 import android.util.Log
+import com.example.R
+import com.example.ui.theme.LanguagePreferences
 import com.example.notification.RadarNotifier
 import com.example.repository.FirebaseRepository
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -47,15 +49,21 @@ class FamilyRadarMessagingService : FirebaseMessagingService() {
             return
         }
 
+        // Le stringhe di fallback delle push devono seguire la lingua scelta in
+        // Impostazioni, non quella del dispositivo: il payload FCM arriva senza
+        // lingua e il testo lo componiamo noi qui.
+        val res = LanguagePreferences.localizedContext(this)
+
         val type = data["type"].orEmpty()
         val groupId = data["groupId"]
-        val userName = data["userName"] ?: data["senderName"] ?: "Un membro"
-        val placeName = data["placeName"] ?: "la destinazione"
+        val userName = data["userName"] ?: data["senderName"]
+            ?: res.getString(R.string.notif_member_fallback)
+        val placeName = data["placeName"] ?: res.getString(R.string.notif_place_fallback)
         val latitude = data["latitude"]?.toDoubleOrNull()
         val longitude = data["longitude"]?.toDoubleOrNull()
 
-        val title = remoteMessage.notification?.title ?: defaultTitle(type, data)
-        val body = remoteMessage.notification?.body ?: defaultBody(type, data, userName, placeName)
+        val title = remoteMessage.notification?.title ?: defaultTitle(res, type, data)
+        val body = remoteMessage.notification?.body ?: defaultBody(res, type, data, userName, placeName)
 
         RadarNotifier.ensureChannels(this)
 
@@ -109,29 +117,36 @@ class FamilyRadarMessagingService : FirebaseMessagingService() {
         }
     }
 
-    private fun defaultTitle(type: String, data: Map<String, String>): String = when (type) {
-        "geofence_entry" -> "Arrivo a destinazione"
-        "geofence_exit" -> "Partenza registrata"
-        "sos_alert" -> "Allerta SOS"
-        "low_battery" -> "Batteria in esaurimento"
-        "join_request" -> "Nuova richiesta di adesione"
-        "chat_message" -> data["senderName"] ?: "Nuovo messaggio"
-        else -> data["title"] ?: "Family Radar"
+    private fun defaultTitle(
+        res: Context,
+        type: String,
+        data: Map<String, String>
+    ): String = when (type) {
+        "geofence_entry" -> res.getString(R.string.notif_place_entry_title)
+        "geofence_exit" -> res.getString(R.string.notif_place_exit_title)
+        "sos_alert" -> res.getString(R.string.notif_sos_title)
+        "low_battery" -> res.getString(R.string.notif_low_battery_title)
+        "join_request" -> res.getString(R.string.notif_join_request_title)
+        "chat_message" -> data["senderName"] ?: res.getString(R.string.notif_chat_default_title)
+        else -> data["title"] ?: res.getString(R.string.notif_generic_title)
     }
 
     private fun defaultBody(
+        res: Context,
         type: String,
         data: Map<String, String>,
         userName: String,
         placeName: String
     ): String = when (type) {
-        "geofence_entry" -> "$userName è arrivato presso $placeName"
-        "geofence_exit" -> "$userName si è allontanato da $placeName"
-        "sos_alert" -> "Richiesta di soccorso inviata da $userName"
-        "low_battery" -> "Batteria al ${data["batteryLevel"] ?: "?"}% per $userName"
-        "join_request" -> "$userName ha chiesto di entrare nel gruppo"
-        "chat_message" -> data["text"] ?: "Nuovo messaggio ricevuto"
-        else -> data["body"] ?: data["message"] ?: "Nuovo aggiornamento sulla mappa"
+        "geofence_entry" -> res.getString(R.string.notif_place_entry_body, userName, placeName)
+        "geofence_exit" -> res.getString(R.string.notif_place_exit_body, userName, placeName)
+        "sos_alert" -> res.getString(R.string.notif_sos_body, userName)
+        "low_battery" -> res.getString(
+            R.string.notif_low_battery_body, data["batteryLevel"] ?: "?", userName
+        )
+        "join_request" -> res.getString(R.string.notif_join_request_body, userName)
+        "chat_message" -> data["text"] ?: res.getString(R.string.notif_chat_default_body)
+        else -> data["body"] ?: data["message"] ?: res.getString(R.string.notif_generic_body)
     }
 
     private fun destinationFor(type: String): String = when (type) {

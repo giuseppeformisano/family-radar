@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.MainActivity
 import com.example.R
+import com.example.ui.theme.LanguagePreferences
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -58,6 +59,9 @@ object RadarNotifier {
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+        // Le etichette dei canali sono visibili nelle impostazioni di Android e
+        // devono seguire la lingua dell'app come tutto il resto.
+        val res = localized(context)
 
         val sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         val notificationAudio = AudioAttributes.Builder()
@@ -70,22 +74,22 @@ object RadarNotifier {
             .build()
 
         val channels = listOf(
-            NotificationChannel(CHANNEL_CHAT, "Messaggi del gruppo", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Nuovi messaggi nella chat dei tuoi gruppi"
+            NotificationChannel(CHANNEL_CHAT, res.getString(R.string.channel_chat_name), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = res.getString(R.string.channel_chat_desc)
                 enableLights(true)
                 enableVibration(true)
                 setSound(sound, notificationAudio)
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PRIVATE
             },
-            NotificationChannel(CHANNEL_PLACES, "Arrivi e partenze", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Avvisi quando un membro entra o esce da un luogo salvato"
+            NotificationChannel(CHANNEL_PLACES, res.getString(R.string.channel_places_name), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = res.getString(R.string.channel_places_desc)
                 enableLights(true)
                 enableVibration(true)
                 setSound(sound, notificationAudio)
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
             },
-            NotificationChannel(CHANNEL_SOS, "Allerte SOS", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Richieste di soccorso immediate dai membri del gruppo"
+            NotificationChannel(CHANNEL_SOS, res.getString(R.string.channel_sos_name), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = res.getString(R.string.channel_sos_desc)
                 enableLights(true)
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 500, 200, 500, 200, 500)
@@ -136,7 +140,9 @@ object RadarNotifier {
         // puo' risvegliare un processo nuovo, azzerandola, mentre in status bar le
         // notifiche precedenti ci sono ancora. Si prende il massimo fra i due.
         val count = maxOf(state.ids.size, activeChildCount(context, groupKey) + 1)
-        val summaryTitle = groupName?.takeIf { it.isNotBlank() } ?: "Chat del gruppo"
+        val res = localized(context)
+        val summaryTitle = groupName?.takeIf { it.isNotBlank() }
+            ?: res.getString(R.string.notif_chat_group_fallback)
 
         // Niente `.apply { }` su NotificationCompat.Style: la classe espone un
         // metodo Java pubblico che si chiama anch'esso `apply`, e in Kotlin il
@@ -146,14 +152,16 @@ object RadarNotifier {
         inboxStyle.setBigContentTitle(summaryTitle)
         synchronized(state) { state.lines.forEach { line -> inboxStyle.addLine(line) } }
         if (count > INBOX_MAX_LINES) {
-            inboxStyle.setSummaryText("+${count - INBOX_MAX_LINES} altri")
+            inboxStyle.setSummaryText(
+                res.getString(R.string.notif_chat_more, count - INBOX_MAX_LINES)
+            )
         }
 
         val summary = NotificationCompat.Builder(context, CHANNEL_CHAT)
             .setSmallIcon(R.drawable.ic_radar_notification)
             .setContentTitle(summaryTitle)
             .setContentText(
-                if (count == 1) "1 nuovo messaggio" else "$count nuovi messaggi"
+                res.resources.getQuantityString(R.plurals.notif_chat_new_messages, count, count)
             )
             .setStyle(inboxStyle)
             .setAutoCancel(true)
@@ -322,6 +330,17 @@ object RadarNotifier {
     // ------------------------------------------------------------------
     // INTERNI
     // ------------------------------------------------------------------
+
+    /**
+     * Context da cui leggere le stringhe delle notifiche.
+     *
+     * Deve essere quello localizzato secondo la scelta in Impostazioni: il context
+     * che arriva qui e' quello dell'applicazione o di un Service, che non ne sa
+     * nulla. Senza questo passaggio l'interfaccia sarebbe in una lingua e le
+     * notifiche in un'altra.
+     */
+    private fun localized(context: Context): Context =
+        LanguagePreferences.localizedContext(context)
 
     private fun post(context: Context, id: Int, notification: Notification) {
         runCatching {

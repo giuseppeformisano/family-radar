@@ -69,6 +69,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -78,6 +79,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
+import com.example.R
 import com.example.model.*
 import com.example.repository.FirebaseRepository
 import com.example.service.LocationTrackingService
@@ -2518,6 +2520,7 @@ private fun SettingsPanel(
 ) {
     val context = LocalContext.current
     val currentThemeMode by ThemePreferences.themeModeFlow.collectAsState()
+    val currentLanguage by LanguagePreferences.languageFlow.collectAsState()
 
     var intervalUnit by remember {
         mutableStateOf(
@@ -2959,7 +2962,7 @@ private fun SettingsPanel(
         item {
             SettingsCard {
                 SettingsSectionHeader(
-                    title = "Aspetto",
+                    title = stringResource(R.string.settings_appearance),
                     subtitle = "Tema dell'applicazione",
                     icon = Icons.Default.Palette
                 )
@@ -2969,15 +2972,57 @@ private fun SettingsPanel(
                     horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
                 ) {
                     listOf(
-                        Triple(ThemeMode.SYSTEM, "Sistema", Icons.Default.BrightnessAuto),
-                        Triple(ThemeMode.LIGHT, "Chiaro", Icons.Default.LightMode),
-                        Triple(ThemeMode.DARK, "Scuro", Icons.Default.DarkMode)
-                    ).forEach { (mode, label, icon) ->
+                        Triple(ThemeMode.SYSTEM, R.string.theme_system, Icons.Default.BrightnessAuto),
+                        Triple(ThemeMode.LIGHT, R.string.theme_light, Icons.Default.LightMode),
+                        Triple(ThemeMode.DARK, R.string.theme_dark, Icons.Default.DarkMode)
+                    ).forEach { (mode, labelRes, icon) ->
                         PillChip(
-                            label = label,
+                            label = stringResource(labelRes),
                             icon = icon,
                             selected = currentThemeMode == mode,
                             onClick = { ThemePreferences.setThemeMode(context, mode) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(Spacing.md))
+                HairlineDivider()
+                Spacer(Modifier.height(Spacing.md))
+
+                SettingsSectionHeader(
+                    title = stringResource(R.string.settings_language),
+                    subtitle = "App e notifiche seguono questa scelta",
+                    icon = Icons.Default.Language
+                )
+                Spacer(Modifier.height(Spacing.xs))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
+                    listOf(
+                        AppLanguage.SYSTEM to R.string.language_system,
+                        AppLanguage.ITALIAN to R.string.language_italian,
+                        AppLanguage.ENGLISH to R.string.language_english
+                    ).forEach { (language, labelRes) ->
+                        PillChip(
+                            label = stringResource(labelRes),
+                            selected = currentLanguage == language,
+                            onClick = {
+                                if (currentLanguage != language) {
+                                    LanguagePreferences.setLanguage(context, language)
+                                    // La locale si applica in attachBaseContext, che
+                                    // gira una volta per istanza di Activity: senza
+                                    // recreate() il cambio si vedrebbe solo al
+                                    // prossimo avvio dell'app.
+                                    //
+                                    // Non basta un cast: LocalContext puo' essere un
+                                    // ContextWrapper (lo e' di sicuro qui, visto che
+                                    // la locale stessa lo avvolge), quindi si risale
+                                    // la catena fino all'Activity.
+                                    context.findActivityOrNull()?.recreate()
+                                }
+                            },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -4224,4 +4269,20 @@ private fun TripDetailRow(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurface
         )
     }
+}
+
+/**
+ * Risale la catena dei ContextWrapper fino all'Activity.
+ *
+ * Serve per `recreate()` al cambio lingua: `LocalContext.current` qui è avvolto
+ * almeno una volta (dal context localizzato), quindi un cast diretto ad Activity
+ * fallirebbe e il cambio lingua sembrerebbe non funzionare.
+ */
+private fun android.content.Context.findActivityOrNull(): android.app.Activity? {
+    var ctx: android.content.Context = this
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is android.app.Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }

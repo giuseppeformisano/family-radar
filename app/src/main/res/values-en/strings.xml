@@ -1,0 +1,58 @@
+<resources>
+
+    <!-- English translation. Keep the keys in sync with res/values/strings.xml:
+         a missing key silently falls back to Italian.
+         Placeholders are positional (%1$s, %2$s) so word order can differ. -->
+
+    <!-- Language and appearance selector -->
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_language">Language</string>
+    <string name="language_system">System</string>
+    <string name="language_italian">Italiano</string>
+    <string name="language_english">English</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+
+    <!-- Notification channels -->
+    <string name="channel_chat_name">Group messages</string>
+    <string name="channel_chat_desc">New messages in your groups\' chat</string>
+    <string name="channel_places_name">Arrivals and departures</string>
+    <string name="channel_places_desc">Alerts when a member enters or leaves a saved place</string>
+    <string name="channel_sos_name">SOS alerts</string>
+    <string name="channel_sos_desc">Immediate help requests from group members</string>
+    <string name="channel_location_name">Location service</string>
+    <string name="channel_location_desc">Ongoing notification for the family radar</string>
+
+    <!-- Notifications: chat -->
+    <string name="notif_chat_group_fallback">Group chat</string>
+    <string name="notif_chat_new_message">1 new message</string>
+    <plurals name="notif_chat_new_messages">
+        <item quantity="one">%1$d new message</item>
+        <item quantity="other">%1$d new messages</item>
+    </plurals>
+    <string name="notif_chat_more">+%1$d more</string>
+    <string name="notif_chat_default_body">New message received</string>
+    <string name="notif_chat_default_title">New message</string>
+
+    <!-- Notifications: places, SOS and others -->
+    <string name="notif_place_entry_title">Arrived at destination</string>
+    <string name="notif_place_exit_title">Departure recorded</string>
+    <string name="notif_place_entry_body">%1$s arrived at %2$s</string>
+    <string name="notif_place_exit_body">%1$s left %2$s</string>
+    <string name="notif_sos_title">SOS alert</string>
+    <string name="notif_sos_body">Help request sent by %1$s</string>
+    <string name="notif_low_battery_title">Battery running low</string>
+    <string name="notif_low_battery_body">Battery at %1$s%% for %2$s</string>
+    <string name="notif_join_request_title">New join request</string>
+    <string name="notif_join_request_body">%1$s asked to join the group</string>
+    <string name="notif_generic_title">Family Radar</string>
+    <string name="notif_generic_body">New update on the map</string>
+    <string name="notif_member_fallback">A member</string>
+    <string name="notif_place_fallback">the destination</string>
+
+    <!-- Foreground location service -->
+    <string name="service_title">Family Radar active</string>
+    <string name="service_last_fix">Last position at %1$s</string>
+    <string name="service_waiting_gps">Waiting for the first GPS signal…</string>
+</resources>

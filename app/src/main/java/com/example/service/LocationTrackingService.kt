@@ -24,6 +24,7 @@ import com.example.MainActivity
 import com.example.R
 import com.example.model.UserLocation
 import com.example.repository.FirebaseRepository
+import com.example.ui.theme.LanguagePreferences
 import com.google.android.gms.location.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -291,6 +292,9 @@ class LocationTrackingService : Service() {
         }
     }
 
+    /** La notifica persistente resta visibile per ore: deve stare nella lingua dell'app. */
+    private fun localizedResources(): Context = LanguagePreferences.localizedContext(this)
+
     private fun getBatteryStatus(): Pair<Int, Boolean> {
         return try {
             val batteryStatus: Intent? = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
@@ -312,10 +316,10 @@ class LocationTrackingService : Service() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Servizio di localizzazione",
+            localizedResources().getString(R.string.channel_location_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Notifica persistente del radar di famiglia"
+            description = localizedResources().getString(R.string.channel_location_desc)
             setShowBadge(false)
             enableVibration(false)
             setSound(null, null)
@@ -332,15 +336,16 @@ class LocationTrackingService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val res = localizedResources()
         val text = if (lastFixAtMillis > 0L) {
             val clock = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(lastFixAtMillis))
-            "Ultima posizione alle $clock"
+            res.getString(R.string.service_last_fix, clock)
         } else {
-            "In attesa del primo segnale GPS…"
+            res.getString(R.string.service_waiting_gps)
         }
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Family Radar attivo")
+            .setContentTitle(res.getString(R.string.service_title))
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_radar_notification)
             .setContentIntent(pendingIntent)

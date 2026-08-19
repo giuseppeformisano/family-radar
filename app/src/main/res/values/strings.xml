@@ -1,3 +1,67 @@
 <resources>
     <string name="app_name">Family Radar</string>
+
+    <!-- ============================================================
+         Lingua predefinita: italiano. La traduzione inglese sta in
+         res/values-en/strings.xml.
+
+         Ogni chiave aggiunta qui va aggiunta anche là, altrimenti in
+         inglese ricade sull'italiano senza segnalare nulla.
+
+         Segnaposto: %1$s, %2$s... sono POSIZIONALI. Nelle traduzioni
+         l'ordine delle parole cambia, e senza indice non si potrebbero
+         invertire.
+         ============================================================ -->
+
+    <!-- Selettore lingua e aspetto -->
+    <string name="settings_appearance">Aspetto</string>
+    <string name="settings_language">Lingua</string>
+    <string name="language_system">Sistema</string>
+    <string name="language_italian">Italiano</string>
+    <string name="language_english">English</string>
+    <string name="theme_system">Sistema</string>
+    <string name="theme_light">Chiaro</string>
+    <string name="theme_dark">Scuro</string>
+
+    <!-- Canali di notifica -->
+    <string name="channel_chat_name">Messaggi del gruppo</string>
+    <string name="channel_chat_desc">Nuovi messaggi nella chat dei tuoi gruppi</string>
+    <string name="channel_places_name">Arrivi e partenze</string>
+    <string name="channel_places_desc">Avvisi quando un membro entra o esce da un luogo salvato</string>
+    <string name="channel_sos_name">Allerte SOS</string>
+    <string name="channel_sos_desc">Richieste di soccorso immediate dai membri del gruppo</string>
+    <string name="channel_location_name">Servizio di localizzazione</string>
+    <string name="channel_location_desc">Notifica persistente del radar di famiglia</string>
+
+    <!-- Notifiche: chat -->
+    <string name="notif_chat_group_fallback">Chat del gruppo</string>
+    <string name="notif_chat_new_message">1 nuovo messaggio</string>
+    <plurals name="notif_chat_new_messages">
+        <item quantity="one">%1$d nuovo messaggio</item>
+        <item quantity="other">%1$d nuovi messaggi</item>
+    </plurals>
+    <string name="notif_chat_more">+%1$d altri</string>
+    <string name="notif_chat_default_body">Nuovo messaggio ricevuto</string>
+    <string name="notif_chat_default_title">Nuovo messaggio</string>
+
+    <!-- Notifiche: luoghi, SOS e varie -->
+    <string name="notif_place_entry_title">Arrivo a destinazione</string>
+    <string name="notif_place_exit_title">Partenza registrata</string>
+    <string name="notif_place_entry_body">%1$s è arrivato presso %2$s</string>
+    <string name="notif_place_exit_body">%1$s si è allontanato da %2$s</string>
+    <string name="notif_sos_title">Allerta SOS</string>
+    <string name="notif_sos_body">Richiesta di soccorso inviata da %1$s</string>
+    <string name="notif_low_battery_title">Batteria in esaurimento</string>
+    <string name="notif_low_battery_body">Batteria al %1$s%% per %2$s</string>
+    <string name="notif_join_request_title">Nuova richiesta di adesione</string>
+    <string name="notif_join_request_body">%1$s ha chiesto di entrare nel gruppo</string>
+    <string name="notif_generic_title">Family Radar</string>
+    <string name="notif_generic_body">Nuovo aggiornamento sulla mappa</string>
+    <string name="notif_member_fallback">Un membro</string>
+    <string name="notif_place_fallback">la destinazione</string>
+
+    <!-- Servizio di localizzazione in foreground -->
+    <string name="service_title">Family Radar attivo</string>
+    <string name="service_last_fix">Ultima posizione alle %1$s</string>
+    <string name="service_waiting_gps">In attesa del primo segnale GPS…</string>
 </resources>

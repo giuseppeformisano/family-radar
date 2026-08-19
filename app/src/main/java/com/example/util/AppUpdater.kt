@@ -1,21 +1,19 @@
 package com.example.util
 
-import android.app.DownloadManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
 import com.example.BuildConfig
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -37,15 +35,19 @@ object AppUpdater {
     private const val RELEASES_URL =
         "https://api.github.com/repos/giuseppeformisano/family-radar/releases/tags/latest-debug"
     private const val CHANNEL_UPDATE = "radar_update"
-    private const val NOTIF_ID = 8_999  // era 9001 = conflitto con SOS_NOTIFICATION_ID
+    private const val NOTIF_ID = 8_999
 
-    // Timeout espliciti: OkHttpClient() senza configurazione ha timeout 0
-    // (aspetta indefinitamente). Su reti instabili il check si bloccava in
-    // silenzio e il dialog non compariva mai.
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .callTimeout(30, TimeUnit.SECONDS)
+        .build()
+
+    // Client senza timeout di lettura per il download dell'APK (può richiedere minuti)
+    private val downloadClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.SECONDS)
+        .callTimeout(0, TimeUnit.SECONDS)
         .build()
 
     /** Ritorna UpdateInfo se c'e' una versione piu' recente, null altrimenti. */
@@ -64,7 +66,6 @@ object AppUpdater {
             ).execute().use { it.body?.string() } ?: return@withContext CheckResult.NetworkError
 
             val json = JSONObject(releaseBody)
-            // GitHub restituisce {"message":"..."} per errori (rate limit, 404…)
             if (json.has("message") && !json.has("assets")) {
                 Log.w("AppUpdater", "GitHub API error: ${json.optString("message")}")
                 return@withContext CheckResult.NetworkError
@@ -106,6 +107,10 @@ object AppUpdater {
         }
     }
 
+    /**
+     * Scarica l'APK con OkHttp (bypassando DownloadManager, inaffidabile su Samsung)
+     * mostrando una notifica con barra di progresso, poi propone l'installazione.
+     */
     fun downloadAndInstall(context: Context, apkUrl: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             !context.packageManager.canRequestPackageInstalls()
@@ -126,137 +131,88 @@ object AppUpdater {
             return
         }
 
-        // Nome univoco a ogni download. Con un nome fisso, se la cancellazione del
-        // file precedente non andava a buon fine — capita quando una voce del
-        // DownloadManager lo referenzia ancora — DownloadManager non sovrascriveva
-        // ma scriveva su "...-1.apk", e l'app continuava a puntare al percorso
-        // vecchio: la notifica compariva e toccarla non faceva nulla.
-        val fileName = "family-radar-update-${System.currentTimeMillis()}.apk"
-        purgeOldDownloads(context)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        ensureChannel(manager)
 
-        // Su molti Samsung il "Gestione download" di sistema puo' essere
-        // disattivato dall'utente: in quel caso getSystemService o enqueue lanciano
-        // e, senza questo try/catch, il pulsante "Aggiorna" non faceva assolutamente
-        // nulla. Se il DownloadManager non e' disponibile si ripiega sul browser,
-        // che scarica l'APK in ogni caso.
-        val dm = try {
-            context.getSystemService(Context.DOWNLOAD_SERVICE) as? DownloadManager
-        } catch (_: Exception) { null }
-
-        if (dm == null) {
-            openInBrowser(context, apkUrl)
-            return
-        }
-
+        // Notifica di progresso indeterminato mentre parte il download
+        manager.notify(NOTIF_ID, progressNotification(context, -1, 0).build())
         android.widget.Toast.makeText(context, "Download in corso…", android.widget.Toast.LENGTH_SHORT).show()
 
-        val downloadId = try {
-            dm.enqueue(
-                DownloadManager.Request(Uri.parse(apkUrl))
-                    .setTitle("Family Radar — aggiornamento")
-                    .setDescription("Tocca per installare al termine del download")
-                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                    .setMimeType("application/vnd.android.package-archive")
-                    .setDestinationInExternalFilesDir(
-                        context,
-                        Environment.DIRECTORY_DOWNLOADS,
-                        fileName
-                    )
-            )
-        } catch (e: Exception) {
-            Log.w("AppUpdater", "DownloadManager.enqueue fallito: ${e.message}")
-            openInBrowser(context, apkUrl)
-            return
-        }
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // Pulizia file precedenti
+                context.cacheDir.listFiles { f -> f.name.startsWith("family-radar-update") }
+                    ?.forEach { runCatching { it.delete() } }
 
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context, intent: Intent) {
-                val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
-                if (id != downloadId) return
-                runCatching { ctx.unregisterReceiver(this) }
+                val dest = File(context.cacheDir, "family-radar-update-${System.currentTimeMillis()}.apk")
 
-                val file = resolveDownloadedFile(dm, id)
-                if (file == null) {
-                    Log.w("AppUpdater", "APK non disponibile dopo il download: apro il browser")
-                    openInBrowser(ctx, apkUrl)
-                    return
+                val response = downloadClient.newCall(Request.Builder().url(apkUrl).build()).execute()
+                val body = response.body ?: run {
+                    Log.w("AppUpdater", "Download: body nullo")
+                    manager.cancel(NOTIF_ID)
+                    showErrorToast(context, "Download fallito: risposta vuota")
+                    return@launch
                 }
 
-                // Android 10+: startActivity() da BroadcastReceiver (background) è bloccato.
-                // Si usa la notifica come unico punto di ingresso: l'utente la tocca
-                // e il PendingIntent parte in foreground senza restrizioni.
-                showInstallNotification(ctx, file)
+                val total = body.contentLength()
+                var downloaded = 0L
+
+                dest.outputStream().use { out ->
+                    body.byteStream().use { input ->
+                        val buf = ByteArray(8 * 1024)
+                        var n: Int
+                        while (input.read(buf).also { n = it } != -1) {
+                            out.write(buf, 0, n)
+                            downloaded += n
+                            if (total > 0) {
+                                val pct = (downloaded * 100 / total).toInt()
+                                manager.notify(NOTIF_ID, progressNotification(context, 100, pct).build())
+                            }
+                        }
+                    }
+                }
+
+                if (!dest.exists() || dest.length() == 0L) {
+                    Log.w("AppUpdater", "APK vuoto dopo download")
+                    manager.cancel(NOTIF_ID)
+                    showErrorToast(context, "Download fallito: file vuoto")
+                    return@launch
+                }
+
+                Log.d("AppUpdater", "Download completato: ${dest.length()} byte")
+                // Prima prova a lanciare l'installer direttamente dal Main thread:
+                // funziona se l'app è ancora in foreground (schermata visibile).
+                // Se fallisce (app in background / Android 11+ blocca), mostra la
+                // notifica che l'utente tocca per completare l'installazione.
+                withContext(Dispatchers.Main) {
+                    val launched = launchInstaller(context, dest)
+                    if (!launched) showInstallNotification(context, manager, dest)
+                    else manager.cancel(NOTIF_ID)
+                }
+
+            } catch (e: Exception) {
+                Log.w("AppUpdater", "downloadAndInstall errore: ${e.message}")
+                manager.cancel(NOTIF_ID)
+                showErrorToast(context, "Download fallito: ${e.message}")
             }
         }
-
-        runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(
-                    receiver,
-                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-                    Context.RECEIVER_EXPORTED
-                )
-            } else {
-                @Suppress("UnspecifiedRegisterReceiverFlag")
-                context.registerReceiver(
-                    receiver,
-                    IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-                )
-            }
-        }
     }
 
-    /**
-     * Dove il DownloadManager ha scritto davvero, e solo se ha finito bene.
-     *
-     * Restituisce null se il download e' fallito o se il file non c'e': in quel
-     * caso non va offerta l'installazione, perche' toccare la notifica aprirebbe
-     * l'installer su un percorso vuoto e non accadrebbe niente.
-     */
-    private fun resolveDownloadedFile(dm: DownloadManager, id: Long): File? = try {
-        dm.query(DownloadManager.Query().setFilterById(id))?.use { c ->
-            if (!c.moveToFirst()) return null
-
-            val status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-            if (status != DownloadManager.STATUS_SUCCESSFUL) {
-                val reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
-                Log.w("AppUpdater", "Download non riuscito: status=$status reason=$reason")
-                return null
-            }
-
-            val localUri = c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
-                ?: return null
-            val path = Uri.parse(localUri).path ?: return null
-            File(path).takeIf { it.exists() && it.length() > 0L }
-        }
-    } catch (e: Exception) {
-        Log.w("AppUpdater", "resolveDownloadedFile fallito: ${e.message}")
-        null
+    private fun progressNotification(
+        context: Context,
+        max: Int,
+        progress: Int
+    ): NotificationCompat.Builder {
+        val indeterminate = max < 0
+        return NotificationCompat.Builder(context, CHANNEL_UPDATE)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle("Family Radar — download aggiornamento")
+            .setContentText(if (indeterminate) "Avvio download…" else "Download in corso ($progress%)")
+            .setProgress(if (indeterminate) 0 else max, progress, indeterminate)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
     }
 
-    /**
-     * Ripulisce gli APK scaricati in precedenza. Con il nome univoco per download
-     * si accumulerebbero: sono decine di MB a testa nella cartella dell'app.
-     */
-    private fun purgeOldDownloads(context: Context) {
-        runCatching {
-            context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-                ?.listFiles { f -> f.name.startsWith("family-radar-update") && f.name.endsWith(".apk") }
-                ?.forEach { runCatching { it.delete() } }
-        }
-    }
-
-    /** Apre l'URL dell'APK nel browser: fallback quando il DownloadManager non c'e'. */
-    private fun openInBrowser(context: Context, apkUrl: String) {
-        runCatching {
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse(apkUrl))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        }.onFailure { Log.w("AppUpdater", "openInBrowser fallito: ${it.message}") }
-    }
-
-    /** Lancia la schermata di installazione del pacchetto scaricato. Ritorna true se avviato. */
     private fun launchInstaller(context: Context, file: File): Boolean {
         if (!file.exists()) return false
         return runCatching {
@@ -278,7 +234,7 @@ object AppUpdater {
         }
     }
 
-    private fun showInstallNotification(context: Context, file: File) {
+    private fun showInstallNotification(context: Context, manager: NotificationManager, file: File) {
         try {
             val uri = FileProvider.getUriForFile(
                 context,
@@ -294,23 +250,33 @@ object AppUpdater {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                manager.createNotificationChannel(
-                    NotificationChannel(CHANNEL_UPDATE, "Aggiornamenti", NotificationManager.IMPORTANCE_HIGH)
-                )
-            }
-
             manager.notify(
                 NOTIF_ID,
                 NotificationCompat.Builder(context, CHANNEL_UPDATE)
                     .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                    .setContentTitle("Family Radar aggiornato")
-                    .setContentText("Tocca per installare la versione scaricata")
+                    .setContentTitle("Download completato!")
+                    .setContentText("Tocca qui per installare Family Radar")
                     .setAutoCancel(true)
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setContentIntent(pending)
                     .build()
             )
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w("AppUpdater", "showInstallNotification fallito: ${e.message}")
+        }
+    }
+
+    private fun ensureChannel(manager: NotificationManager) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(
+                NotificationChannel(CHANNEL_UPDATE, "Aggiornamenti", NotificationManager.IMPORTANCE_HIGH)
+            )
+        }
+    }
+
+    private fun showErrorToast(context: Context, msg: String) {
+        CoroutineScope(Dispatchers.Main).launch {
+            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 }

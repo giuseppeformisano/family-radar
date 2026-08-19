@@ -34,6 +34,7 @@ import com.example.util.MotionTrigger
 import com.google.android.gms.location.*
 import com.google.firebase.FirebaseException
 import com.google.firebase.auth.*
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
@@ -1982,6 +1983,17 @@ class FirebaseRepository private constructor(private val context: Context) {
                                             senderId = senderId
                                         )
                                     }
+                                    "trip_start" -> {
+                                        showLocalNotification(
+                                            title = str(R.string.notif_trip_start_title),
+                                            body = str(R.string.notif_trip_start_body, userName),
+                                            isHighPriority = false,
+                                            notificationId = (timestamp % 100000).toInt(),
+                                            destination = "MAP",
+                                            groupId = groupId,
+                                            senderId = senderId
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -2086,6 +2098,15 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     }
                                 } else emptyList()
 
+                                @Suppress("UNCHECKED_CAST")
+                                val liveTrackRaw = doc.get("liveTrack") as? List<Map<String, Any>> ?: emptyList()
+                                val liveTrack = liveTrackRaw.mapNotNull { map ->
+                                    val lt = (map["latitude"] as? Number)?.toDouble() ?: return@mapNotNull null
+                                    val ln = (map["longitude"] as? Number)?.toDouble() ?: return@mapNotNull null
+                                    val ts = (map["timestamp"] as? Long) ?: 0L
+                                    TripPoint(lt, ln, ts)
+                                }
+
                                 Trip(
                                     id = doc.id,
                                     groupId = groupId,
@@ -2104,7 +2125,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     isLive = isLive,
                                     isPrivate = isPrivate,
                                     activityKind = doc.getString("activityKind") ?: "",
-                                    points = points
+                                    points = points,
+                                    liveTrack = liveTrack
                                 )
                             } catch (ex: Exception) { null }
                         }
@@ -3278,6 +3300,23 @@ class FirebaseRepository private constructor(private val context: Context) {
             // Atomico: qui si scrive da un thread IO mentre i fix di posizione
             // aggiornano lo stesso stato dal main looper.
             _activeTrip.update { it?.copy(liveTripId = ref.id) }
+
+            // Notifica gli altri membri che un viaggio è iniziato.
+            try {
+                val eventId = "trip_${UUID.randomUUID().toString().take(8)}"
+                val eventMap = hashMapOf(
+                    "id" to eventId,
+                    "groupId" to groupId,
+                    "type" to "trip_start",
+                    "userId" to user.uid,
+                    "userName" to user.displayName,
+                    "timestamp" to FieldValue.serverTimestamp()
+                )
+                db.collection("groups").document(groupId)
+                    .collection("events").document(eventId).set(eventMap)
+            } catch (e: Exception) {
+                Log.w(TAG, "trip_start event fallita: ${e.message}")
+            }
         } catch (e: Exception) {
             Log.w(TAG, "createLiveTripDocument fallita: ${e.message}")
         }
@@ -3304,16 +3343,20 @@ class FirebaseRepository private constructor(private val context: Context) {
         val lon = location.longitude
         val now = System.currentTimeMillis()
         var flushDue = false
+        var appendedPoint: TripPoint? = null
 
         _activeTrip.update { current ->
             // Il lambda puo' essere rieseguito se un altro thread scrive nel
             // frattempo: la decisione va ricalcolata a ogni tentativo.
             flushDue = false
+            appendedPoint = null
             if (current == null) return@update null
 
             if (current.lastLat == 0.0 && current.lastLon == 0.0) {
+                val tp = TripPoint(lat, lon, now)
+                if (current.liveTripId != null) appendedPoint = tp
                 return@update current.copy(
-                    points = current.points + TripPoint(lat, lon, now),
+                    points = current.points + tp,
                     lastLat = lat,
                     lastLon = lon,
                     lastFixAt = now
@@ -3340,8 +3383,9 @@ class FirebaseRepository private constructor(private val context: Context) {
                 (now - current.lastFixAt).coerceAtLeast(0L)
             } else 0L
 
+            val tp = TripPoint(lat, lon, now)
             val next = current.copy(
-                points = current.points + TripPoint(lat, lon, now),
+                points = current.points + tp,
                 lastLat = lat,
                 lastLon = lon,
                 distanceMeters = current.distanceMeters + distFromLast,
@@ -3349,6 +3393,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                 movingMs = current.movingMs + movingDelta,
                 lastFixAt = now
             )
+            if (next.liveTripId != null) appendedPoint = tp
 
             // Aggiornamento della diretta: non a ogni punto, sarebbero centinaia
             // di scritture all'ora. Ogni 30 secondi la traccia degli altri resta
@@ -3363,6 +3408,32 @@ class FirebaseRepository private constructor(private val context: Context) {
 
         if (flushDue) {
             CoroutineScope(Dispatchers.IO).launch { flushLiveTrip() }
+        }
+
+        // Appende il nuovo punto in diretta su Firestore via arrayUnion,
+        // così gli altri membri vedono la traccia crescere in tempo reale
+        // senza aspettare il prossimo flush (ogni 30 s).
+        val ptToAppend = appendedPoint
+        val ltId = _activeTrip.value?.liveTripId
+        val lgId = _currentUserState.value?.currentGroupId
+        if (ptToAppend != null && ltId != null && lgId != null) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    firestore?.collection("groups")?.document(lgId)
+                        ?.collection("trips")?.document(ltId)
+                        ?.update(
+                            "liveTrack", FieldValue.arrayUnion(
+                                hashMapOf(
+                                    "latitude" to ptToAppend.latitude,
+                                    "longitude" to ptToAppend.longitude,
+                                    "timestamp" to ptToAppend.timestamp
+                                )
+                            )
+                        )
+                } catch (e: Exception) {
+                    Log.w(TAG, "liveTrack arrayUnion fallita: ${e.message}")
+                }
+            }
         }
     }
 

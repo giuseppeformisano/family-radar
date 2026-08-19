@@ -47,6 +47,8 @@
     <string name="notif_join_request_title">New join request</string>
     <string name="notif_join_request_body">%1$s asked to join the group</string>
     <string name="notif_generic_title">Family Radar</string>
+    <string name="notif_trip_start_title">Trip started</string>
+    <string name="notif_trip_start_body">%1$s started a trip</string>
     <string name="notif_generic_body">New update on the map</string>
     <string name="notif_member_fallback">A member</string>
     <string name="notif_place_fallback">the destination</string>

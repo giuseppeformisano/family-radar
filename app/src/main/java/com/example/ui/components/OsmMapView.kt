@@ -514,6 +514,24 @@ fun OsmMapView(
                     tripOverlays.add(activePoly)
                 }
 
+                // Polilinee live degli altri membri: si usano i punti accumulati
+                // via arrayUnion (liveTrack), più fitti di quelli RDP-semplificati.
+                trips.forEach { trip ->
+                    if (trip.userId == currentUserId) return@forEach   // la propria è già in activeTripPoints
+                    if (!trip.isLive || trip.endTime != 0L) return@forEach
+                    if (trip.liveTrack.size < 2) return@forEach
+                    val geo = trip.liveTrack.map { GeoPoint(it.latitude, it.longitude) }
+                    val poly = Polyline(mapView).apply {
+                        setPoints(geo)
+                        outlinePaint.color = AndroidColor.CYAN
+                        outlinePaint.strokeWidth = 6f
+                        outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                        outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                        outlinePaint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(20f, 10f), 0f)
+                    }
+                    tripOverlays.add(poly)
+                }
+
                 // Apply active overlays
                 refreshMapOverlays(mapView)
 

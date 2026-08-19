@@ -56,7 +56,9 @@ data class Trip(
     val isPrivate: Boolean = false,
     /** Come ci si è spostati, uno fra [ActivityKind]. Vuoto se non riconosciuto. */
     val activityKind: String = "",
-    val points: List<TripPoint> = emptyList()
+    val points: List<TripPoint> = emptyList(),
+    /** Punti live appesi in tempo reale via arrayUnion, visibili agli altri membri. */
+    val liveTrack: List<TripPoint> = emptyList()
 ) {
     /** Velocità media sul tempo in movimento, in m/s. Zero se non si è mai mossi. */
     val averageSpeedMs: Float

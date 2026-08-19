@@ -261,6 +261,55 @@
     <string name="dialog_leave_body">Vuoi uscire da %1$s? La tua posizione non sarà più condivisa e non riceverai più notifiche.</string>
     <string name="action_leave">Abbandona</string>
     <string name="action_delete">Elimina</string>
+
+    <!-- Componenti: luoghi, membro -->
+    <string name="member_avatar_desc">Avatar di %1$s</string>
+    <string name="member_self_label">Tu (%1$s)</string>
+    <string name="member_at_place">Presso %1$s</string>
+    <string name="label_battery">Batteria</string>
+    <string name="label_speed">Velocità</string>
+    <string name="label_accuracy">Accuratezza</string>
+    <string name="label_last_fix">Ultimo fix</string>
+    <string name="speed_stationary">Fermo</string>
+    <string name="action_directions">Indicazioni</string>
+    <string name="action_message">Messaggia</string>
+    <string name="action_edit_my_profile">Modifica il mio profilo nel gruppo</string>
+    <string name="place_fallback_name">Luogo di Gruppo</string>
+    <string name="label_gps_coordinates">Coordinate GPS</string>
+    <string name="label_geofencing">Geofencing Notifiche</string>
+    <string name="geofence_active_status">Attivo (Entrata/Uscita)</string>
+    <string name="action_view_map">Vedi Mappa</string>
+    <string name="place_geofence_toggle_label">Avvisi arrivo e partenza</string>
+    <string name="place_geofence_on_desc">Attivi per questo luogo</string>
+    <string name="place_geofence_off_desc">Disattivati: nessuna notifica</string>
+    <string name="action_edit">Modifica</string>
+    <string name="dialog_delete_place_title">Eliminare questo luogo?</string>
+    <string name="dialog_delete_place_body">Rimuovere %1$s dai luoghi sicuri del gruppo? I membri non riceveranno piu notifiche di arrivo e partenza.</string>
+    <string name="toast_no_navigation_app">Nessuna app di navigazione installata</string>
+    <string name="dialog_place_edit_title">Modifica Luogo</string>
+    <string name="dialog_place_new_title">Nuovo Luogo Sicuro</string>
+    <string name="dialog_place_edit_subtitle">Aggiorna nome, posizione, raggio e avvisi</string>
+    <string name="dialog_place_new_subtitle">Posiziona il pin sulla mappa o cerca</string>
+    <string name="action_close">Chiudi</string>
+    <string name="search_place_hint">Cerca via, piazza o città...</string>
+    <string name="action_search">Cerca</string>
+    <string name="action_clear">Cancella</string>
+    <string name="map_pin_hint">Scorri la mappa per posizionare il pin</string>
+    <string name="map_position_placeholder">Posizione sulla mappa...</string>
+    <string name="action_current_location">Posizione Attuale</string>
+    <string name="place_name_label">Nome Luogo (es. Casa, Ufficio)</string>
+    <string name="place_name_placeholder">Es. Casa di Marco</string>
+    <string name="label_category">Categoria</string>
+    <string name="label_geofence_radius">Raggio Notifica Geofence</string>
+    <string name="place_alerts_toggle_label">Avvisi di arrivo e partenza</string>
+    <string name="place_alerts_on_desc">Il gruppo riceve una notifica quando qualcuno entra o esce</string>
+    <string name="place_alerts_off_desc">Il luogo resta sulla mappa ma non genera notifiche</string>
+    <string name="action_cancel">Annulla</string>
+    <string name="action_save_changes">Salva Modifiche</string>
+    <string name="action_save_place">Salva Luogo</string>
+    <string name="toast_address_found">Trovato: %1$s</string>
+    <string name="toast_address_not_found">Nessun indirizzo trovato per %1$s</string>
+    <string name="toast_search_error">Errore durante la ricerca: %1$s</string>
 </resources>
 
 

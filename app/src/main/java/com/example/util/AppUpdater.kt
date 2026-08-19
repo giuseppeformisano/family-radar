@@ -118,6 +118,11 @@ object AppUpdater {
                     ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 )
             }
+            android.widget.Toast.makeText(
+                context,
+                "Abilita 'Installa app sconosciute' per Family Radar, poi premi di nuovo Aggiorna",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
             return
         }
 
@@ -184,7 +189,8 @@ object AppUpdater {
                 // dal permesso notifiche (su Android 13+ del S22 puo' essere negato,
                 // e allora la sola notifica non sarebbe mai comparsa). La notifica
                 // resta come rete di sicurezza se l'installer non parte da solo.
-                if (!launchInstaller(ctx, file)) showInstallNotification(ctx, file)
+                launchInstaller(ctx, file)
+                showInstallNotification(ctx, file)
             }
         }
 

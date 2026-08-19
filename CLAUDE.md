@@ -246,13 +246,51 @@ colour (including dynamic Material You), which a baked `.json` cannot.
 - `family_radar_settings_prefs` — `tracking_freq_sec`, `bg_tracking_enabled`, `global_ghost_mode`
 - `family_radar_theme_prefs` — via the `ThemePreferences` object, which exposes a `StateFlow` and
   **must** be `init()`-ed in `MainActivity.onCreate` before the theme is read
+- `family_radar_language_prefs` — via `LanguagePreferences`, same shape as `ThemePreferences`
 - `fcm_prefs` — cached FCM token
 - `osmdroid` — tile cache config
 
+### Localisation (it / en) — migration in progress
+
+Italian is the default locale (`res/values/`), English lives in `res/values-en/`. **The extraction is
+only partly done**: notification channels, all notification and updater copy, the foreground-service
+notification and the Appearance card read from resources; the rest of the UI is still hardcoded
+Italian. When you touch a screen, extract the strings you pass through rather than adding new literals.
+
+`LanguagePreferences` (`ui/theme/`) holds `SYSTEM / ITALIAN / ENGLISH`. The locale is applied in
+`MainActivity.attachBaseContext`, so it covers the whole Compose tree without providing `LocalContext`
+by hand — which is also why changing language calls `recreate()`: `attachBaseContext` runs once per
+Activity instance.
+
+Three rules that are easy to break:
+
+1. **App and notifications must share one language.** Notifications are built outside Compose from the
+   application or a Service context, which knows nothing about the in-app choice. Every such call site
+   (`RadarNotifier`, `FamilyRadarMessagingService`, `LocationTrackingService`, `AppUpdater`) must read
+   strings through `LanguagePreferences.localizedContext(context)`.
+2. **`LanguagePreferences.readStored()` reads SharedPreferences synchronously, not the StateFlow.** An
+   FCM push can land on a freshly created process where `init()` has not run yet; reading the flow
+   would yield `SYSTEM` and send the notification in the wrong language exactly in the common
+   app-closed case.
+3. **Never put an apostrophe in a string resource.** aapt2 requires `\'` and reports a bare one as
+   `invalid unicode escape sequence`, which points nowhere near the cause. Worse, XML formatters strip
+   the backslash again, so the build breaks a second time. Reword instead: `Consenti a X di installare`
+   rather than `Consenti l'installazione`. Many Italian phrases need this (`l'utente`, `dell'app`,
+   `un'immagine`).
+
+Placeholders are positional (`%1$s`, `%2$s`) because word order differs between the two languages. Keys
+must exist in both files — a missing one silently falls back to Italian. `app_name` is deliberately
+untranslated.
+
+Note the limit that localisation does not fix: system chat messages and `events` docs
+(`"Marco è arrivato a Casa"`) are written to Firestore **already rendered**, in the language of the
+device that generated them. Localising those properly means storing `type` + parameters and composing
+the sentence on the reading client.
+
 ## Conventions
 
-- **UI copy is Italian and hardcoded in Composables.** `strings.xml` holds only `app_name`. Match the
-  surrounding language when adding UI text.
+- **UI copy is Italian by default.** See the localisation section above before adding text: prefer a
+  string resource over a literal, and match the surrounding language in the parts not yet extracted.
 - **Pull spacing, radii and sizes from the token objects**, not literal `dp` values — `Spacing.lg`,
   not `16.dp`. Colours come from `MaterialTheme.colorScheme` or `RadarSemantic`; a raw `Color(0xFF…)`
   in a screen is a bug, because it will not survive the light/dark or dynamic-colour switch.

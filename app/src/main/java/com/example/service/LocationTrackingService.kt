@@ -203,6 +203,7 @@ class LocationTrackingService : Service() {
             longitude = location.longitude,
             accuracy = location.accuracy,
             speed = if (location.hasSpeed()) location.speed else 0.0f,
+            bearing = if (location.hasBearing()) location.bearing else 0.0f,
             altitude = if (location.hasAltitude()) location.altitude else 0.0,
             batteryLevel = batteryLevel,
             isCharging = isCharging,

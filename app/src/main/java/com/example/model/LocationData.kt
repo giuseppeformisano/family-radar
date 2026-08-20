@@ -9,6 +9,7 @@ data class UserLocation(
     val longitude: Double = 0.0,
     val accuracy: Float = 0.0f,
     val speed: Float = 0.0f, // in m/s (or converted to km/h in UI)
+    val bearing: Float = 0.0f, // gradi da nord, 0-360
     val altitude: Double = 0.0,
     val batteryLevel: Int = 100,
     val isCharging: Boolean = false,

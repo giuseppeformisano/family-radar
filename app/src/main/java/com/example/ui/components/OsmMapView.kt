@@ -51,10 +51,21 @@ import org.osmdroid.views.overlay.Overlay
 import org.osmdroid.views.overlay.Polygon
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
+import kotlinx.coroutines.delay
 import androidx.compose.ui.res.stringResource
 import com.example.R
+
+// Soglia minima di velocita' per applicare il dead reckoning: sotto questa
+// velocita' il membro e' considerato fermo e il marker non viene anticipato.
+private const val INTERP_MIN_SPEED_MS = 1.0f      // m/s (~3.6 km/h)
+
+// Cappatura massima del tempo extrapolato: oltre questo limite il marker
+// potrebbe derivare troppo lontano dall'ultima posizione reale.
+private const val INTERP_MAX_ELAPSED_SEC = 8.0    // secondi
 
 // In-memory cache for generated marker drawables to ensure 60 FPS layer switching
 private val markerDrawableCache = LruCache<String, Drawable>(120)
@@ -131,6 +142,37 @@ fun OsmMapView(
     val placeOverlays = remember { mutableListOf<Overlay>() }
     val snapshotOverlays = remember { mutableListOf<Overlay>() }
     val tripOverlays = remember { mutableListOf<Overlay>() }
+
+    // Mappa userId → marker osmdroid corrente, per aggiornarne la posizione
+    // senza ricostruire l'intero overlay a ogni tick del dead reckoning.
+    val memberMarkerMap = remember { mutableMapOf<String, Marker>() }
+
+    // Ticker del dead reckoning: ogni 100 ms calcola la posizione estrapolata
+    // di ogni membro in movimento e aggiorna direttamente il marker osmdroid.
+    // Il LaunchedEffect si cancella automaticamente quando il composable esce
+    // dalla composizione.
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(100L)
+            val mapView = mapViewInstance ?: continue
+            var changed = false
+            memberMarkerMap.forEach { (_, marker) ->
+                val tag = marker.relatedObject as? UserLocation ?: return@forEach
+                if (tag.speed < INTERP_MIN_SPEED_MS) return@forEach
+                val elapsedSec = ((System.currentTimeMillis() - tag.timestamp) / 1000.0)
+                    .coerceIn(0.0, INTERP_MAX_ELAPSED_SEC)
+                if (elapsedSec <= 0.0) return@forEach
+                val deltaMeters = tag.speed * elapsedSec
+                val bearingRad = Math.toRadians(tag.bearing.toDouble())
+                val dLat = deltaMeters * cos(bearingRad) / 111320.0
+                val dLon = deltaMeters * sin(bearingRad) /
+                    (111320.0 * cos(Math.toRadians(tag.latitude)))
+                marker.position = GeoPoint(tag.latitude + dLat, tag.longitude + dLon)
+                changed = true
+            }
+            if (changed) mapView.invalidate()
+        }
+    }
 
     // Compute snapshot clusters
     val snapshotClusters = remember(snapshots) {
@@ -403,6 +445,7 @@ fun OsmMapView(
 
                 // 3. Rebuild Members Overlays
                 memberOverlays.clear()
+                memberMarkerMap.clear()
                 locations.forEach { userLoc ->
                     try {
                         if (userLoc.latitude != 0.0 && userLoc.longitude != 0.0 &&
@@ -412,6 +455,10 @@ fun OsmMapView(
                             val isSelf = userLoc.userId == currentUserId
                             val memberMarker = Marker(mapView).apply {
                                 position = memberPoint
+                                // relatedObject porta il fix reale: il ticker del dead
+                                // reckoning lo legge per calcolare la posizione estrapolata
+                                // senza dover cercare nel flows né ricostruire l'overlay.
+                                relatedObject = userLoc
                                 val markerCtx = mapView.context
                                 title = if (isSelf) markerCtx.getString(R.string.map_marker_member_self, userLoc.userName) else userLoc.userName
                                 val timeStr = formatRelativeTime(markerCtx, userLoc.timestamp)
@@ -438,6 +485,7 @@ fun OsmMapView(
                                 }
                             }
                             memberOverlays.add(memberMarker)
+                            memberMarkerMap[userLoc.userId] = memberMarker
                         }
                     } catch (me: Throwable) {
                         Log.w("OsmMapView", "Error building member marker: ${me.message}")

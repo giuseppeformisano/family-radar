@@ -2070,6 +2070,17 @@ class FirebaseRepository private constructor(private val context: Context) {
                                             senderId = senderId
                                         )
                                     }
+                                    "trip_end" -> {
+                                        showLocalNotification(
+                                            title = str(R.string.notif_trip_end_title),
+                                            body = str(R.string.notif_trip_end_body, userName),
+                                            isHighPriority = false,
+                                            notificationId = (timestamp % 100000).toInt(),
+                                            destination = "MAP",
+                                            groupId = groupId,
+                                            senderId = senderId
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -3623,6 +3634,26 @@ class FirebaseRepository private constructor(private val context: Context) {
                     }
                 )
             ).await()
+
+            // Notifica gli altri membri che il viaggio e' terminato (solo se condiviso).
+            if (!isPrivate) {
+                try {
+                    val eventId = db.collection("groups").document(groupId)
+                        .collection("events").document().id
+                    val eventMap = hashMapOf(
+                        "id" to eventId,
+                        "groupId" to groupId,
+                        "type" to "trip_end",
+                        "userId" to user.uid,
+                        "userName" to user.displayName,
+                        "timestamp" to FieldValue.serverTimestamp()
+                    )
+                    db.collection("groups").document(groupId)
+                        .collection("events").document(eventId).set(eventMap)
+                } catch (e: Exception) {
+                    Log.w(TAG, "trip_end event fallita: ${e.message}")
+                }
+            }
 
             Result.success(Unit)
         } catch (e: Exception) {

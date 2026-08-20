@@ -27,6 +27,7 @@ import com.example.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.example.model.ActivityKind
 import com.example.model.UserLocation
 import com.example.ui.theme.*
 import com.example.util.ImageUtils
@@ -184,6 +185,43 @@ fun MemberDetailSheet(
                         iconColor = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.weight(1f)
                     )
+                }
+
+                // Activity type row — shown only when the activity is known
+                if (location.activityType.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(Spacing.md))
+                    val activityIcon = when (location.activityType) {
+                        ActivityKind.VEHICLE  -> Icons.Default.DriveEta
+                        ActivityKind.BICYCLE  -> Icons.Default.DirectionsBike
+                        ActivityKind.RUNNING  -> Icons.Default.DirectionsRun
+                        ActivityKind.WALKING  -> Icons.Default.DirectionsWalk
+                        else -> null
+                    }
+                    val activityLabel = when (location.activityType) {
+                        ActivityKind.VEHICLE  -> stringResource(R.string.trip_activity_vehicle)
+                        ActivityKind.BICYCLE  -> stringResource(R.string.trip_activity_bicycle)
+                        ActivityKind.RUNNING  -> stringResource(R.string.trip_activity_running)
+                        ActivityKind.WALKING  -> stringResource(R.string.trip_activity_walking)
+                        else -> null
+                    }
+                    if (activityIcon != null && activityLabel != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                        ) {
+                            Icon(
+                                imageVector = activityIcon,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = activityLabel,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(Spacing.lg))

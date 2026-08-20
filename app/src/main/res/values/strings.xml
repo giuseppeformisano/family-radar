@@ -66,6 +66,8 @@
     <string name="notif_generic_title">Family Radar</string>
     <string name="notif_trip_start_title">Viaggio iniziato</string>
     <string name="notif_trip_start_body">%1$s ha iniziato un viaggio</string>
+    <string name="notif_trip_end_title">Viaggio concluso</string>
+    <string name="notif_trip_end_body">%1$s ha concluso un viaggio</string>
     <string name="notif_generic_body">Nuovo aggiornamento sulla mappa</string>
     <string name="notif_member_fallback">Un membro</string>
     <string name="notif_place_fallback">la destinazione</string>

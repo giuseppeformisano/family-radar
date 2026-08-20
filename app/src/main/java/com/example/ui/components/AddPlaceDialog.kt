@@ -532,8 +532,8 @@ fun AddPlaceDialog(
                                     .background(container)
                                     .clickable {
                                         selectedCategory = cat
-                                        if (placeName.isBlank() || PlaceCategory.values().any { it.label == placeName }) {
-                                            placeName = cat.label
+                                        if (placeName.isBlank() || PlaceCategory.values().any { context.getString(it.labelRes) == placeName }) {
+                                            placeName = context.getString(cat.labelRes)
                                         }
                                     }
                                     .padding(vertical = 8.dp),
@@ -541,13 +541,13 @@ fun AddPlaceDialog(
                             ) {
                                 Icon(
                                     icon,
-                                    contentDescription = cat.label,
+                                    contentDescription = context.getString(cat.labelRes),
                                     tint = content,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(Modifier.height(2.dp))
                                 Text(
-                                    text = cat.label,
+                                    text = context.getString(cat.labelRes),
                                     fontSize = 10.sp,
                                     color = content,
                                     maxLines = 1,

@@ -351,6 +351,181 @@
     <string name="placeholder_nickname_examples">e.g. The Boss, Speedy</string>
     <string name="action_save">Save</string>
     <string name="toast_enter_valid_name">Enter a valid name</string>
+
+    <!-- Place categories -->
+    <string name="place_cat_home">Home</string>
+    <string name="place_cat_work">Work</string>
+    <string name="place_cat_school">School</string>
+    <string name="place_cat_gym">Gym</string>
+    <string name="place_cat_other">Other</string>
+
+    <!-- Trip source -->
+    <string name="trip_source_manual">Manual</string>
+    <string name="trip_source_auto">Automatic</string>
+
+    <!-- Activity kind -->
+    <string name="trip_activity_vehicle">By car</string>
+    <string name="trip_activity_bicycle">By bicycle</string>
+    <string name="trip_activity_running">Running</string>
+    <string name="trip_activity_walking">Walking</string>
+
+    <!-- Chat -->
+    <string name="chat_empty_title">No messages yet</string>
+    <string name="chat_empty_body">Write to the group, share a photo or your location.</string>
+    <string name="chat_input_placeholder">Write a message…</string>
+    <string name="chat_take_photo_desc">Take photo</string>
+    <string name="chat_attach_image_desc">Attach image</string>
+    <string name="chat_send_desc">Send</string>
+    <string name="chat_sos_alert_label">SOS Alert · %1$s</string>
+
+    <!-- Places panel -->
+    <string name="section_safe_zones">Safe zones</string>
+    <string name="section_safe_zones_desc">Automatic alerts when a member arrives or leaves</string>
+    <string name="action_add">Add</string>
+    <string name="empty_places_title">No zones set up</string>
+    <string name="empty_places_body">Add Home, School, Work or Gym to receive alerts when someone arrives or leaves.</string>
+    <string name="section_recent_activity">Recent activity</string>
+    <string name="content_desc_alerts_disabled">Alerts disabled</string>
+    <string name="place_row_subtitle">%1$s · radius %2$d m</string>
+    <string name="place_row_subtitle_silent">%1$s · radius %2$d m · alerts off</string>
+    <string name="content_desc_edit_place">Edit place</string>
+    <string name="content_desc_delete_place">Delete place</string>
+
+    <!-- Settings: Profile -->
+    <string name="settings_section_profile">Profile</string>
+    <string name="label_anonymous_account">Anonymous account</string>
+    <string name="action_edit_short">Edit</string>
+
+    <!-- Settings: Privacy -->
+    <string name="settings_section_privacy">Privacy</string>
+    <string name="settings_privacy_subtitle">Who can see your location</string>
+    <string name="settings_ghost_mode_title">Ghost mode</string>
+    <string name="settings_ghost_mode_desc">Nobody sees you, in all groups</string>
+    <string name="settings_group_share_title">Share in this group</string>
+    <string name="settings_group_share_desc">Turn off to disappear only from %1$s</string>
+    <string name="settings_group_share_fallback">this group</string>
+
+    <!-- Settings: Tracking -->
+    <string name="settings_section_tracking">Tracking</string>
+    <string name="settings_tracking_subtitle">How your position is detected</string>
+    <string name="settings_bg_tracking_title">Background tracking</string>
+    <string name="settings_bg_tracking_desc">Keeps working even when the app is closed</string>
+    <string name="settings_power_saving_title">Battery saver</string>
+    <string name="settings_power_saving_desc">Less battery, less precise position (about 100 metres)</string>
+    <string name="settings_update_frequency">Update frequency</string>
+    <string name="settings_update_frequency_desc">How often your position is detected</string>
+    <string name="label_value">Value</string>
+    <string name="settings_effective_interval">Update every %1$s</string>
+    <string name="settings_trip_speed_note">During a trip the interval is always 5 seconds</string>
+    <string name="interval_hours">%1$d hours</string>
+    <string name="interval_minutes">%1$d minutes</string>
+    <string name="interval_seconds">%1$d seconds</string>
+
+    <!-- Settings: Trips -->
+    <string name="settings_section_trips">Trips</string>
+    <string name="settings_trips_subtitle">Recording your journeys</string>
+    <string name="settings_auto_trip_title">Detect trips automatically</string>
+    <string name="settings_auto_trip_desc">Records when you move without pressing anything. Uses more battery</string>
+    <string name="settings_auto_trip_shared_title">Share automatic trips</string>
+    <string name="settings_auto_trip_shared_desc">Turn off to see them only yourself</string>
+
+    <!-- Settings: Group -->
+    <string name="label_active_group">ACTIVE GROUP</string>
+    <string name="label_no_group">No group</string>
+    <string name="label_active_members">%1$d active members</string>
+    <string name="label_active_members_pending">%1$d active members · %2$d pending</string>
+    <string name="action_change_short">Change</string>
+    <string name="action_leave_group">Leave</string>
+    <string name="action_delete_group">Delete</string>
+    <string name="label_invite_code_section">Invite code</string>
+    <string name="toast_code_copied">Code copied</string>
+    <string name="action_copy">Copy</string>
+    <string name="settings_approval_title">New member approval</string>
+    <string name="settings_approval_on_desc">You must approve everyone who joins with the code</string>
+    <string name="settings_approval_off_desc">Anyone with the code joins immediately</string>
+
+    <!-- Settings: Appearance and Language -->
+    <string name="settings_appearance_subtitle">App theme</string>
+    <string name="settings_language_subtitle">App and notifications follow this choice</string>
+
+    <!-- Settings: Account -->
+    <string name="settings_section_account">Account</string>
+    <string name="settings_account_subtitle">Sign out from this device</string>
+    <string name="action_sign_out_account">Sign out account</string>
+
+    <!-- Settings: App / Updates -->
+    <string name="settings_section_app">App</string>
+    <string name="label_version">Version</string>
+    <string name="action_check_updates">Check for updates</string>
+    <string name="checking_updates">Checking...</string>
+    <string name="update_available_body">Version %1$s is available. Download and install it now.</string>
+    <string name="action_later">Later</string>
+    <string name="action_update">Update</string>
+    <string name="up_to_date_body">You are using version %1$s (%2$d): no updates available.</string>
+    <string name="action_ok">OK</string>
+    <string name="update_network_error_body">Could not check for updates. Check your connection and try again.</string>
+
+    <!-- Settings: Feedback -->
+    <string name="settings_section_feedback">Feedback</string>
+    <string name="settings_feedback_subtitle">Report issues or suggest improvements</string>
+    <string name="feedback_thanks">Thanks for your feedback!</string>
+    <string name="action_send_more_feedback">Send more feedback</string>
+    <string name="feedback_placeholder">Write your feedback here...</string>
+    <string name="action_send_feedback">Send feedback</string>
+
+    <!-- Settings: Development -->
+    <string name="settings_section_dev">Development</string>
+    <string name="settings_dev_subtitle">Test tools</string>
+    <string name="settings_sim_title">Simulate movement</string>
+    <string name="settings_sim_desc">Moves fake members on the map. For testing only</string>
+    <string name="settings_dev_feedback_title">View feedback</string>
+    <string name="settings_dev_feedback_desc">Protected by developer password</string>
+    <string name="dev_area_title">Developer area</string>
+    <string name="dev_area_body">Enter the password to view feedback</string>
+    <string name="label_password">Password</string>
+    <string name="err_wrong_password">Wrong password</string>
+    <string name="dev_feedback_list_title">Received feedback</string>
+    <string name="dev_feedback_empty">No feedback to analyse</string>
+    <string name="content_desc_mark_done">Done</string>
+    <string name="content_desc_discard">Discard</string>
+
+    <!-- Map overlays -->
+    <string name="loading_text">Loading...</string>
+    <string name="snapshot_source_title">New snapshot</string>
+    <string name="snapshot_source_body">The photo will be pinned to your current position on the map.</string>
+    <string name="action_take_photo_now">Take now</string>
+    <string name="action_choose_gallery">Choose from gallery</string>
+    <string name="label_you_follow">you</string>
+
+    <!-- Trips panel -->
+    <string name="trip_recording">Recording in progress</string>
+    <string name="action_stop_and_save">Stop and save</string>
+    <string name="action_start_trip">Start trip</string>
+    <string name="empty_trips_title">No trips</string>
+    <string name="empty_trips_body">Recorded trips will appear here</string>
+    <string name="trip_badge_live">LIVE</string>
+    <string name="trip_badge_private">PRIVATE</string>
+    <string name="trip_title_of">%1$s trip</string>
+    <string name="trip_stat_distance">Distance</string>
+    <string name="trip_stat_duration">Duration</string>
+    <string name="trip_stat_avg_speed">Average</string>
+    <string name="trip_stat_max_speed">Maximum</string>
+    <string name="trip_detail_departure">Departure</string>
+    <string name="trip_detail_arrival">Arrival</string>
+    <string name="trip_detail_stopped">Stopped time</string>
+    <string name="trip_detail_stopped_value">%1$d min</string>
+    <string name="trip_detail_activity">Activity</string>
+    <string name="trip_detail_source">Recorded</string>
+    <string name="trip_detail_by">By</string>
+    <string name="action_remove_from_map">Remove from map</string>
+    <string name="time_short_minutes_ago">%1$d min ago</string>
+
+    <!-- Edit group dialog -->
+    <string name="dialog_edit_group_title">Edit group</string>
+    <string name="dialog_edit_group_subtitle">Name, description and image visible to all members</string>
+    <string name="edit_group_desc_placeholder">e.g. Home and commute</string>
+    <string name="content_desc_group_image">Group image</string>
+    <string name="content_desc_change_image_badge">Change image</string>
 </resources>
 
 

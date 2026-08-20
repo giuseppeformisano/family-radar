@@ -709,7 +709,7 @@ fun MainRadarScreen(
                         if (target != null) {
                             followedUserId = targetId
                             focusMapOn(target.latitude, target.longitude, collapse = false)
-                            val label = if (targetId == currentUserId) "te" else (target.nickname ?: target.userName)
+                            val label = if (targetId == currentUserId) context.getString(R.string.label_you_follow) else (target.nickname ?: target.userName)
                             Toast.makeText(context, strFollowOn.format(label), Toast.LENGTH_SHORT).show()
                         } else {
                             Toast.makeText(context, strFollowTargetUnavailable, Toast.LENGTH_SHORT).show()
@@ -1792,7 +1792,7 @@ private fun MemberRow(
                     if (!member.nickname.isNullOrBlank()) append("${member.nickname} · ")
                     if (location != null) {
                         append(location.currentPlaceName?.takeIf { it.isNotBlank() } ?: context.getString(R.string.status_moving))
-                        append(" · ${formatShortTime(location.timestamp)}")
+                        append(" · ${formatShortTime(location.timestamp, context)}")
                     } else {
                         append(context.getString(R.string.status_not_sharing))
                     }
@@ -2018,8 +2018,8 @@ private fun ChatPanel(
         if (messages.isEmpty()) {
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 EmptyState(
-                    title = "Ancora nessun messaggio",
-                    description = "Scrivi al gruppo, condividi una foto o la tua posizione.",
+                    title = stringResource(R.string.chat_empty_title),
+                    description = stringResource(R.string.chat_empty_body),
                     icon = Icons.Default.ChatBubbleOutline,
                     lottieAsset = "empty_chat"
                 )
@@ -2065,7 +2065,7 @@ private fun ChatPanel(
                 ) {
                     Icon(
                         Icons.Default.PhotoCamera,
-                        contentDescription = "Scatta foto",
+                        contentDescription = stringResource(R.string.chat_take_photo_desc),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -2075,7 +2075,7 @@ private fun ChatPanel(
                 ) {
                     Icon(
                         Icons.Default.AddPhotoAlternate,
-                        contentDescription = "Allega immagine",
+                        contentDescription = stringResource(R.string.chat_attach_image_desc),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -2083,7 +2083,7 @@ private fun ChatPanel(
                 OutlinedTextField(
                     value = inputText,
                     onValueChange = { inputText = it },
-                    placeholder = { Text("Scrivi un messaggio…") },
+                    placeholder = { Text(stringResource(R.string.chat_input_placeholder)) },
                     modifier = Modifier
                         .weight(1f)
                         .testTag("chat_input_field"),
@@ -2114,7 +2114,7 @@ private fun ChatPanel(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             Icons.Default.Send,
-                            contentDescription = "Invia",
+                            contentDescription = stringResource(R.string.chat_send_desc),
                             tint = if (canSend) MaterialTheme.colorScheme.onPrimary
                             else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(Sizes.iconMd)
@@ -2180,7 +2180,7 @@ private fun ChatBubble(
                     )
                     Column {
                         Text(
-                            text = "Allerta SOS · ${message.senderName}",
+                            text = stringResource(R.string.chat_sos_alert_label, message.senderName),
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.error
                         )
@@ -2307,8 +2307,8 @@ private fun PlacesPanel(
     ) {
         item {
             SectionHeader(
-                title = "Zone sicure",
-                subtitle = "Avvisi automatici quando un membro arriva o si allontana",
+                title = stringResource(R.string.section_safe_zones),
+                subtitle = stringResource(R.string.section_safe_zones_desc),
                 icon = Icons.Default.Security,
                 action = {
                     FilledTonalButton(
@@ -2323,7 +2323,7 @@ private fun PlacesPanel(
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                         Spacer(Modifier.width(Spacing.xs))
-                        Text("Aggiungi")
+                        Text(stringResource(R.string.action_add))
                     }
                 }
             )
@@ -2332,9 +2332,8 @@ private fun PlacesPanel(
         if (places.isEmpty()) {
             item {
                 EmptyState(
-                    title = "Nessuna zona impostata",
-                    description = "Aggiungi Casa, Scuola, Lavoro o Palestra per ricevere " +
-                        "avvisi quando qualcuno entra o esce.",
+                    title = stringResource(R.string.empty_places_title),
+                    description = stringResource(R.string.empty_places_body),
                     icon = Icons.Default.PinDrop,
                     lottieAsset = "empty_places"
                 )
@@ -2355,7 +2354,7 @@ private fun PlacesPanel(
             item {
                 Spacer(Modifier.height(Spacing.sm))
                 SectionHeader(
-                    title = "Attività recente",
+                    title = stringResource(R.string.section_recent_activity),
                     icon = Icons.Default.History
                 )
             }
@@ -2375,6 +2374,7 @@ private fun PlaceRow(
     onDelete: () -> Unit
 ) {
     val accent = placeColor(place.category)
+    val context = LocalContext.current
 
     Surface(
         onClick = onClick,
@@ -2422,15 +2422,17 @@ private fun PlaceRow(
                     if (!place.geofenceEnabled) {
                         Icon(
                             Icons.Default.NotificationsOff,
-                            contentDescription = "Avvisi disattivati",
+                            contentDescription = stringResource(R.string.content_desc_alerts_disabled),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(Sizes.iconSm)
                         )
                     }
                 }
                 Text(
-                    text = "${place.category.label} · raggio ${place.radiusMeters.toInt()} m" +
-                        if (!place.geofenceEnabled) " · avvisi spenti" else "",
+                    text = if (place.geofenceEnabled)
+                        stringResource(R.string.place_row_subtitle, stringResource(place.category.labelRes), place.radiusMeters.toInt())
+                    else
+                        stringResource(R.string.place_row_subtitle_silent, stringResource(place.category.labelRes), place.radiusMeters.toInt()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1
@@ -2440,7 +2442,7 @@ private fun PlaceRow(
             IconButton(onClick = onEdit) {
                 Icon(
                     Icons.Default.Edit,
-                    contentDescription = "Modifica luogo",
+                    contentDescription = stringResource(R.string.content_desc_edit_place),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(Sizes.iconMd)
                 )
@@ -2456,7 +2458,7 @@ private fun PlaceRow(
             IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Default.DeleteOutline,
-                    contentDescription = "Elimina luogo",
+                    contentDescription = stringResource(R.string.content_desc_delete_place),
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(Sizes.iconMd)
                 )
@@ -2493,7 +2495,8 @@ private fun GeofenceAlertRow(alert: GeofenceEvent) {
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "${alert.userName} ${if (alert.isInside) "è arrivato a" else "è uscito da"} ${alert.placeName}",
+                text = if (alert.isInside) stringResource(R.string.msg_arrived_at, alert.userName, alert.placeName)
+                       else stringResource(R.string.msg_left_place, alert.userName, alert.placeName),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
@@ -2593,7 +2596,7 @@ private fun SettingsPanel(
         // ---- Profilo ----
         item {
             SettingsCard {
-                SettingsSectionHeader(title = "Profilo", icon = Icons.Default.Person)
+                SettingsSectionHeader(title = stringResource(R.string.settings_section_profile), icon = Icons.Default.Person)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Spacing.md)
@@ -2613,7 +2616,7 @@ private fun SettingsPanel(
                         )
                         val secondary = currentUser?.email?.takeIf { it.isNotBlank() }
                             ?: currentUser?.phoneNumber?.takeIf { it.isNotBlank() }
-                            ?: "Account anonimo"
+                            ?: stringResource(R.string.label_anonymous_account)
                         Text(
                             text = secondary,
                             style = MaterialTheme.typography.bodySmall,
@@ -2629,7 +2632,7 @@ private fun SettingsPanel(
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                         Spacer(Modifier.width(Spacing.xs))
-                        Text("Modifica")
+                        Text(stringResource(R.string.action_edit_short))
                     }
                 }
             }
@@ -2639,13 +2642,13 @@ private fun SettingsPanel(
         item {
             SettingsCard {
                 SettingsSectionHeader(
-                    title = "Privacy",
-                    subtitle = "Chi vede la tua posizione",
+                    title = stringResource(R.string.settings_section_privacy),
+                    subtitle = stringResource(R.string.settings_privacy_subtitle),
                     icon = if (isGlobalGhostMode) Icons.Default.VisibilityOff else Icons.Default.Visibility
                 )
                 SettingsToggleRow(
-                    title = "Modalità fantasma",
-                    description = "Nessuno ti vede, in tutti i gruppi",
+                    title = stringResource(R.string.settings_ghost_mode_title),
+                    description = stringResource(R.string.settings_ghost_mode_desc),
                     icon = if (isGlobalGhostMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                     iconTint = if (isGlobalGhostMode) MaterialTheme.colorScheme.error
                     else MaterialTheme.colorScheme.primary,
@@ -2654,8 +2657,8 @@ private fun SettingsPanel(
                     testTag = "global_ghost_mode_switch"
                 )
                 SettingsToggleRow(
-                    title = "Condividi in questo gruppo",
-                    description = "Se lo spegni, sparisci solo da ${currentGroup?.name ?: "questo gruppo"}",
+                    title = stringResource(R.string.settings_group_share_title),
+                    description = stringResource(R.string.settings_group_share_desc, currentGroup?.name ?: stringResource(R.string.settings_group_share_fallback)),
                     icon = Icons.Default.ShareLocation,
                     checked = myMember?.isTrackingActive ?: true,
                     onCheckedChange = onToggleGroupTracking,
@@ -2671,21 +2674,21 @@ private fun SettingsPanel(
         item {
             SettingsCard {
                 SettingsSectionHeader(
-                    title = "Tracciamento",
-                    subtitle = "Come viene rilevata la posizione",
+                    title = stringResource(R.string.settings_section_tracking),
+                    subtitle = stringResource(R.string.settings_tracking_subtitle),
                     icon = Icons.Default.GpsFixed
                 )
                 SettingsToggleRow(
-                    title = "Tracciamento in background",
-                    description = "Continua a funzionare anche ad app chiusa",
+                    title = stringResource(R.string.settings_bg_tracking_title),
+                    description = stringResource(R.string.settings_bg_tracking_desc),
                     icon = Icons.Default.GpsFixed,
                     checked = isTrackingEnabled,
                     onCheckedChange = onToggleTracking,
                     testTag = "tracking_switch"
                 )
                 SettingsToggleRow(
-                    title = "Risparmio energia",
-                    description = "Meno batteria, posizione meno precisa (circa 100 metri)",
+                    title = stringResource(R.string.settings_power_saving_title),
+                    description = stringResource(R.string.settings_power_saving_desc),
                     icon = Icons.Default.BatterySaver,
                     iconTint = if (isPowerSavingMode) RadarSemantic.BatteryOk
                     else MaterialTheme.colorScheme.primary,
@@ -2695,12 +2698,12 @@ private fun SettingsPanel(
                 )
                 Spacer(Modifier.height(Spacing.md))
                 Text(
-                    text = "Frequenza aggiornamento",
+                    text = stringResource(R.string.settings_update_frequency),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "Ogni quanto viene rilevata la tua posizione",
+                    text = stringResource(R.string.settings_update_frequency_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2717,7 +2720,7 @@ private fun SettingsPanel(
                             intervalText = filtered
                             if (filtered.isNotBlank()) applyInterval(filtered, intervalUnit)
                         },
-                        label = { Text("Valore") },
+                        label = { Text(stringResource(R.string.label_value)) },
                         singleLine = true,
                         shape = RoundedCornerShape(Radius.sm),
                         keyboardOptions = KeyboardOptions(
@@ -2742,13 +2745,13 @@ private fun SettingsPanel(
                 Spacer(Modifier.height(Spacing.sm))
                 val effective = (intervalText.toIntOrNull() ?: 0) * intervalUnit.multiplier
                 Text(
-                    text = "Aggiornamento ogni ${formatInterval(effective)}",
+                    text = stringResource(R.string.settings_effective_interval, formatInterval(effective, context)),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(Modifier.height(Spacing.xs))
                 Text(
-                    text = "Durante un viaggio si passa sempre a 5 secondi",
+                    text = stringResource(R.string.settings_trip_speed_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2759,13 +2762,13 @@ private fun SettingsPanel(
         item {
             SettingsCard {
                 SettingsSectionHeader(
-                    title = "Viaggi",
-                    subtitle = "Registrazione dei tuoi spostamenti",
+                    title = stringResource(R.string.settings_section_trips),
+                    subtitle = stringResource(R.string.settings_trips_subtitle),
                     icon = Icons.Default.Route
                 )
                 SettingsToggleRow(
-                    title = "Rileva i viaggi da solo",
-                    description = "Registra quando ti muovi, senza premere niente. Consuma più batteria",
+                    title = stringResource(R.string.settings_auto_trip_title),
+                    description = stringResource(R.string.settings_auto_trip_desc),
                     icon = Icons.Default.AutoMode,
                     checked = isAutoTripEnabled,
                     onCheckedChange = onToggleAutoTrip,
@@ -2773,8 +2776,8 @@ private fun SettingsPanel(
                 )
                 if (isAutoTripEnabled) {
                     SettingsToggleRow(
-                        title = "Condividi i viaggi automatici",
-                        description = "Se lo spegni, li vedi solo tu",
+                        title = stringResource(R.string.settings_auto_trip_shared_title),
+                        description = stringResource(R.string.settings_auto_trip_shared_desc),
                         icon = if (isAutoTripShared) Icons.Default.Group else Icons.Default.Lock,
                         checked = isAutoTripShared,
                         onCheckedChange = onToggleAutoTripShared,
@@ -2825,13 +2828,13 @@ private fun SettingsPanel(
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "GRUPPO ATTIVO",
+                            text = stringResource(R.string.label_active_group),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(Modifier.height(Spacing.xxs))
                         Text(
-                            text = currentGroup?.name ?: "Nessun gruppo",
+                            text = currentGroup?.name ?: stringResource(R.string.label_no_group),
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
@@ -2839,8 +2842,10 @@ private fun SettingsPanel(
                         )
                         Spacer(Modifier.height(Spacing.xxs))
                         Text(
-                            text = "$activeMemberCount membri attivi" +
-                                if (pendingMemberCount > 0) " · $pendingMemberCount in attesa" else "",
+                            text = if (pendingMemberCount > 0)
+                                stringResource(R.string.label_active_members_pending, activeMemberCount, pendingMemberCount)
+                            else
+                                stringResource(R.string.label_active_members, activeMemberCount),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -2865,7 +2870,7 @@ private fun SettingsPanel(
                     ) {
                         Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                         Spacer(Modifier.width(Spacing.xs))
-                        Text("Cambia")
+                        Text(stringResource(R.string.action_change_short))
                     }
                     if (isOwnerOrAdmin && currentGroup != null) {
                         OutlinedButton(
@@ -2878,7 +2883,7 @@ private fun SettingsPanel(
                         ) {
                             Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                             Spacer(Modifier.width(Spacing.xs))
-                            Text("Modifica")
+                            Text(stringResource(R.string.action_edit_short))
                         }
                     }
                 }
@@ -2905,7 +2910,7 @@ private fun SettingsPanel(
                         ) {
                             Icon(Icons.Default.ExitToApp, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                             Spacer(Modifier.width(Spacing.xs))
-                            Text("Abbandona")
+                            Text(stringResource(R.string.action_leave_group))
                         }
                     }
                     if (isOwnerOrAdmin && currentGroup != null) {
@@ -2923,7 +2928,7 @@ private fun SettingsPanel(
                         ) {
                             Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                             Spacer(Modifier.width(Spacing.xs))
-                            Text("Elimina")
+                            Text(stringResource(R.string.action_delete_group))
                         }
                     }
                 }
@@ -2941,7 +2946,7 @@ private fun SettingsPanel(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Codice invito",
+                                text = stringResource(R.string.label_invite_code_section),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
@@ -2955,15 +2960,15 @@ private fun SettingsPanel(
                             onClick = {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(
-                                    ClipData.newPlainText("Codice invito", currentGroup?.joinCode ?: "")
+                                    ClipData.newPlainText(context.getString(R.string.label_invite_code_section), currentGroup?.joinCode ?: "")
                                 )
-                                Toast.makeText(context, "Codice copiato", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.toast_code_copied), Toast.LENGTH_SHORT).show()
                             },
                             shape = RoundedCornerShape(Radius.sm)
                         ) {
                             Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                             Spacer(Modifier.width(Spacing.xs))
-                            Text("Copia")
+                            Text(stringResource(R.string.action_copy))
                         }
                     }
                 }
@@ -2971,11 +2976,11 @@ private fun SettingsPanel(
                 if (isOwnerOrAdmin && currentGroup != null) {
                     Spacer(Modifier.height(Spacing.xs))
                     SettingsToggleRow(
-                        title = "Approvazione nuovi membri",
+                        title = stringResource(R.string.settings_approval_title),
                         description = if (currentGroup.requiresApproval)
-                            "Devi approvare tu chi entra col codice"
+                            stringResource(R.string.settings_approval_on_desc)
                         else
-                            "Chi ha il codice entra subito",
+                            stringResource(R.string.settings_approval_off_desc),
                         icon = Icons.Default.AdminPanelSettings,
                         checked = currentGroup.requiresApproval,
                         onCheckedChange = onToggleAccessPolicy,
@@ -2992,7 +2997,7 @@ private fun SettingsPanel(
             SettingsCard {
                 SettingsSectionHeader(
                     title = stringResource(R.string.settings_appearance),
-                    subtitle = "Tema dell'applicazione",
+                    subtitle = stringResource(R.string.settings_appearance_subtitle),
                     icon = Icons.Default.Palette
                 )
                 Spacer(Modifier.height(Spacing.xs))
@@ -3021,7 +3026,7 @@ private fun SettingsPanel(
 
                 SettingsSectionHeader(
                     title = stringResource(R.string.settings_language),
-                    subtitle = "App e notifiche seguono questa scelta",
+                    subtitle = stringResource(R.string.settings_language_subtitle),
                     icon = Icons.Default.Language
                 )
                 Spacer(Modifier.height(Spacing.xs))
@@ -3065,8 +3070,8 @@ private fun SettingsPanel(
         item {
             SettingsCard {
                 SettingsSectionHeader(
-                    title = "Account",
-                    subtitle = "Disconnessione da questo dispositivo",
+                    title = stringResource(R.string.settings_section_account),
+                    subtitle = stringResource(R.string.settings_account_subtitle),
                     icon = Icons.Default.ManageAccounts
                 )
                 Spacer(Modifier.height(Spacing.xs))
@@ -3083,7 +3088,7 @@ private fun SettingsPanel(
                 ) {
                     Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
                     Spacer(Modifier.width(Spacing.sm))
-                    Text("Disconnetti account")
+                    Text(stringResource(R.string.action_sign_out_account))
                 }
             }
         }
@@ -3091,14 +3096,14 @@ private fun SettingsPanel(
         // ---- App ----
         item {
             SettingsCard {
-                SettingsSectionHeader(title = "App", icon = Icons.Default.Info)
+                SettingsSectionHeader(title = stringResource(R.string.settings_section_app), icon = Icons.Default.Info)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Versione",
+                        stringResource(R.string.label_version),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -3135,7 +3140,7 @@ private fun SettingsPanel(
                         )
                         Spacer(Modifier.width(Spacing.sm))
                     }
-                    Text(if (checking) "Controllo in corso..." else "Controlla aggiornamenti")
+                    Text(if (checking) stringResource(R.string.checking_updates) else stringResource(R.string.action_check_updates))
                 }
 
                 when (val result = checkResult) {
@@ -3161,15 +3166,15 @@ private fun SettingsPanel(
                                         tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
                                 }
                                 Text(
-                                    text = "È disponibile la versione ${result.info.versionName}.\nScaricala e installala ora.",
+                                    text = stringResource(R.string.update_available_body, result.info.versionName),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
                                 )
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                                    OutlinedButton(onClick = { checkResult = null }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm)) { Text("Dopo") }
+                                    OutlinedButton(onClick = { checkResult = null }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm)) { Text(stringResource(R.string.action_later)) }
                                     Button(onClick = { checkResult = null; AppUpdater.downloadAndInstall(context, result.info.apkUrl) },
-                                        modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm)) { Text("Aggiorna") }
+                                        modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm)) { Text(stringResource(R.string.action_update)) }
                                 }
                             }
                         }
@@ -3196,12 +3201,12 @@ private fun SettingsPanel(
                                         tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(Sizes.iconLg))
                                 }
                                 Text(
-                                    text = "Stai usando la versione ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}),\nche è l'ultima disponibile.",
+                                    text = stringResource(R.string.up_to_date_body, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
                                 )
-                                Button(onClick = { checkResult = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) { Text("OK") }
+                                Button(onClick = { checkResult = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) { Text(stringResource(R.string.action_ok)) }
                             }
                         }
                     }
@@ -3227,12 +3232,12 @@ private fun SettingsPanel(
                                         tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(Sizes.iconLg))
                                 }
                                 Text(
-                                    text = "Impossibile verificare gli aggiornamenti.\nControlla la connessione e riprova.",
+                                    text = stringResource(R.string.update_network_error_body),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
                                 )
-                                Button(onClick = { checkResult = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) { Text("OK") }
+                                Button(onClick = { checkResult = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) { Text(stringResource(R.string.action_ok)) }
                             }
                         }
                     }
@@ -3250,13 +3255,13 @@ private fun SettingsPanel(
 
             SettingsCard {
                 SettingsSectionHeader(
-                    title = "Feedback",
-                    subtitle = "Segnala problemi o suggerisci miglioramenti",
+                    title = stringResource(R.string.settings_section_feedback),
+                    subtitle = stringResource(R.string.settings_feedback_subtitle),
                     icon = Icons.Default.Feedback
                 )
                 if (feedbackSent) {
                     Text(
-                        text = "Grazie per il tuo feedback!",
+                        text = stringResource(R.string.feedback_thanks),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(vertical = Spacing.xs)
@@ -3266,12 +3271,12 @@ private fun SettingsPanel(
                         onClick = { feedbackSent = false },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(Radius.sm)
-                    ) { Text("Invia altro feedback") }
+                    ) { Text(stringResource(R.string.action_send_more_feedback)) }
                 } else {
                     OutlinedTextField(
                         value = feedbackText,
                         onValueChange = { feedbackText = it },
-                        placeholder = { Text("Scrivi qui il tuo feedback...") },
+                        placeholder = { Text(stringResource(R.string.feedback_placeholder)) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(Radius.sm),
                         minLines = 3,
@@ -3299,7 +3304,7 @@ private fun SettingsPanel(
                             CircularProgressIndicator(modifier = Modifier.size(Sizes.iconMd), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                             Spacer(Modifier.width(Spacing.sm))
                         }
-                        Text("Invia feedback")
+                        Text(stringResource(R.string.action_send_feedback))
                     }
                 }
             }
@@ -3312,13 +3317,13 @@ private fun SettingsPanel(
         item {
             SettingsCard {
                 SettingsSectionHeader(
-                    title = "Sviluppo",
-                    subtitle = "Strumenti di prova",
+                    title = stringResource(R.string.settings_section_dev),
+                    subtitle = stringResource(R.string.settings_dev_subtitle),
                     icon = Icons.Default.Code
                 )
                 SettingsToggleRow(
-                    title = "Simula movimento",
-                    description = "Muove membri finti sulla mappa. Solo per prove",
+                    title = stringResource(R.string.settings_sim_title),
+                    description = stringResource(R.string.settings_sim_desc),
                     icon = if (isSimulationRunning) Icons.Default.DirectionsRun else Icons.Default.PlayCircle,
                     checked = isSimulationRunning,
                     onCheckedChange = onToggleSimulation,
@@ -3329,8 +3334,8 @@ private fun SettingsPanel(
 
                 var showDevFeedbackDialog by remember { mutableStateOf(false) }
                 SettingsClickRow(
-                    title = "Visualizza feedback",
-                    description = "Accesso protetto da password sviluppatore",
+                    title = stringResource(R.string.settings_dev_feedback_title),
+                    description = stringResource(R.string.settings_dev_feedback_desc),
                     icon = Icons.Default.Feedback,
                     onClick = { showDevFeedbackDialog = true }
                 )
@@ -3391,9 +3396,9 @@ private fun FeedbackDevDialog(
                             tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
                     }
                     Spacer(Modifier.height(Spacing.sm))
-                    Text("Area sviluppatore", style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.dev_area_title), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(Spacing.xs))
-                    Text("Inserisci la password per visualizzare i feedback",
+                    Text(stringResource(R.string.dev_area_body),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center)
@@ -3401,22 +3406,22 @@ private fun FeedbackDevDialog(
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it; wrongPassword = false },
-                        label = { Text("Password") },
+                        label = { Text(stringResource(R.string.label_password)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(Radius.sm),
                         isError = wrongPassword,
-                        supportingText = if (wrongPassword) {{ Text("Password errata", color = MaterialTheme.colorScheme.error) }} else null,
+                        supportingText = if (wrongPassword) {{ Text(stringResource(R.string.err_wrong_password), color = MaterialTheme.colorScheme.error) }} else null,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { tryUnlock() })
                     )
                     Spacer(Modifier.height(Spacing.lg))
                     Button(onClick = { tryUnlock() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) {
-                        Text("Accedi")
+                        Text(stringResource(R.string.action_sign_in))
                     }
                     Spacer(Modifier.height(Spacing.sm))
-                    TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Annulla") }
+                    TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.action_cancel)) }
                 }
             }
         }
@@ -3439,7 +3444,7 @@ private fun FeedbackDevDialog(
                             tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
                     }
                     Spacer(Modifier.height(Spacing.sm))
-                    Text("Feedback ricevuti", style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.dev_feedback_list_title), style = MaterialTheme.typography.titleLarge)
                     Spacer(Modifier.height(Spacing.md))
                     if (loading) {
                         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -3447,7 +3452,7 @@ private fun FeedbackDevDialog(
                         }
                     } else if (list.isEmpty()) {
                         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            Text("Nessun feedback da analizzare 🎉", style = MaterialTheme.typography.bodyMedium,
+                            Text(stringResource(R.string.dev_feedback_empty), style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                         }
                     } else {
@@ -3476,14 +3481,14 @@ private fun FeedbackDevDialog(
                                                     list = list.filter { it.id != entry.id }
                                                     scope.launch { onUpdateFeedbackStatus(entry.id, "done") }
                                                 }) {
-                                                    Icon(Icons.Default.CheckCircle, contentDescription = "Completato",
+                                                    Icon(Icons.Default.CheckCircle, contentDescription = stringResource(R.string.content_desc_mark_done),
                                                         tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(Sizes.iconMd))
                                                 }
                                                 IconButton(onClick = {
                                                     list = list.filter { it.id != entry.id }
                                                     scope.launch { onUpdateFeedbackStatus(entry.id, "discarded") }
                                                 }) {
-                                                    Icon(Icons.Default.Cancel, contentDescription = "Scartato",
+                                                    Icon(Icons.Default.Cancel, contentDescription = stringResource(R.string.content_desc_discard),
                                                         tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(Sizes.iconMd))
                                                 }
                                             }
@@ -3498,7 +3503,7 @@ private fun FeedbackDevDialog(
                     }
                     Spacer(Modifier.height(Spacing.md))
                     OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) {
-                        Text("Chiudi")
+                        Text(stringResource(R.string.action_close))
                     }
                 }
             }
@@ -3698,7 +3703,7 @@ private fun ConfirmDialog(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(Radius.sm)
-                    ) { Text("Annulla") }
+                    ) { Text(stringResource(R.string.action_cancel)) }
                     Button(
                         onClick = onConfirm,
                         modifier = Modifier.weight(1f),
@@ -3793,7 +3798,7 @@ private fun GroupLoadingOverlay() {
                     )
                 }
                 Text(
-                    text = "Caricamento in corso...",
+                    text = stringResource(R.string.loading_text),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -3830,7 +3835,7 @@ private fun SnapshotSourceDialog(
         },
         title = {
             Text(
-                text = "Nuova istantanea",
+                text = stringResource(R.string.snapshot_source_title),
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -3838,7 +3843,7 @@ private fun SnapshotSourceDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 Text(
-                    text = "La foto verrà agganciata alla tua posizione attuale sulla mappa.",
+                    text = stringResource(R.string.snapshot_source_body),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -3850,7 +3855,7 @@ private fun SnapshotSourceDialog(
                 ) {
                     Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
                     Spacer(Modifier.width(Spacing.sm))
-                    Text("Scatta ora")
+                    Text(stringResource(R.string.action_take_photo_now))
                 }
                 OutlinedButton(
                     onClick = onGallery,
@@ -3859,13 +3864,13 @@ private fun SnapshotSourceDialog(
                 ) {
                     Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
                     Spacer(Modifier.width(Spacing.sm))
-                    Text("Scegli dalla galleria")
+                    Text(stringResource(R.string.action_choose_gallery))
                 }
             }
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Annulla") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }
@@ -3890,18 +3895,18 @@ private fun placeIcon(category: PlaceCategory) = when (category) {
     PlaceCategory.OTHER -> Icons.Default.Place
 }
 
-private fun formatInterval(seconds: Int): String = when {
+private fun formatInterval(seconds: Int, context: android.content.Context): String = when {
     seconds <= 0 -> "—"
-    seconds % 3600 == 0 -> "${seconds / 3600} ore"
-    seconds % 60 == 0 -> "${seconds / 60} minuti"
-    else -> "$seconds secondi"
+    seconds % 3600 == 0 -> context.getString(R.string.interval_hours, seconds / 3600)
+    seconds % 60 == 0 -> context.getString(R.string.interval_minutes, seconds / 60)
+    else -> context.getString(R.string.interval_seconds, seconds)
 }
 
-private fun formatShortTime(timestamp: Long): String {
+private fun formatShortTime(timestamp: Long, context: android.content.Context): String {
     val diff = System.currentTimeMillis() - timestamp
     return when {
-        diff < 60_000 -> "adesso"
-        diff < 3_600_000 -> "${diff / 60_000} min fa"
+        diff < 60_000 -> context.getString(R.string.map_time_just_now)
+        diff < 3_600_000 -> context.getString(R.string.time_short_minutes_ago, (diff / 60_000).toInt())
         else -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
     }
 }
@@ -3922,6 +3927,7 @@ private fun TripsPanel(
     onStopTrip: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val dateFormat = remember { java.text.SimpleDateFormat("dd MMM, HH:mm", java.util.Locale.ITALY) }
 
     LazyColumn(
@@ -3960,7 +3966,7 @@ private fun TripsPanel(
                                 modifier = Modifier.size(10.dp)
                             )
                             Text(
-                                "Registrazione in corso",
+                                stringResource(R.string.trip_recording),
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.error
                             )
@@ -3979,7 +3985,7 @@ private fun TripsPanel(
                         ) {
                             Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                             Spacer(Modifier.width(Spacing.xs))
-                            Text("Termina e salva")
+                            Text(stringResource(R.string.action_stop_and_save))
                         }
                     }
                 }
@@ -3992,7 +3998,7 @@ private fun TripsPanel(
                 ) {
                     Icon(Icons.Default.DirectionsCar, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                     Spacer(Modifier.width(Spacing.xs))
-                    Text("Inizia viaggio")
+                    Text(stringResource(R.string.action_start_trip))
                 }
             }
         }
@@ -4001,8 +4007,8 @@ private fun TripsPanel(
             item {
                 EmptyState(
                     icon = Icons.Default.Route,
-                    title = "Nessun viaggio",
-                    description = "I viaggi registrati appariranno qui"
+                    title = stringResource(R.string.empty_trips_title),
+                    description = stringResource(R.string.empty_trips_body)
                 )
             }
         }
@@ -4048,7 +4054,7 @@ private fun TripsPanel(
                             // Distinguere a colpo d'occhio cosa ha premuto una
                             // persona da cosa ha dedotto l'app.
                             TripBadge(
-                                text = if (trip.isLive) "IN CORSO" else trip.source.label.uppercase(),
+                                text = if (trip.isLive) stringResource(R.string.trip_badge_live) else trip.source.label(context).uppercase(),
                                 color = when {
                                     trip.isLive -> MaterialTheme.colorScheme.error
                                     trip.source == TripSource.AUTO -> MaterialTheme.colorScheme.tertiary
@@ -4057,7 +4063,7 @@ private fun TripsPanel(
                             )
                             if (trip.isPrivate) {
                                 TripBadge(
-                                    text = "PRIVATO",
+                                    text = stringResource(R.string.trip_badge_private),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -4073,7 +4079,7 @@ private fun TripsPanel(
                         )
                         Text(
                             "%.1f km  •  %d min".format(km, durationMin) +
-                                (trip.activityLabel?.let { "  •  $it" } ?: ""),
+                                (trip.activityLabel(context)?.let { "  •  $it" } ?: ""),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -4082,7 +4088,7 @@ private fun TripsPanel(
                         IconButton(onClick = { onDeleteTrip(trip.id) }) {
                             Icon(
                                 Icons.Default.Delete,
-                                contentDescription = "Elimina viaggio",
+                                contentDescription = stringResource(R.string.content_desc_delete_place),
                                 tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(Sizes.iconSm)
                             )
@@ -4125,6 +4131,7 @@ private fun TripDetailDialog(
     onShowOnMap: () -> Unit,
     onHideFromMap: () -> Unit
 ) {
+    val context = LocalContext.current
     val dateFormat = remember { SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.ITALY) }
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.ITALY) }
 
@@ -4164,7 +4171,7 @@ private fun TripDetailDialog(
                 Text(
                     text = listOfNotNull(trip.startPlaceName, trip.endPlaceName)
                         .takeIf { it.size == 2 }?.joinToString(" → ")
-                        ?: "Viaggio di ${trip.userName}",
+                        ?: stringResource(R.string.trip_title_of, trip.userName),
                     style = MaterialTheme.typography.titleMedium,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -4180,13 +4187,13 @@ private fun TripDetailDialog(
                 // Stat tiles
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     TripStatTile(
-                        label = "Distanza",
+                        label = stringResource(R.string.trip_stat_distance),
                         value = "%.1f".format(trip.distanceMeters / 1000.0),
                         unit = "km",
                         modifier = Modifier.weight(1f)
                     )
                     TripStatTile(
-                        label = "Durata",
+                        label = stringResource(R.string.trip_stat_duration),
                         value = "${trip.durationMs / 60000}",
                         unit = "min",
                         modifier = Modifier.weight(1f)
@@ -4194,13 +4201,13 @@ private fun TripDetailDialog(
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     TripStatTile(
-                        label = "Media",
+                        label = stringResource(R.string.trip_stat_avg_speed),
                         value = "${(trip.averageSpeedMs * 3.6f).toInt()}",
                         unit = "km/h",
                         modifier = Modifier.weight(1f)
                     )
                     TripStatTile(
-                        label = "Massima",
+                        label = stringResource(R.string.trip_stat_max_speed),
                         value = "${(trip.maxSpeedMs * 3.6f).toInt()}",
                         unit = "km/h",
                         modifier = Modifier.weight(1f)
@@ -4209,29 +4216,29 @@ private fun TripDetailDialog(
 
                 HairlineDivider()
 
-                TripDetailRow("Partenza", timeFormat.format(Date(trip.startTime)))
+                TripDetailRow(stringResource(R.string.trip_detail_departure), timeFormat.format(Date(trip.startTime)))
                 if (trip.endTime > 0) {
-                    TripDetailRow("Arrivo", timeFormat.format(Date(trip.endTime)))
+                    TripDetailRow(stringResource(R.string.trip_detail_arrival), timeFormat.format(Date(trip.endTime)))
                 }
                 if (trip.stoppedMs > 60_000) {
-                    TripDetailRow("Tempo fermo", "${trip.stoppedMs / 60000} min")
+                    TripDetailRow(stringResource(R.string.trip_detail_stopped), stringResource(R.string.trip_detail_stopped_value, (trip.stoppedMs / 60000).toInt()))
                 }
-                trip.activityLabel?.let { TripDetailRow("Spostamento", it) }
-                TripDetailRow("Registrazione", trip.source.label)
-                TripDetailRow("Da", trip.userName)
+                trip.activityLabel(LocalContext.current)?.let { TripDetailRow(stringResource(R.string.trip_detail_activity), it) }
+                TripDetailRow(stringResource(R.string.trip_detail_source), trip.source.label(LocalContext.current))
+                TripDetailRow(stringResource(R.string.trip_detail_by), trip.userName)
 
                 // Action buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Chiudi") }
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
                     Spacer(Modifier.width(Spacing.xs))
                     if (isOnMap) {
                         OutlinedButton(onClick = onHideFromMap) {
                             Icon(Icons.Default.LayersClear, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                             Spacer(Modifier.width(Spacing.xs))
-                            Text("Togli dalla mappa")
+                            Text(stringResource(R.string.action_remove_from_map))
                         }
                     } else {
                         Button(onClick = onShowOnMap) {

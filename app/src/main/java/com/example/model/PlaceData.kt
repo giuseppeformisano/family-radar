@@ -1,11 +1,17 @@
 package com.example.model
 
-enum class PlaceCategory(val label: String, val iconName: String) {
-    HOME("Casa", "home"),
-    WORK("Lavoro", "work"),
-    SCHOOL("Scuola", "school"),
-    GYM("Palestra", "fitness_center"),
-    OTHER("Altro", "place")
+import android.content.Context
+import androidx.annotation.StringRes
+import com.example.R
+
+enum class PlaceCategory(@StringRes val labelRes: Int, val iconName: String) {
+    HOME(R.string.place_cat_home, "home"),
+    WORK(R.string.place_cat_work, "work"),
+    SCHOOL(R.string.place_cat_school, "school"),
+    GYM(R.string.place_cat_gym, "fitness_center"),
+    OTHER(R.string.place_cat_other, "place");
+
+    fun label(ctx: Context): String = ctx.getString(labelRes)
 }
 
 data class SavedPlace(
@@ -14,17 +20,9 @@ data class SavedPlace(
     val category: PlaceCategory = PlaceCategory.HOME,
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
-    val radiusMeters: Double = 100.0, // e.g. 50m - 500m
+    val radiusMeters: Double = 100.0,
     val createdBy: String = "",
     val createdAt: Long = System.currentTimeMillis(),
-    /**
-     * Se false il luogo resta sulla mappa ma non genera più avvisi di arrivo e
-     * partenza. Serve per i posti che si vogliono vedere senza esserne notificati
-     * di continuo — il classico luogo dove si passa dieci volte al giorno.
-     *
-     * Default true anche in lettura: i documenti creati prima di questo campo non
-     * lo hanno, e devono continuare a comportarsi come prima.
-     */
     val geofenceEnabled: Boolean = true
 )
 

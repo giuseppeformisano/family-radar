@@ -49,8 +49,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.example.R
 import com.example.model.GroupData
 import com.example.ui.theme.Radius
 import com.example.ui.theme.Sizes
@@ -97,7 +99,7 @@ fun EditGroupDialog(
                     photoBitmap = ImageUtils.base64ToBitmap(base64)
                 } else {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Errore nel caricamento immagine", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.toast_image_load_error), Toast.LENGTH_SHORT).show()
                     }
                 }
                 isProcessingImage = false
@@ -136,13 +138,13 @@ fun EditGroupDialog(
                 }
                 Spacer(Modifier.height(Spacing.sm))
                 Text(
-                    text = "Modifica gruppo",
+                    text = stringResource(R.string.dialog_edit_group_title),
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.height(Spacing.xs))
                 Text(
-                    text = "Nome, descrizione e immagine visibili a tutti i membri",
+                    text = stringResource(R.string.dialog_edit_group_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -172,7 +174,7 @@ fun EditGroupDialog(
                             modifier = Modifier.size(Sizes.iconSm)
                         )
                         Spacer(Modifier.width(Spacing.xs))
-                        Text("Scegli foto", style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.action_choose_photo), style = MaterialTheme.typography.labelLarge)
                     }
                     if (photoBitmap != null) {
                         TextButton(
@@ -185,7 +187,7 @@ fun EditGroupDialog(
                                 contentColor = MaterialTheme.colorScheme.error
                             )
                         ) {
-                            Text("Rimuovi", style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(R.string.action_remove), style = MaterialTheme.typography.labelLarge)
                         }
                     }
                 }
@@ -195,8 +197,8 @@ fun EditGroupDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Nome del gruppo") },
-                    placeholder = { Text("es. Famiglia Rossi") },
+                    label = { Text(stringResource(R.string.label_group_name)) },
+                    placeholder = { Text(stringResource(R.string.placeholder_group_name)) },
                     singleLine = true,
                     shape = RoundedCornerShape(Radius.sm),
                     leadingIcon = { Icon(Icons.Default.Group, contentDescription = null) },
@@ -209,8 +211,8 @@ fun EditGroupDialog(
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Descrizione (facoltativa)") },
-                    placeholder = { Text("es. Casa e spostamenti") },
+                    label = { Text(stringResource(R.string.label_group_description)) },
+                    placeholder = { Text(stringResource(R.string.edit_group_desc_placeholder)) },
                     shape = RoundedCornerShape(Radius.sm),
                     minLines = 2,
                     maxLines = 3,
@@ -229,12 +231,12 @@ fun EditGroupDialog(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(Radius.sm),
                         enabled = !isSaving
-                    ) { Text("Annulla") }
+                    ) { Text(stringResource(R.string.action_cancel)) }
 
                     Button(
                         onClick = {
                             if (name.isBlank()) {
-                                Toast.makeText(context, "Inserisci un nome valido", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.toast_enter_valid_name), Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
                             isSaving = true
@@ -251,7 +253,7 @@ fun EditGroupDialog(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Text("Salva")
+                            Text(stringResource(R.string.action_save))
                         }
                     }
                 }
@@ -298,7 +300,7 @@ fun GroupPhotoPicker(
 
                 bitmap != null -> Image(
                     bitmap = bitmap.asImageBitmap(),
-                    contentDescription = "Immagine del gruppo",
+                    contentDescription = stringResource(R.string.content_desc_group_image),
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
@@ -325,7 +327,7 @@ fun GroupPhotoPicker(
         ) {
             Icon(
                 imageVector = Icons.Default.CameraAlt,
-                contentDescription = "Cambia immagine",
+                contentDescription = stringResource(R.string.content_desc_change_image_badge),
                 tint = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.size(Sizes.iconSm)
             )

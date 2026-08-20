@@ -368,6 +368,181 @@
     <string name="placeholder_nickname_examples">es. Il Capo, Speedy</string>
     <string name="action_save">Salva</string>
     <string name="toast_enter_valid_name">Inserisci un nome valido</string>
+
+    <!-- Categorie luogo -->
+    <string name="place_cat_home">Casa</string>
+    <string name="place_cat_work">Lavoro</string>
+    <string name="place_cat_school">Scuola</string>
+    <string name="place_cat_gym">Palestra</string>
+    <string name="place_cat_other">Altro</string>
+
+    <!-- Sorgente viaggio -->
+    <string name="trip_source_manual">Manuale</string>
+    <string name="trip_source_auto">Automatico</string>
+
+    <!-- Modalita di spostamento -->
+    <string name="trip_activity_vehicle">In auto</string>
+    <string name="trip_activity_bicycle">In bicicletta</string>
+    <string name="trip_activity_running">Di corsa</string>
+    <string name="trip_activity_walking">A piedi</string>
+
+    <!-- Chat -->
+    <string name="chat_empty_title">Ancora nessun messaggio</string>
+    <string name="chat_empty_body">Scrivi al gruppo, condividi una foto o la tua posizione.</string>
+    <string name="chat_input_placeholder">Scrivi un messaggio…</string>
+    <string name="chat_take_photo_desc">Scatta foto</string>
+    <string name="chat_attach_image_desc">Allega immagine</string>
+    <string name="chat_send_desc">Invia</string>
+    <string name="chat_sos_alert_label">Allerta SOS · %1$s</string>
+
+    <!-- Pannello Luoghi -->
+    <string name="section_safe_zones">Zone sicure</string>
+    <string name="section_safe_zones_desc">Avvisi automatici quando un membro arriva o si allontana</string>
+    <string name="action_add">Aggiungi</string>
+    <string name="empty_places_title">Nessuna zona impostata</string>
+    <string name="empty_places_body">Aggiungi Casa, Scuola, Lavoro o Palestra per ricevere avvisi quando qualcuno entra o esce.</string>
+    <string name="section_recent_activity">Attivita recente</string>
+    <string name="content_desc_alerts_disabled">Avvisi disattivati</string>
+    <string name="place_row_subtitle">%1$s · raggio %2$d m</string>
+    <string name="place_row_subtitle_silent">%1$s · raggio %2$d m · avvisi spenti</string>
+    <string name="content_desc_edit_place">Modifica luogo</string>
+    <string name="content_desc_delete_place">Elimina luogo</string>
+
+    <!-- Impostazioni: Profilo -->
+    <string name="settings_section_profile">Profilo</string>
+    <string name="label_anonymous_account">Account anonimo</string>
+    <string name="action_edit_short">Modifica</string>
+
+    <!-- Impostazioni: Privacy -->
+    <string name="settings_section_privacy">Privacy</string>
+    <string name="settings_privacy_subtitle">Chi vede la tua posizione</string>
+    <string name="settings_ghost_mode_title">Modalita fantasma</string>
+    <string name="settings_ghost_mode_desc">Nessuno ti vede, in tutti i gruppi</string>
+    <string name="settings_group_share_title">Condividi in questo gruppo</string>
+    <string name="settings_group_share_desc">Se lo spegni, sparisci solo da %1$s</string>
+    <string name="settings_group_share_fallback">questo gruppo</string>
+
+    <!-- Impostazioni: Tracciamento -->
+    <string name="settings_section_tracking">Tracciamento</string>
+    <string name="settings_tracking_subtitle">Come viene rilevata la posizione</string>
+    <string name="settings_bg_tracking_title">Tracciamento in background</string>
+    <string name="settings_bg_tracking_desc">Continua a funzionare anche ad app chiusa</string>
+    <string name="settings_power_saving_title">Risparmio energia</string>
+    <string name="settings_power_saving_desc">Meno batteria, posizione meno precisa (circa 100 metri)</string>
+    <string name="settings_update_frequency">Frequenza aggiornamento</string>
+    <string name="settings_update_frequency_desc">Ogni quanto viene rilevata la tua posizione</string>
+    <string name="label_value">Valore</string>
+    <string name="settings_effective_interval">Aggiornamento ogni %1$s</string>
+    <string name="settings_trip_speed_note">Durante un viaggio si passa sempre a 5 secondi</string>
+    <string name="interval_hours">%1$d ore</string>
+    <string name="interval_minutes">%1$d minuti</string>
+    <string name="interval_seconds">%1$d secondi</string>
+
+    <!-- Impostazioni: Viaggi -->
+    <string name="settings_section_trips">Viaggi</string>
+    <string name="settings_trips_subtitle">Registrazione dei tuoi spostamenti</string>
+    <string name="settings_auto_trip_title">Rileva i viaggi da solo</string>
+    <string name="settings_auto_trip_desc">Registra quando ti muovi, senza premere niente. Consuma piu batteria</string>
+    <string name="settings_auto_trip_shared_title">Condividi i viaggi automatici</string>
+    <string name="settings_auto_trip_shared_desc">Se lo spegni, li vedi solo tu</string>
+
+    <!-- Impostazioni: Gruppo -->
+    <string name="label_active_group">GRUPPO ATTIVO</string>
+    <string name="label_no_group">Nessun gruppo</string>
+    <string name="label_active_members">%1$d membri attivi</string>
+    <string name="label_active_members_pending">%1$d membri attivi · %2$d in attesa</string>
+    <string name="action_change_short">Cambia</string>
+    <string name="action_leave_group">Abbandona</string>
+    <string name="action_delete_group">Elimina</string>
+    <string name="label_invite_code_section">Codice invito</string>
+    <string name="toast_code_copied">Codice copiato</string>
+    <string name="action_copy">Copia</string>
+    <string name="settings_approval_title">Approvazione nuovi membri</string>
+    <string name="settings_approval_on_desc">Devi approvare tu chi entra col codice</string>
+    <string name="settings_approval_off_desc">Chi ha il codice entra subito</string>
+
+    <!-- Impostazioni: Aspetto e Lingua -->
+    <string name="settings_appearance_subtitle">Tema dell applicazione</string>
+    <string name="settings_language_subtitle">App e notifiche seguono questa scelta</string>
+
+    <!-- Impostazioni: Account -->
+    <string name="settings_section_account">Account</string>
+    <string name="settings_account_subtitle">Disconnessione da questo dispositivo</string>
+    <string name="action_sign_out_account">Disconnetti account</string>
+
+    <!-- Impostazioni: App / Aggiornamenti -->
+    <string name="settings_section_app">App</string>
+    <string name="label_version">Versione</string>
+    <string name="action_check_updates">Controlla aggiornamenti</string>
+    <string name="checking_updates">Controllo in corso...</string>
+    <string name="update_available_body">E disponibile la versione %1$s. Scaricala e installala ora.</string>
+    <string name="action_later">Dopo</string>
+    <string name="action_update">Aggiorna</string>
+    <string name="up_to_date_body">Stai usando la versione %1$s (%2$d): nessun aggiornamento disponibile.</string>
+    <string name="action_ok">OK</string>
+    <string name="update_network_error_body">Impossibile verificare gli aggiornamenti. Controlla la connessione e riprova.</string>
+
+    <!-- Impostazioni: Feedback -->
+    <string name="settings_section_feedback">Feedback</string>
+    <string name="settings_feedback_subtitle">Segnala problemi o suggerisci miglioramenti</string>
+    <string name="feedback_thanks">Grazie per il tuo feedback!</string>
+    <string name="action_send_more_feedback">Invia altro feedback</string>
+    <string name="feedback_placeholder">Scrivi qui il tuo feedback...</string>
+    <string name="action_send_feedback">Invia feedback</string>
+
+    <!-- Impostazioni: Sviluppo -->
+    <string name="settings_section_dev">Sviluppo</string>
+    <string name="settings_dev_subtitle">Strumenti di prova</string>
+    <string name="settings_sim_title">Simula movimento</string>
+    <string name="settings_sim_desc">Muove membri finti sulla mappa. Solo per prove</string>
+    <string name="settings_dev_feedback_title">Visualizza feedback</string>
+    <string name="settings_dev_feedback_desc">Accesso protetto da password sviluppatore</string>
+    <string name="dev_area_title">Area sviluppatore</string>
+    <string name="dev_area_body">Inserisci la password per visualizzare i feedback</string>
+    <string name="label_password">Password</string>
+    <string name="err_wrong_password">Password errata</string>
+    <string name="dev_feedback_list_title">Feedback ricevuti</string>
+    <string name="dev_feedback_empty">Nessun feedback da analizzare</string>
+    <string name="content_desc_mark_done">Completato</string>
+    <string name="content_desc_discard">Scartato</string>
+
+    <!-- Overlay mappa -->
+    <string name="loading_text">Caricamento in corso...</string>
+    <string name="snapshot_source_title">Nuova istantanea</string>
+    <string name="snapshot_source_body">La foto verra agganciata alla tua posizione attuale sulla mappa.</string>
+    <string name="action_take_photo_now">Scatta ora</string>
+    <string name="action_choose_gallery">Scegli dalla galleria</string>
+    <string name="label_you_follow">te</string>
+
+    <!-- Pannello Viaggi -->
+    <string name="trip_recording">Registrazione in corso</string>
+    <string name="action_stop_and_save">Termina e salva</string>
+    <string name="action_start_trip">Inizia viaggio</string>
+    <string name="empty_trips_title">Nessun viaggio</string>
+    <string name="empty_trips_body">I viaggi registrati appariranno qui</string>
+    <string name="trip_badge_live">IN CORSO</string>
+    <string name="trip_badge_private">PRIVATO</string>
+    <string name="trip_title_of">Viaggio di %1$s</string>
+    <string name="trip_stat_distance">Distanza</string>
+    <string name="trip_stat_duration">Durata</string>
+    <string name="trip_stat_avg_speed">Media</string>
+    <string name="trip_stat_max_speed">Massima</string>
+    <string name="trip_detail_departure">Partenza</string>
+    <string name="trip_detail_arrival">Arrivo</string>
+    <string name="trip_detail_stopped">Tempo fermo</string>
+    <string name="trip_detail_stopped_value">%1$d min</string>
+    <string name="trip_detail_activity">Spostamento</string>
+    <string name="trip_detail_source">Registrazione</string>
+    <string name="trip_detail_by">Da</string>
+    <string name="action_remove_from_map">Togli dalla mappa</string>
+    <string name="time_short_minutes_ago">%1$d min fa</string>
+
+    <!-- Dialog modifica gruppo -->
+    <string name="dialog_edit_group_title">Modifica gruppo</string>
+    <string name="dialog_edit_group_subtitle">Nome, descrizione e immagine visibili a tutti i membri</string>
+    <string name="edit_group_desc_placeholder">es. Casa e spostamenti</string>
+    <string name="content_desc_group_image">Immagine del gruppo</string>
+    <string name="content_desc_change_image_badge">Cambia immagine</string>
 </resources>
 
 

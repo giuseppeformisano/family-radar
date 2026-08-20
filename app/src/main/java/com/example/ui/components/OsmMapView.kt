@@ -354,7 +354,7 @@ fun OsmMapView(
                             val placeMarker = Marker(mapView).apply {
                                 position = placeCenter
                                 title = place.name
-                                snippet = mapView.context.getString(R.string.map_marker_place_zone, place.category.label, place.radiusMeters.toInt())
+                                snippet = mapView.context.getString(R.string.map_marker_place_zone, place.category.label(mapView.context), place.radiusMeters.toInt())
                                 icon = createPlaceMarkerDrawable(ctx = mapView.context, place = place)
                                 setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                                 setOnMarkerClickListener { _, _ ->

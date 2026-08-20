@@ -103,7 +103,7 @@ fun PlaceDetailSheet(
                     shape = RoundedCornerShape(Radius.md)
                 ) {
                     Text(
-                        text = "${place.category.label} • Raggio ${place.radiusMeters.toInt()}m",
+                        text = "${place.category.label(context)} • Raggio ${place.radiusMeters.toInt()}m",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = catColor,

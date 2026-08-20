@@ -2155,6 +2155,11 @@ private fun ChatBubble(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
+                        Text(
+                            text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+                        )
                     }
                 }
             }

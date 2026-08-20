@@ -53,8 +53,8 @@
     <string name="notif_chat_default_title">Nuovo messaggio</string>
 
     <!-- Notifiche: luoghi, SOS e varie -->
-    <string name="notif_place_entry_title">Arrivo a destinazione</string>
-    <string name="notif_place_exit_title">Partenza registrata</string>
+    <string name="notif_place_entry_title">Family Radar</string>
+    <string name="notif_place_exit_title">Family Radar</string>
     <string name="notif_place_entry_body">%1$s è arrivato presso %2$s</string>
     <string name="notif_place_exit_body">%1$s si è allontanato da %2$s</string>
     <string name="notif_sos_title">Allerta SOS</string>

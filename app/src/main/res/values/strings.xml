@@ -123,6 +123,8 @@
     <string name="group_members_count">%1$d membri</string>
     <string name="join_code_preview_title">Gruppo trovato</string>
     <string name="no_search_results">Nessun gruppo trovato</string>
+    <string name="group_public_title">Trovabile per nome</string>
+    <string name="group_public_desc">Altri potranno cercare questo gruppo per nome e chiedere di entrare</string>
 
     <!-- Selezione gruppo e schermata accesso -->
     <string name="greeting_user">Ciao, %1$s</string>

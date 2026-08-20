@@ -73,13 +73,14 @@ import kotlinx.coroutines.withContext
 fun EditGroupDialog(
     group: GroupData,
     onDismiss: () -> Unit,
-    onSave: (name: String, description: String, photoBase64: String?) -> Unit
+    onSave: (name: String, description: String, photoBase64: String?, isPublic: Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     var name by remember { mutableStateOf(group.name) }
     var description by remember { mutableStateOf(group.description) }
+    var isPublic by remember { mutableStateOf(group.isPublic) }
     var photoBase64 by remember { mutableStateOf(group.photoBase64.ifBlank { null }) }
     var photoBitmap by remember {
         mutableStateOf<Bitmap?>(ImageUtils.base64ToBitmap(group.photoBase64.ifBlank { null }))
@@ -220,6 +221,32 @@ fun EditGroupDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                Spacer(Modifier.height(Spacing.md))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.group_public_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.group_public_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = isPublic,
+                        onCheckedChange = { isPublic = it },
+                        enabled = !isSaving
+                    )
+                }
+
                 Spacer(Modifier.height(Spacing.xxl))
 
                 Row(
@@ -240,7 +267,7 @@ fun EditGroupDialog(
                                 return@Button
                             }
                             isSaving = true
-                            onSave(name.trim(), description.trim(), photoBase64)
+                            onSave(name.trim(), description.trim(), photoBase64, isPublic)
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(Radius.sm),

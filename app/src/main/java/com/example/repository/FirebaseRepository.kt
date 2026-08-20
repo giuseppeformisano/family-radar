@@ -347,7 +347,8 @@ class FirebaseRepository private constructor(private val context: Context) {
         groupId: String,
         name: String,
         description: String,
-        photoBase64: String?
+        photoBase64: String?,
+        isPublic: Boolean = false
     ): Result<Unit> {
         val cleanName = name.trim().ifBlank { "Gruppo" }
         val cleanDesc = description.trim()
@@ -360,14 +361,24 @@ class FirebaseRepository private constructor(private val context: Context) {
                         mapOf(
                             "name" to cleanName,
                             "description" to cleanDesc,
-                            "photoBase64" to cleanPhoto
+                            "photoBase64" to cleanPhoto,
+                            // nameLower va riscritto qui: i gruppi creati prima di
+                            // questo campo non lo hanno e senza non sono cercabili.
+                            "nameLower" to cleanName.lowercase(),
+                            "isPublic" to isPublic
                         )
                     )
                     .await()
             }
             _userGroupsState.value = _userGroupsState.value.map {
                 if (it.id == groupId) {
-                    it.copy(name = cleanName, description = cleanDesc, photoBase64 = cleanPhoto)
+                    it.copy(
+                        name = cleanName,
+                        description = cleanDesc,
+                        photoBase64 = cleanPhoto,
+                        nameLower = cleanName.lowercase(),
+                        isPublic = isPublic
+                    )
                 } else it
             }
             Result.success(Unit)

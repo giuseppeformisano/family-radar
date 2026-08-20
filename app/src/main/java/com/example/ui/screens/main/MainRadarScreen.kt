@@ -1007,13 +1007,14 @@ fun MainRadarScreen(
         EditGroupDialog(
             group = currentGroup,
             onDismiss = { showEditGroupDialog = false },
-            onSave = { newName, newDescription, newPhotoBase64 ->
+            onSave = { newName, newDescription, newPhotoBase64, newIsPublic ->
                 coroutineScope.launch {
                     val res = repository.updateGroupInfo(
                         groupId = currentGroup.id,
                         name = newName,
                         description = newDescription,
-                        photoBase64 = newPhotoBase64
+                        photoBase64 = newPhotoBase64,
+                        isPublic = newIsPublic
                     )
                     showEditGroupDialog = false
                     Toast.makeText(

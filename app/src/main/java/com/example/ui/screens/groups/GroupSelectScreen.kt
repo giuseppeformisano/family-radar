@@ -67,6 +67,7 @@ fun GroupSelectScreen(
     var newGroupName by remember { mutableStateOf("") }
     var newGroupDesc by remember { mutableStateOf("") }
     var newGroupRequiresApproval by remember { mutableStateOf(true) }
+    var newGroupIsPublic by remember { mutableStateOf(false) }
     var newGroupPhotoBase64 by remember { mutableStateOf<String?>(null) }
     var pendingGroupInfoDialog by remember { mutableStateOf<GroupData?>(null) }
     var joinCodeInput by remember { mutableStateOf("") }
@@ -120,6 +121,7 @@ fun GroupSelectScreen(
                     newGroupName = ""
                     newGroupDesc = ""
                     newGroupRequiresApproval = true
+                    newGroupIsPublic = false
                     showCreateDialog = true
                 },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
@@ -353,6 +355,8 @@ fun GroupSelectScreen(
             onDescriptionChange = { newGroupDesc = it },
             requiresApproval = newGroupRequiresApproval,
             onRequiresApprovalChange = { newGroupRequiresApproval = it },
+            isPublic = newGroupIsPublic,
+            onIsPublicChange = { newGroupIsPublic = it },
             photoBase64 = newGroupPhotoBase64,
             onPhotoChange = { newGroupPhotoBase64 = it },
             isSubmitting = isSubmitting,
@@ -364,7 +368,8 @@ fun GroupSelectScreen(
                             newGroupName.trim(),
                             newGroupDesc.trim(),
                             newGroupRequiresApproval,
-                            newGroupPhotoBase64 ?: ""
+                            newGroupPhotoBase64 ?: "",
+                            newGroupIsPublic
                         )
                         isSubmitting = false
                         showCreateDialog = false
@@ -598,6 +603,8 @@ private fun CreateGroupDialog(
     onDescriptionChange: (String) -> Unit,
     requiresApproval: Boolean,
     onRequiresApprovalChange: (Boolean) -> Unit,
+    isPublic: Boolean,
+    onIsPublicChange: (Boolean) -> Unit,
     photoBase64: String?,
     onPhotoChange: (String?) -> Unit,
     isSubmitting: Boolean,
@@ -711,6 +718,31 @@ private fun CreateGroupDialog(
                     description = stringResource(R.string.join_mode_direct_desc),
                     onClick = { onRequiresApprovalChange(false) }
                 )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = Spacing.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.group_public_title),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = stringResource(R.string.group_public_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = isPublic,
+                        onCheckedChange = onIsPublicChange
+                    )
+                }
             }
         },
         confirmButton = {

@@ -57,6 +57,7 @@
     <string name="service_title">Family Radar active</string>
     <string name="service_last_fix">Last position at %1$s</string>
     <string name="service_waiting_gps">Waiting for the first GPS signal…</string>
+    <string name="service_tracking_active">Location tracking active</string>
     <!-- In-app update -->
     <string name="channel_update_name">Updates</string>
     <string name="update_downloading_title">Update in progress</string>

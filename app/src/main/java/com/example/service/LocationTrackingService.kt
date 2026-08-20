@@ -337,12 +337,7 @@ class LocationTrackingService : Service() {
         )
 
         val res = localizedResources()
-        val text = if (lastFixAtMillis > 0L) {
-            val clock = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(lastFixAtMillis))
-            res.getString(R.string.service_last_fix, clock)
-        } else {
-            res.getString(R.string.service_waiting_gps)
-        }
+        val text = res.getString(R.string.service_tracking_active)
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(res.getString(R.string.service_title))

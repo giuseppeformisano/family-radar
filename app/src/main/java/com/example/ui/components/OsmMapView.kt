@@ -51,21 +51,50 @@ import org.osmdroid.views.overlay.Overlay
 import org.osmdroid.views.overlay.Polygon
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlinx.coroutines.delay
 import androidx.compose.ui.res.stringResource
 import com.example.R
 
 // Soglia minima di velocita' per applicare il dead reckoning: sotto questa
 // velocita' il membro e' considerato fermo e il marker non viene anticipato.
-private const val INTERP_MIN_SPEED_MS = 1.0f      // m/s (~3.6 km/h)
+// Bassa apposta (0,5 m/s ~ 1,8 km/h): la velocita' usata e' quella CALCOLATA dai
+// delta di posizione, non il campo speed del GPS che spesso resta a 0.
+private const val INTERP_MIN_SPEED_MS = 0.5f      // m/s
 
-// Cappatura massima del tempo extrapolato: oltre questo limite il marker
-// potrebbe derivare troppo lontano dall'ultima posizione reale.
-private const val INTERP_MAX_ELAPSED_SEC = 8.0    // secondi
+// Cappatura massima del tempo extrapolato: le scritture avvengono di rado a
+// passo d'uomo (ogni ~13s per 18m di spostamento), quindi il cap deve coprire
+// il buco tra un fix e l'altro senza far derivare troppo il marker.
+private const val INTERP_MAX_ELAPSED_SEC = 14.0   // secondi
+
+// Velocita' e direzione stimate dai delta tra gli ultimi due fix reali.
+private data class MotionEstimate(val speedMs: Float, val bearingDeg: Double)
+
+// Distanza in metri fra due punti (haversine).
+private fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val r = 6371000.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+        sin(dLon / 2) * sin(dLon / 2)
+    return r * 2 * atan2(sqrt(a), sqrt(1 - a))
+}
+
+// Direzione (gradi, 0 = Nord) dal primo al secondo punto.
+private fun bearingDegrees(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val phi1 = Math.toRadians(lat1)
+    val phi2 = Math.toRadians(lat2)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val y = sin(dLon) * cos(phi2)
+    val x = cos(phi1) * sin(phi2) - sin(phi1) * cos(phi2) * cos(dLon)
+    return (Math.toDegrees(atan2(y, x)) + 360.0) % 360.0
+}
 
 // In-memory cache for generated marker drawables to ensure 60 FPS layer switching
 private val markerDrawableCache = LruCache<String, Drawable>(120)
@@ -147,6 +176,39 @@ fun OsmMapView(
     // senza ricostruire l'intero overlay a ogni tick del dead reckoning.
     val memberMarkerMap = remember { mutableMapOf<String, Marker>() }
 
+    // Fix reale precedente per utente e stima di moto calcolata dai delta.
+    // La velocita'/direzione del GPS (campi speed/bearing) sono spesso a 0,
+    // quindi si ricavano dalla differenza fra gli ultimi due fix reali.
+    val previousFix = remember { mutableMapOf<String, UserLocation>() }
+    val motionEstimate = remember { mutableMapOf<String, MotionEstimate>() }
+
+    // A ogni nuovo set di posizioni reali ricalcola la stima di moto per utente.
+    LaunchedEffect(locations) {
+        locations.forEach { loc ->
+            if (loc.latitude == 0.0 && loc.longitude == 0.0) return@forEach
+            val prev = previousFix[loc.userId]
+            if (prev != null && prev.timestamp != loc.timestamp) {
+                val dtSec = (loc.timestamp - prev.timestamp) / 1000.0
+                if (dtSec > 0.3) {
+                    val dist = distanceMeters(prev.latitude, prev.longitude, loc.latitude, loc.longitude)
+                    val computedSpeed = (dist / dtSec).toFloat()
+                    // Se il fix ha gia' un bearing valido lo si preferisce; altrimenti
+                    // si ricava la direzione dal segmento prev→cur.
+                    val bearing = if (loc.bearing != 0.0f) loc.bearing.toDouble()
+                        else bearingDegrees(prev.latitude, prev.longitude, loc.latitude, loc.longitude)
+                    // Velocita' effettiva: la maggiore fra quella GPS e quella calcolata.
+                    val effSpeed = max(computedSpeed, loc.speed)
+                    motionEstimate[loc.userId] = MotionEstimate(effSpeed, bearing)
+                }
+            }
+            previousFix[loc.userId] = loc
+        }
+        // Pulisce le stime di utenti non piu' presenti.
+        val activeIds = locations.map { it.userId }.toSet()
+        previousFix.keys.retainAll(activeIds)
+        motionEstimate.keys.retainAll(activeIds)
+    }
+
     // Ticker del dead reckoning: ogni 100 ms calcola la posizione estrapolata
     // di ogni membro in movimento e aggiorna direttamente il marker osmdroid.
     // Il LaunchedEffect si cancella automaticamente quando il composable esce
@@ -156,14 +218,15 @@ fun OsmMapView(
             delay(100L)
             val mapView = mapViewInstance ?: continue
             var changed = false
-            memberMarkerMap.forEach { (_, marker) ->
+            memberMarkerMap.forEach { (userId, marker) ->
                 val tag = marker.relatedObject as? UserLocation ?: return@forEach
-                if (tag.speed < INTERP_MIN_SPEED_MS) return@forEach
+                val motion = motionEstimate[userId] ?: return@forEach
+                if (motion.speedMs < INTERP_MIN_SPEED_MS) return@forEach
                 val elapsedSec = ((System.currentTimeMillis() - tag.timestamp) / 1000.0)
                     .coerceIn(0.0, INTERP_MAX_ELAPSED_SEC)
                 if (elapsedSec <= 0.0) return@forEach
-                val deltaMeters = tag.speed * elapsedSec
-                val bearingRad = Math.toRadians(tag.bearing.toDouble())
+                val deltaMeters = motion.speedMs * elapsedSec
+                val bearingRad = Math.toRadians(motion.bearingDeg)
                 val dLat = deltaMeters * cos(bearingRad) / 111320.0
                 val dLon = deltaMeters * sin(bearingRad) /
                     (111320.0 * cos(Math.toRadians(tag.latitude)))

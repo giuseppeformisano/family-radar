@@ -109,6 +109,18 @@
     <string name="msg_new_snapshot">Ha pubblicato una nuova istantanea geolocalizzata</string>
     <string name="msg_sos_sent">Richiesta di assistenza immediata inviata</string>
 
+    <!-- Ricerca gruppi pubblici -->
+    <string name="search_group_hint">Cerca gruppo per nome</string>
+    <string name="search_results_title">Risultati ricerca</string>
+    <string name="btn_join_group">Unisciti</string>
+    <string name="join_request_sent">Richiesta inviata</string>
+    <string name="already_member">Gia membro</string>
+    <string name="group_preview_title">Anteprima gruppo</string>
+    <string name="group_preview_confirm">Conferma</string>
+    <string name="group_members_count">%1$d membri</string>
+    <string name="join_code_preview_title">Gruppo trovato</string>
+    <string name="no_search_results">Nessun gruppo trovato</string>
+
     <!-- Selezione gruppo e schermata accesso -->
     <string name="greeting_user">Ciao, %1$s</string>
     <string name="label_user_fallback">utente</string>

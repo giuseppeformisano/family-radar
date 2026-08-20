@@ -92,6 +92,18 @@
     <string name="msg_new_snapshot">Posted a new geotagged snapshot</string>
     <string name="msg_sos_sent">Immediate assistance request sent</string>
 
+    <!-- Public group search -->
+    <string name="search_group_hint">Search group by name</string>
+    <string name="search_results_title">Search results</string>
+    <string name="btn_join_group">Join</string>
+    <string name="join_request_sent">Request sent</string>
+    <string name="already_member">Already a member</string>
+    <string name="group_preview_title">Group preview</string>
+    <string name="group_preview_confirm">Confirm</string>
+    <string name="group_members_count">%1$d members</string>
+    <string name="join_code_preview_title">Group found</string>
+    <string name="no_search_results">No groups found</string>
+
     <!-- Selezione gruppo e schermata accesso -->
     <string name="greeting_user">Hello, %1$s</string>
     <string name="label_user_fallback">there</string>

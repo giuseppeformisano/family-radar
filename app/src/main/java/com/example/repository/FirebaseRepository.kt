@@ -1,4 +1,4 @@
-package com.example.repository
+﻿package com.example.repository
 
 import android.Manifest
 import android.app.Activity
@@ -1184,7 +1184,8 @@ class FirebaseRepository private constructor(private val context: Context) {
         name: String,
         description: String = "",
         requiresApproval: Boolean = true,
-        photoBase64: String = ""
+        photoBase64: String = "",
+        isPublic: Boolean = false
     ): Result<GroupData> {
         val currentUser = _currentUserState.value ?: return Result.failure(Exception(str(R.string.err_not_authenticated)))
         val groupId = "grp_${UUID.randomUUID().toString().take(8)}"
@@ -1212,7 +1213,10 @@ class FirebaseRepository private constructor(private val context: Context) {
                     "description" to newGroup.description,
                     "createdAt" to newGroup.createdAt,
                     "requiresApproval" to requiresApproval,
-                    "photoBase64" to newGroup.photoBase64
+                    "photoBase64" to newGroup.photoBase64,
+                    "isPublic" to isPublic,
+                    "nameLower" to name.lowercase(),
+                    "memberCount" to 1
                 )
                 firestore.collection("groups").document(groupId).set(groupMap).await()
 
@@ -1374,6 +1378,78 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
 
         return Result.failure(Exception(str(R.string.err_invalid_join_code)))
+    }
+
+    /**
+     * Search public groups by name prefix.
+     * Requires Firestore composite index: isPublic (asc) + nameLower (asc)
+     */
+    suspend fun searchGroupsByName(query: String): List<GroupData> {
+        return try {
+            val q = query.lowercase().trim()
+            if (firestore == null || q.isBlank()) return emptyList()
+            val snapshot = firestore.collection("groups")
+                .whereEqualTo("isPublic", true)
+                .whereGreaterThanOrEqualTo("nameLower", q)
+                .whereLessThanOrEqualTo("nameLower", q + "")
+                .limit(20)
+                .get()
+                .await()
+            snapshot.documents.mapNotNull { doc ->
+                try {
+                    GroupData(
+                        id = doc.getString("id") ?: doc.id,
+                        name = doc.getString("name") ?: "",
+                        joinCode = doc.getString("joinCode") ?: "",
+                        ownerId = doc.getString("ownerId") ?: "",
+                        description = doc.getString("description") ?: "",
+                        createdAt = doc.getLong("createdAt") ?: 0L,
+                        requiresApproval = doc.getBoolean("requiresApproval") ?: true,
+                        photoBase64 = doc.getString("photoBase64") ?: "",
+                        isPublic = true,
+                        nameLower = doc.getString("nameLower") ?: "",
+                        memberCount = (doc.getLong("memberCount") ?: 0L).toInt()
+                    )
+                } catch (e: Exception) {
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "searchGroupsByName failed: ${e.message}")
+            emptyList()
+        }
+    }
+
+    /**
+     * Fetch a group preview by its join code, without joining.
+     */
+    suspend fun getGroupPreviewByCode(code: String): GroupData? {
+        return try {
+            if (firestore == null) return null
+            val cleanCode = code.trim().uppercase()
+            val snapshot = firestore.collection("groups")
+                .whereEqualTo("joinCode", cleanCode)
+                .limit(1)
+                .get()
+                .await()
+            val doc = snapshot.documents.firstOrNull() ?: return null
+            GroupData(
+                id = doc.getString("id") ?: doc.id,
+                name = doc.getString("name") ?: "",
+                joinCode = doc.getString("joinCode") ?: cleanCode,
+                ownerId = doc.getString("ownerId") ?: "",
+                description = doc.getString("description") ?: "",
+                createdAt = doc.getLong("createdAt") ?: 0L,
+                requiresApproval = doc.getBoolean("requiresApproval") ?: true,
+                photoBase64 = doc.getString("photoBase64") ?: "",
+                isPublic = doc.getBoolean("isPublic") ?: false,
+                nameLower = doc.getString("nameLower") ?: "",
+                memberCount = (doc.getLong("memberCount") ?: 0L).toInt()
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "getGroupPreviewByCode failed: ${e.message}")
+            null
+        }
     }
 
     /**

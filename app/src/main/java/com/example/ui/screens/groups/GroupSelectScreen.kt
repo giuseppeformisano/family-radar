@@ -48,6 +48,7 @@ import com.example.ui.theme.Radius
 import com.example.ui.theme.Sizes
 import com.example.ui.theme.Spacing
 import com.example.util.ImageUtils
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -72,6 +73,24 @@ fun GroupSelectScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var infoMessage by remember { mutableStateOf<String?>(null) }
     var isSubmitting by remember { mutableStateOf(false) }
+
+    // Search state
+    var searchQuery by remember { mutableStateOf("") }
+    var searchResults by remember { mutableStateOf<List<GroupData>>(emptyList()) }
+    var isSearching by remember { mutableStateOf(false) }
+    var codePreviewGroup by remember { mutableStateOf<GroupData?>(null) }
+    var codePreviewLoading by remember { mutableStateOf(false) }
+
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.isBlank()) {
+            searchResults = emptyList()
+            return@LaunchedEffect
+        }
+        delay(400)
+        isSearching = true
+        searchResults = repository.searchGroupsByName(searchQuery)
+        isSearching = false
+    }
 
     val errInvalidJoinCode = stringResource(R.string.err_invalid_join_code)
 
@@ -166,6 +185,67 @@ fun GroupSelectScreen(
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
+                }
+            }
+
+            // ---- Cerca gruppo ----
+            item {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text(stringResource(R.string.search_group_hint)) },
+                    leadingIcon = {
+                        if (isSearching) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.Search, contentDescription = null)
+                        }
+                    },
+                    trailingIcon = if (searchQuery.isNotBlank()) {
+                        { IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Clear, contentDescription = null) } }
+                    } else null,
+                    singleLine = true,
+                    shape = RoundedCornerShape(Radius.md),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // ---- Risultati ricerca ----
+            if (searchResults.isNotEmpty()) {
+                item {
+                    SectionHeader(
+                        title = stringResource(R.string.search_results_title),
+                        modifier = Modifier.padding(top = Spacing.sm)
+                    )
+                }
+                items(searchResults, key = { "search_${it.id}" }) { group ->
+                    val userMembership = userGroups.find { it.id == group.id }
+                    val memberStatus = userMembership?.userMembershipStatus
+                    SearchResultCard(
+                        group = group,
+                        memberStatus = memberStatus,
+                        onJoin = {
+                            coroutineScope.launch {
+                                isSubmitting = true
+                                val result = repository.joinGroupByCode(group.joinCode)
+                                isSubmitting = false
+                                if (result.isSuccess) {
+                                    repository.userGroupsState.value
+                                        .find { it.id == repository.currentUserState.value?.currentGroupId }
+                                        ?.let(onGroupSelected)
+                                }
+                            }
+                        }
+                    )
+                }
+            } else if (searchQuery.isNotBlank() && !isSearching) {
+                item {
+                    Text(
+                        text = stringResource(R.string.no_search_results),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = Spacing.sm)
+                    )
                 }
             }
 
@@ -312,23 +392,13 @@ fun GroupSelectScreen(
                     errorMessage = null
                     infoMessage = null
                     coroutineScope.launch {
-                        val result = repository.joinGroupByCode(joinCodeInput.trim())
+                        val preview = repository.getGroupPreviewByCode(joinCodeInput.trim())
                         isSubmitting = false
-                        if (result.isSuccess) {
+                        if (preview != null) {
+                            codePreviewGroup = preview
                             showJoinDialog = false
-                            repository.userGroupsState.value
-                                .find { it.id == repository.currentUserState.value?.currentGroupId }
-                                ?.let(onGroupSelected)
                         } else {
-                            val msg = result.exceptionOrNull()?.message
-                                ?: errInvalidJoinCode
-                            // Il repository segnala l'attesa di approvazione come errore:
-                            // qui lo distinguiamo per mostrarlo come informazione, non come fallimento.
-                            if (msg.contains("approvazione") || msg.contains("inviata")) {
-                                infoMessage = msg
-                            } else {
-                                errorMessage = msg
-                            }
+                            errorMessage = errInvalidJoinCode
                         }
                     }
                 }
@@ -353,6 +423,27 @@ fun GroupSelectScreen(
                     pendingGroupInfoDialog = null
                 }
             }
+        )
+    }
+
+    codePreviewGroup?.let { group ->
+        GroupCodePreviewDialog(
+            group = group,
+            isLoading = codePreviewLoading,
+            onConfirm = {
+                codePreviewLoading = true
+                coroutineScope.launch {
+                    val result = repository.joinGroupByCode(group.joinCode)
+                    codePreviewLoading = false
+                    codePreviewGroup = null
+                    if (result.isSuccess) {
+                        repository.userGroupsState.value
+                            .find { it.id == repository.currentUserState.value?.currentGroupId }
+                            ?.let(onGroupSelected)
+                    }
+                }
+            },
+            onDismiss = { codePreviewGroup = null }
         )
     }
 }
@@ -839,6 +930,150 @@ private fun PendingRequestDialog(
                     contentColor = MaterialTheme.colorScheme.error
                 )
             ) { Text(stringResource(R.string.action_cancel_request)) }
+        }
+    )
+}
+
+@Composable
+private fun SearchResultCard(
+    group: GroupData,
+    memberStatus: String?,
+    onJoin: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(Radius.lg),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 1.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(Spacing.lg),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(Sizes.avatarMd)
+                    .clip(RoundedCornerShape(Radius.sm))
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = group.name.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "G",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = group.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (group.description.isNotBlank()) {
+                    Text(
+                        text = group.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (group.memberCount > 0) {
+                    Text(
+                        text = stringResource(R.string.group_members_count, group.memberCount),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            when (memberStatus) {
+                "ACTIVE" -> OutlinedButton(
+                    onClick = {},
+                    enabled = false,
+                    shape = RoundedCornerShape(Radius.sm)
+                ) { Text(stringResource(R.string.already_member)) }
+                "PENDING" -> OutlinedButton(
+                    onClick = {},
+                    enabled = false,
+                    shape = RoundedCornerShape(Radius.sm)
+                ) { Text(stringResource(R.string.join_request_sent)) }
+                else -> Button(
+                    onClick = onJoin,
+                    shape = RoundedCornerShape(Radius.sm)
+                ) { Text(stringResource(R.string.btn_join_group)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GroupCodePreviewDialog(
+    group: GroupData,
+    isLoading: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { if (!isLoading) onDismiss() },
+        shape = RoundedCornerShape(Radius.xl),
+        containerColor = MaterialTheme.colorScheme.surface,
+        icon = { DialogIcon(Icons.Default.Groups, MaterialTheme.colorScheme.primary) },
+        title = {
+            Text(
+                text = stringResource(R.string.join_code_preview_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                Text(
+                    text = group.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (group.description.isNotBlank()) {
+                    Text(
+                        text = group.description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (group.memberCount > 0) {
+                    Text(
+                        text = stringResource(R.string.group_members_count, group.memberCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = !isLoading,
+                shape = RoundedCornerShape(Radius.sm)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Text(stringResource(R.string.group_preview_confirm))
+                }
+            }
+        },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onDismiss,
+                enabled = !isLoading,
+                shape = RoundedCornerShape(Radius.sm)
+            ) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }

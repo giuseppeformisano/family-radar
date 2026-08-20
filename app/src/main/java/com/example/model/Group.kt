@@ -9,5 +9,8 @@ data class GroupData(
     val description: String = "",
     val requiresApproval: Boolean = true,
     val photoBase64: String = "",
-    val userMembershipStatus: String = "ACTIVE" // "ACTIVE", "PENDING"
+    val userMembershipStatus: String = "ACTIVE", // "ACTIVE", "PENDING"
+    val isPublic: Boolean = false,
+    val nameLower: String = "",
+    val memberCount: Int = 0
 )

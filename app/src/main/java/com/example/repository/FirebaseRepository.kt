@@ -36,11 +36,13 @@ import com.google.firebase.FirebaseException
 import com.google.firebase.auth.*
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -75,6 +77,13 @@ class FirebaseRepository private constructor(private val context: Context) {
     private var snapshotsListener: ListenerRegistration? = null
     private var tripsListener: ListenerRegistration? = null
     private var userDocListener: ListenerRegistration? = null
+    // Auto-recupero listener di gruppo. Un errore recuperabile (quota esaurita,
+    // rete assente) chiude lo stream Firestore, che non sempre riparte da solo
+    // quando la quota si resetta: senza questo i membri restano "offline" finche'
+    // l'app non viene riavviata a mano. La generazione invalida un reattach in
+    // coda quando nel frattempo si e' cambiato gruppo o fatto cleanup.
+    private var groupListenerGeneration = 0
+    @Volatile private var reattachScheduled = false
     private var groupsCollectionListener: ListenerRegistration? = null
     private val memberStatusListeners = java.util.concurrent.ConcurrentHashMap<String, ListenerRegistration>()
     // Ultimo status visto per gruppo. Serve a distinguere una vera approvazione
@@ -1778,7 +1787,53 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
     }
 
+    /**
+     * Un errore del listener e' recuperabile riagganciandolo? PERMISSION_DENIED /
+     * UNAUTHENTICATED / NOT_FOUND non lo sono (riprovare non cambia nulla); tutto
+     * il resto — RESOURCE_EXHAUSTED (quota), UNAVAILABLE (rete), ABORTED, INTERNAL,
+     * DEADLINE_EXCEEDED — lo e'.
+     */
+    private fun isRecoverableListenerError(e: Exception?): Boolean {
+        val code = (e as? FirebaseFirestoreException)?.code ?: return true
+        return when (code) {
+            FirebaseFirestoreException.Code.PERMISSION_DENIED,
+            FirebaseFirestoreException.Code.UNAUTHENTICATED,
+            FirebaseFirestoreException.Code.NOT_FOUND -> false
+            else -> true
+        }
+    }
+
+    /**
+     * Riaggancia TUTTI i listener di gruppo dopo un errore recuperabile, una sola
+     * volta (debounce via [reattachScheduled]) e solo se nel frattempo non si e'
+     * cambiato gruppo (guardia sulla generazione). Ricrea l'intero set: e' la
+     * stessa strada gia' collaudata di [listenToGroupData], senza duplicare la
+     * logica di riattacco per ognuno dei sette listener.
+     */
+    private fun scheduleGroupListenersReattach(groupId: String, reason: String) {
+        if (reattachScheduled) return
+        reattachScheduled = true
+        val genAtSchedule = groupListenerGeneration
+        Log.w(TAG, "Listener di gruppo in errore ($reason) -> reattach tra ${LISTENER_REATTACH_DELAY_MS}ms")
+        CoroutineScope(Dispatchers.IO).launch {
+            delay(LISTENER_REATTACH_DELAY_MS)
+            // Ancora sullo stesso gruppo e nessun cleanup/reattach nel frattempo?
+            if (genAtSchedule == groupListenerGeneration &&
+                _currentUserState.value?.currentGroupId == groupId
+            ) {
+                Log.w(TAG, "Riaggancio listener del gruppo $groupId")
+                listenToGroupData(groupId)
+            } else {
+                reattachScheduled = false
+            }
+        }
+    }
+
     private fun cleanupGroupListeners() {
+        // Invalida qualsiasi reattach in coda: i listener stanno per essere
+        // ricreati (o azzerati), non deve ripartire quello vecchio.
+        groupListenerGeneration++
+        reattachScheduled = false
         locationsListener?.remove()
         placesListener?.remove()
         messagesListener?.remove()
@@ -1827,6 +1882,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                 .addSnapshotListener { snapshot, e ->
                     if (e != null) {
                         Log.w(TAG, "Listen locations failed: ${e.message}")
+                        if (isRecoverableListenerError(e)) scheduleGroupListenersReattach(groupId, "locations: ${e.message}")
                         return@addSnapshotListener
                     }
                     // Niente guardia su isEmpty: una collection vuota e' a tutti
@@ -1868,7 +1924,10 @@ class FirebaseRepository private constructor(private val context: Context) {
             placesListener = firestore.collection("groups").document(groupId)
                 .collection("places")
                 .addSnapshotListener { snapshot, e ->
-                    if (e != null) return@addSnapshotListener
+                    if (e != null) {
+                        if (isRecoverableListenerError(e)) scheduleGroupListenersReattach(groupId, "places: ${e.message}")
+                        return@addSnapshotListener
+                    }
                     if (snapshot != null) {
                         val list = snapshot.documents.mapNotNull { doc ->
                             try {
@@ -1912,7 +1971,10 @@ class FirebaseRepository private constructor(private val context: Context) {
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .limit(CHAT_HISTORY_LIMIT)
                 .addSnapshotListener { snapshot, e ->
-                    if (e != null) return@addSnapshotListener
+                    if (e != null) {
+                        if (isRecoverableListenerError(e)) scheduleGroupListenersReattach(groupId, "messages: ${e.message}")
+                        return@addSnapshotListener
+                    }
                     if (snapshot != null) {
                         val currentUid = _currentUserState.value?.uid
                         val list = snapshot.documents.mapNotNull { doc ->
@@ -2005,6 +2067,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                 .addSnapshotListener { snapshot, error ->
                     if (error != null) {
                         Log.w(TAG, "Listen group events error: ${error.message}")
+                        if (isRecoverableListenerError(error)) scheduleGroupListenersReattach(groupId, "events: ${error.message}")
                         return@addSnapshotListener
                     }
                     val currentUid = _currentUserState.value?.uid
@@ -2117,7 +2180,10 @@ class FirebaseRepository private constructor(private val context: Context) {
             membersListener = firestore.collection("groups").document(groupId)
                 .collection("members")
                 .addSnapshotListener { snapshot, e ->
-                    if (e != null) return@addSnapshotListener
+                    if (e != null) {
+                        if (isRecoverableListenerError(e)) scheduleGroupListenersReattach(groupId, "members: ${e.message}")
+                        return@addSnapshotListener
+                    }
                     if (snapshot != null) {
                         val list = snapshot.documents.mapNotNull { doc ->
                             try {
@@ -2150,6 +2216,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                 .addSnapshotListener { snapshot, e ->
                     if (e != null) {
                         Log.w(TAG, "Listen snapshots failed: ${e.message}")
+                        if (isRecoverableListenerError(e)) scheduleGroupListenersReattach(groupId, "snapshots: ${e.message}")
                         return@addSnapshotListener
                     }
                     if (snapshot != null) {
@@ -2185,7 +2252,10 @@ class FirebaseRepository private constructor(private val context: Context) {
                 .orderBy("startTime", Query.Direction.DESCENDING)
                 .limit(50)
                 .addSnapshotListener { snapshot, e ->
-                    if (e != null) return@addSnapshotListener
+                    if (e != null) {
+                        if (isRecoverableListenerError(e)) scheduleGroupListenersReattach(groupId, "trips: ${e.message}")
+                        return@addSnapshotListener
+                    }
                     if (snapshot != null) {
                         val myUid = _currentUserState.value?.uid
                         val list = snapshot.documents.mapNotNull { doc ->
@@ -4208,6 +4278,9 @@ class FirebaseRepository private constructor(private val context: Context) {
 
         /** Aggiornamento forzato anche da fermi, per tenere vivi stato online e batteria. */
         const val HEARTBEAT_INTERVAL_MS = 5 * 60_000L
+
+        /** Attesa prima di riagganciare i listener di gruppo dopo un errore recuperabile. */
+        const val LISTENER_REATTACH_DELAY_MS = 8_000L
 
         /**
          * Intervallo GPS di partenza: 30 secondi.

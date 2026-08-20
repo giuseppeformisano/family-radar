@@ -639,7 +639,7 @@ fun AddPlaceDialog(
                             // così id, createdBy e createdAt restano gli originali.
                             val base = existingPlace ?: SavedPlace()
                             val finalPlace = base.copy(
-                                name = placeName.ifBlank { selectedCategory.label },
+                                name = placeName.ifBlank { context.getString(selectedCategory.labelRes) },
                                 category = selectedCategory,
                                 latitude = currentPinLat,
                                 longitude = currentPinLon,

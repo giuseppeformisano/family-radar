@@ -1,4 +1,4 @@
-﻿package com.example.repository
+package com.example.repository
 
 import android.Manifest
 import android.app.Activity
@@ -1244,70 +1244,6 @@ class FirebaseRepository private constructor(private val context: Context) {
         _userGroupsState.value = updatedGroups
         selectGroup(groupId)
         return Result.success(newGroup)
-    }
-
-    /** Returns group info without joining, used to show a preview before confirming. */
-    suspend fun getGroupPreviewByCode(joinCode: String): GroupData? {
-        val cleanCode = joinCode.trim().uppercase()
-        return try {
-            val snapshot = firestore?.collection("groups")
-                ?.whereEqualTo("joinCode", cleanCode)
-                ?.limit(1)
-                ?.get()
-                ?.await() ?: return null
-            if (snapshot.isEmpty) return null
-            val doc = snapshot.documents[0]
-            GroupData(
-                id = doc.getString("id") ?: doc.id,
-                name = doc.getString("name") ?: "",
-                joinCode = doc.getString("joinCode") ?: cleanCode,
-                ownerId = doc.getString("ownerId") ?: "",
-                description = doc.getString("description") ?: "",
-                requiresApproval = doc.getBoolean("requiresApproval") ?: true,
-                photoBase64 = doc.getString("photoBase64") ?: ""
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "getGroupPreviewByCode failed: ${e.message}")
-            null
-        }
-    }
-
-    /**
-     * Prefix search on public groups by nameLower field.
-     * Requires a Firestore composite index on: isPublic (asc) + nameLower (asc).
-     */
-    suspend fun searchGroupsByName(query: String): List<GroupData> {
-        if (query.isBlank()) return emptyList()
-        val q = query.trim().lowercase()
-        return try {
-            val snapshot = firestore?.collection("groups")
-                ?.whereEqualTo("isPublic", true)
-                ?.orderBy("nameLower")
-                ?.startAt(q)
-                ?.endAt(q + "")
-                ?.limit(20)
-                ?.get()
-                ?.await() ?: return emptyList()
-            snapshot.documents.mapNotNull { doc ->
-                try {
-                    GroupData(
-                        id = doc.getString("id") ?: doc.id,
-                        name = doc.getString("name") ?: "",
-                        joinCode = doc.getString("joinCode") ?: "",
-                        ownerId = doc.getString("ownerId") ?: "",
-                        description = doc.getString("description") ?: "",
-                        requiresApproval = doc.getBoolean("requiresApproval") ?: true,
-                        photoBase64 = doc.getString("photoBase64") ?: "",
-                        isPublic = true,
-                        nameLower = doc.getString("nameLower") ?: "",
-                        memberCount = (doc.getLong("memberCount") ?: 0L).toInt()
-                    )
-                } catch (e: Exception) { null }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "searchGroupsByName failed: ${e.message}")
-            emptyList()
-        }
     }
 
     /**

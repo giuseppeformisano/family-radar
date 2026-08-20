@@ -219,6 +219,21 @@ fun MainRadarScreen(
 
     val currentGroup = userGroups.find { it.id == currentUser?.currentGroupId } ?: userGroups.firstOrNull()
     val currentUserId = currentUser?.uid ?: ""
+
+    // Autoripristino del caricamento infinito. All'avvio (soprattutto dopo un
+    // aggiornamento in-app) puo' capitare una race per cui i listener del gruppo
+    // non si agganciano: currentGroup e' risolto ma i membri restano vuoti per
+    // sempre e i pannelli mostrano lo skeleton all'infinito. Ogni gruppo ha almeno
+    // il proprietario tra i membri, quindi una lista vuota dopo qualche secondo
+    // significa listener non attivi: si riaggancia esplicitamente selectGroup, che
+    // se i listener ci sono gia' con dati e' comunque un no-op (guardia interna).
+    LaunchedEffect(currentGroup?.id) {
+        val gid = currentGroup?.id ?: return@LaunchedEffect
+        delay(3000)
+        if (repository.currentGroupMembers.value.isEmpty()) {
+            repository.selectGroup(gid)
+        }
+    }
     val isOwnerOrAdmin = currentGroup?.ownerId == currentUserId ||
         members.find { it.userId == currentUserId }?.role in listOf("owner", "admin")
     val pendingMembers = remember(members) {

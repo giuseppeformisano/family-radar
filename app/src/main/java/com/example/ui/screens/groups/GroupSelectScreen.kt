@@ -82,6 +82,8 @@ fun GroupSelectScreen(
     var codePreviewGroup by remember { mutableStateOf<GroupData?>(null) }
     var codePreviewLoading by remember { mutableStateOf(false) }
 
+    val searchError by repository.lastSearchError.collectAsState()
+
     LaunchedEffect(searchQuery) {
         if (searchQuery.isBlank()) {
             searchResults = emptyList()
@@ -242,12 +244,23 @@ fun GroupSelectScreen(
                 }
             } else if (searchQuery.isNotBlank() && !isSearching) {
                 item {
-                    Text(
-                        text = stringResource(R.string.no_search_results),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = Spacing.sm)
-                    )
+                    Column(modifier = Modifier.padding(top = Spacing.sm)) {
+                        Text(
+                            text = stringResource(R.string.no_search_results),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        // Diagnostica: se la query Firestore e' fallita (regole o
+                        // indice), mostra il motivo invece di lasciare vuoto.
+                        searchError?.let { err ->
+                            Text(
+                                text = stringResource(R.string.search_error_detail, err),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = Spacing.xs)
+                            )
+                        }
+                    }
                 }
             }
 

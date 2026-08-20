@@ -125,6 +125,7 @@
     <string name="no_search_results">Nessun gruppo trovato</string>
     <string name="group_public_title">Trovabile per nome</string>
     <string name="group_public_desc">Altri potranno cercare questo gruppo per nome e chiedere di entrare</string>
+    <string name="search_error_detail">Ricerca non riuscita: %1$s</string>
 
     <!-- Selezione gruppo e schermata accesso -->
     <string name="greeting_user">Ciao, %1$s</string>

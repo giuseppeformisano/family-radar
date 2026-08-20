@@ -108,6 +108,7 @@
     <string name="no_search_results">No groups found</string>
     <string name="group_public_title">Findable by name</string>
     <string name="group_public_desc">Others can search this group by name and ask to join</string>
+    <string name="search_error_detail">Search failed: %1$s</string>
 
     <!-- Selezione gruppo e schermata accesso -->
     <string name="greeting_user">Hello, %1$s</string>

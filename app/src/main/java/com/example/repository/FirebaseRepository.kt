@@ -1391,23 +1391,34 @@ class FirebaseRepository private constructor(private val context: Context) {
         return Result.failure(Exception(str(R.string.err_invalid_join_code)))
     }
 
+    /** Ultimo errore di ricerca, esposto alla UI per diagnosticare index/regole. */
+    private val _lastSearchError = MutableStateFlow<String?>(null)
+    val lastSearchError = _lastSearchError.asStateFlow()
+
     /**
-     * Search public groups by name prefix.
-     * Requires Firestore composite index: isPublic (asc) + nameLower (asc)
+     * Cerca i gruppi pubblici per prefisso del nome.
+     *
+     * Deliberatamente NON usa un range su nameLower nella query: combinare
+     * l'uguaglianza su isPublic con un range su un altro campo richiederebbe un
+     * indice composito da creare a mano in Console. Qui si interroga solo
+     * `isPublic == true` (indice a campo singolo, automatico) e si filtra il
+     * prefisso lato client - per un'app familiare i gruppi pubblici sono pochi.
      */
     suspend fun searchGroupsByName(query: String): List<GroupData> {
+        val q = query.lowercase().trim()
+        if (firestore == null || q.isBlank()) return emptyList()
         return try {
-            val q = query.lowercase().trim()
-            if (firestore == null || q.isBlank()) return emptyList()
             val snapshot = firestore.collection("groups")
                 .whereEqualTo("isPublic", true)
-                .whereGreaterThanOrEqualTo("nameLower", q)
-                .whereLessThanOrEqualTo("nameLower", q + "")
-                .limit(20)
+                .limit(100)
                 .get()
                 .await()
+            _lastSearchError.value = null
             snapshot.documents.mapNotNull { doc ->
                 try {
+                    val nameLower = (doc.getString("nameLower")
+                        ?: doc.getString("name")?.lowercase() ?: "")
+                    if (!nameLower.startsWith(q)) return@mapNotNull null
                     GroupData(
                         id = doc.getString("id") ?: doc.id,
                         name = doc.getString("name") ?: "",
@@ -1418,7 +1429,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                         requiresApproval = doc.getBoolean("requiresApproval") ?: true,
                         photoBase64 = doc.getString("photoBase64") ?: "",
                         isPublic = true,
-                        nameLower = doc.getString("nameLower") ?: "",
+                        nameLower = nameLower,
                         memberCount = (doc.getLong("memberCount") ?: 0L).toInt()
                     )
                 } catch (e: Exception) {
@@ -1426,7 +1437,10 @@ class FirebaseRepository private constructor(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
+            // Tipicamente PERMISSION_DENIED (regole Firestore che vietano di
+            // leggere gruppi di cui non sei membro). Lo si espone alla UI.
             Log.w(TAG, "searchGroupsByName failed: ${e.message}")
+            _lastSearchError.value = e.message
             emptyList()
         }
     }

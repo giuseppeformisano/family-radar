@@ -182,6 +182,15 @@ fun OsmMapView(
     val previousFix = remember { mutableMapOf<String, UserLocation>() }
     val motionEstimate = remember { mutableMapOf<String, MotionEstimate>() }
 
+    // Utenti con un viaggio in corso: SOLO per loro si applica il dead reckoning.
+    // Fuori da un viaggio il marker resta sul fix reale — anticiparlo mentre uno
+    // e' solo "in giro" produceva derive fastidiose senza un percorso a coprirle.
+    val liveTripUserIds = remember { mutableSetOf<String>() }
+    LaunchedEffect(trips) {
+        liveTripUserIds.clear()
+        trips.forEach { if (it.isLive && it.endTime == 0L) liveTripUserIds.add(it.userId) }
+    }
+
     // A ogni nuovo set di posizioni reali ricalcola la stima di moto per utente.
     LaunchedEffect(locations) {
         locations.forEach { loc ->
@@ -220,6 +229,8 @@ fun OsmMapView(
             var changed = false
             memberMarkerMap.forEach { (userId, marker) ->
                 val tag = marker.relatedObject as? UserLocation ?: return@forEach
+                // Solo chi sta facendo un viaggio: fuori da un viaggio niente anticipo.
+                if (userId !in liveTripUserIds) return@forEach
                 val motion = motionEstimate[userId] ?: return@forEach
                 if (motion.speedMs < INTERP_MIN_SPEED_MS) return@forEach
                 val elapsedSec = ((System.currentTimeMillis() - tag.timestamp) / 1000.0)

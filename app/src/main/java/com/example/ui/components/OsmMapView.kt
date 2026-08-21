@@ -136,6 +136,8 @@ fun OsmMapView(
     onMemberSelected: (UserLocation) -> Unit,
     onPlaceSelected: (SavedPlace) -> Unit,
     onSnapshotClusterSelected: (PlaceSnapshotCluster) -> Unit = {},
+    /** Callback opzionale che riceve il centro mappa corrente (lat, lon). */
+    onMapCenterChanged: (Pair<Double, Double>) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // I lambda vengono catturati dentro il blocco `factory`, che gira una sola
@@ -143,6 +145,7 @@ fun OsmMapView(
     // composizione e il Follow Mode non si spegnerebbe più.
     val currentOnMapTap by rememberUpdatedState(onMapTap)
     val currentOnUserPan by rememberUpdatedState(onUserPan)
+    val currentOnMapCenterChanged by rememberUpdatedState(onMapCenterChanged)
     // La mappa segue il tema dell'app: il filtro di inversione sui tile viene
     // applicato o rimosso nel blocco update, non solo alla creazione.
     val isDark = com.example.ui.theme.RadarTheme.palette.isDark

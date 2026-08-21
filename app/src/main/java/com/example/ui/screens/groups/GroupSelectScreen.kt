@@ -856,7 +856,6 @@ private fun JoinGroupDialog(
                     value = code,
                     onValueChange = onCodeChange,
                     label = { Text(stringResource(R.string.label_invite_code)) },
-                    placeholder = { Text(stringResource(R.string.placeholder_invite_code)) },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.headlineSmall.copy(
                         textAlign = TextAlign.Center

@@ -952,30 +952,18 @@ class FirebaseRepository private constructor(private val context: Context) {
     private suspend fun syncUserWithFirestore(user: UserData) {
         if (firestore == null) return
         try {
-            val userDocRef = firestore.collection("users").document(user.uid)
-            val snap = userDocRef.get().await()
-            val existingPhoto = snap.getString("photoBase64")?.takeIf { it.isNotBlank() }
-            val existingName = snap.getString("displayName")?.takeIf { it.isNotBlank() }
-
-            val finalPhoto = user.photoBase64?.takeIf { it.isNotBlank() } ?: existingPhoto ?: ""
-            val finalName = if (!user.displayName.isNullOrBlank() && user.displayName != "Utente Google" && user.displayName != "Utente Anonymous") user.displayName else (existingName ?: user.displayName ?: "Utente")
-
-            if (finalPhoto != user.photoBase64 || finalName != user.displayName) {
-                _currentUserState.value = user.copy(photoBase64 = finalPhoto, displayName = finalName)
-            }
-
-            val userMap = hashMapOf<String, Any?>(
+            val userMap = hashMapOf(
                 "uid" to user.uid,
-                "displayName" to finalName,
+                "displayName" to user.displayName,
                 "email" to (user.email ?: ""),
                 "phoneNumber" to (user.phoneNumber ?: ""),
                 "photoUrl" to (user.photoUrl ?: ""),
-                "photoBase64" to finalPhoto,
+                "photoBase64" to (user.photoBase64 ?: ""),
                 "fcmToken" to (user.fcmToken ?: getStoredFcmToken() ?: ""),
                 "lastSeen" to System.currentTimeMillis(),
                 "isAnonymous" to user.isAnonymous
             )
-            userDocRef.set(userMap, com.google.firebase.firestore.SetOptions.merge()).await()
+            firestore.collection("users").document(user.uid).set(userMap).await()
         } catch (e: Exception) {
             Log.w(TAG, "syncUserWithFirestore warning: ${e.message}")
         }
@@ -1007,22 +995,6 @@ class FirebaseRepository private constructor(private val context: Context) {
         userDocListener = firestore.collection("users").document(userId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
-                val photoBase64 = snapshot.getString("photoBase64")
-                val displayName = snapshot.getString("displayName")
-                val current = _currentUserState.value
-                if (current != null) {
-                    var updated = current
-                    if (photoBase64 != null && photoBase64 != current.photoBase64) {
-                        updated = updated.copy(photoBase64 = photoBase64)
-                    }
-                    if (!displayName.isNullOrBlank() && displayName != current.displayName) {
-                        updated = updated.copy(displayName = displayName)
-                    }
-                    if (updated != current) {
-                        _currentUserState.value = updated
-                    }
-                }
-
                 val lastApproved = snapshot.getString("lastApprovedGroupId")
                 val currentGroupId = snapshot.getString("currentGroupId")
 
@@ -2979,7 +2951,7 @@ class FirebaseRepository private constructor(private val context: Context) {
     ): Result<Unit> {
         val cleanName = displayName.trim().ifBlank { "Membro" }
         val cleanNick = nickname?.trim()?.ifBlank { null }
-        val cleanPhoto = photoBase64?.trim()
+        val cleanPhoto = photoBase64?.trim()?.ifBlank { null }
 
         val currentUser = _currentUserState.value
         val isSelf = currentUser != null && currentUser.uid == memberId
@@ -2987,50 +2959,58 @@ class FirebaseRepository private constructor(private val context: Context) {
         try {
             if (firestore != null && groupId.isNotBlank() && memberId.isNotBlank()) {
                 if (isSelf) {
-                    val finalPhoto = cleanPhoto ?: currentUser?.photoBase64 ?: ""
-                    _currentUserState.value = currentUser?.copy(displayName = cleanName, photoBase64 = finalPhoto)
-                    lastWrittenLocPhoto = finalPhoto
+                    val nameUnchanged = cleanName == currentUser!!.displayName
+                    val photoUnchanged = cleanPhoto == currentUser.photoBase64
 
-                    firestore.collection("users").document(memberId)
-                        .set(hashMapOf("displayName" to cleanName, "photoBase64" to finalPhoto), com.google.firebase.firestore.SetOptions.merge())
-                        .await()
-
-                    val allGroupIds = (_userGroupsState.value.map { it.id } + groupId).distinct()
-                    for (gid in allGroupIds) {
-                        val memberMap = hashMapOf<String, Any?>(
-                            "displayName" to cleanName,
-                            "photoBase64" to finalPhoto
-                        )
-                        val locMap2 = hashMapOf<String, Any?>(
-                            "userName" to cleanName,
-                            "photoBase64" to finalPhoto
-                        )
-                        if (gid == groupId) {
-                            memberMap["nickname"] = cleanNick
-                            locMap2["nickname"] = cleanNick
-                        }
-                        firestore.collection("groups").document(gid)
+                    if (nameUnchanged && photoUnchanged) {
+                        // Solo il nickname è cambiato: aggiorna solo il gruppo corrente
+                        val memberMap = hashMapOf<String, Any?>("nickname" to cleanNick)
+                        val locMap = hashMapOf<String, Any?>("nickname" to cleanNick)
+                        firestore.collection("groups").document(groupId)
                             .collection("members").document(memberId)
                             .set(memberMap, com.google.firebase.firestore.SetOptions.merge())
-                            .await()
-
-                        firestore.collection("groups").document(gid)
+                        firestore.collection("groups").document(groupId)
                             .collection("locations").document(memberId)
-                            .set(locMap2, com.google.firebase.firestore.SetOptions.merge())
-                            .await()
+                            .set(locMap, com.google.firebase.firestore.SetOptions.merge())
+                    } else {
+                        // Nome o foto cambiati: propaga a tutti i gruppi
+                        _currentUserState.value = currentUser.copy(displayName = cleanName, photoBase64 = cleanPhoto)
+                        firestore.collection("users").document(memberId)
+                            .set(hashMapOf("displayName" to cleanName, "photoBase64" to cleanPhoto), com.google.firebase.firestore.SetOptions.merge())
+
+                        val allGroupIds = (_userGroupsState.value.map { it.id } + groupId).distinct()
+                        for (gid in allGroupIds) {
+                            val memberMap = hashMapOf<String, Any?>(
+                                "displayName" to cleanName,
+                                "photoBase64" to cleanPhoto
+                            )
+                            val locMap2 = hashMapOf<String, Any?>(
+                                "userName" to cleanName,
+                                "photoBase64" to cleanPhoto
+                            )
+                            if (gid == groupId) {
+                                memberMap["nickname"] = cleanNick
+                                locMap2["nickname"] = cleanNick
+                            }
+                            firestore.collection("groups").document(gid)
+                                .collection("members").document(memberId)
+                                .set(memberMap, com.google.firebase.firestore.SetOptions.merge())
+                            firestore.collection("groups").document(gid)
+                                .collection("locations").document(memberId)
+                                .set(locMap2, com.google.firebase.firestore.SetOptions.merge())
+                        }
                     }
                 } else {
-                    val memberMap = hashMapOf<String, Any?>(
-                        "displayName" to cleanName,
-                        "nickname" to cleanNick
-                    )
-                    if (cleanPhoto != null) {
-                        memberMap["photoBase64"] = cleanPhoto
-                    }
+                    // Non e' il proprio profilo: si tocca solo il gruppo indicato.
                     firestore.collection("groups").document(groupId)
-                        .collection("members").document(memberId)
-                        .set(memberMap, com.google.firebase.firestore.SetOptions.merge())
-                        .await()
+                        .collection("members").document(memberId).set(
+                            hashMapOf<String, Any?>(
+                                "displayName" to cleanName,
+                                "nickname" to cleanNick,
+                                "photoBase64" to cleanPhoto
+                            ),
+                            com.google.firebase.firestore.SetOptions.merge()
+                        ).await()
                 }
             }
         } catch (e: Exception) {
@@ -3038,29 +3018,13 @@ class FirebaseRepository private constructor(private val context: Context) {
             return Result.failure(e)
         }
 
-        // Update local members & locations state (gruppo corrente)
-        val targetPhoto = if (isSelf) (cleanPhoto ?: currentUser?.photoBase64) else cleanPhoto
+        // Update local members state (gruppo corrente)
         val updatedMembers = _currentGroupMembers.value.map { m ->
             if (m.userId == memberId) {
-                m.copy(
-                    displayName = cleanName,
-                    nickname = cleanNick,
-                    photoBase64 = targetPhoto ?: m.photoBase64
-                )
+                m.copy(displayName = cleanName, nickname = cleanNick, photoBase64 = cleanPhoto)
             } else m
         }
         _currentGroupMembers.value = updatedMembers
-
-        val updatedLocations = _currentGroupLocations.value.map { loc ->
-            if (loc.userId == memberId) {
-                loc.copy(
-                    userName = cleanName,
-                    nickname = cleanNick,
-                    photoBase64 = targetPhoto ?: loc.photoBase64
-                )
-            } else loc
-        }
-        _currentGroupLocations.value = updatedLocations
 
         return Result.success(Unit)
     }

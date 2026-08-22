@@ -41,6 +41,9 @@ import com.example.model.UserLocation
 import org.osmdroid.views.overlay.Polyline
 import com.example.util.ImageUtils
 import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapListener
+import org.osmdroid.events.ScrollEvent
+import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
@@ -285,6 +288,7 @@ fun OsmMapView(
             try {
                 if (lat != 0.0 && lon != 0.0 && !lat.isNaN() && !lon.isNaN()) {
                     mapViewInstance?.controller?.animateTo(GeoPoint(lat, lon))
+                    currentOnMapCenterChanged(Pair(lat, lon))
                 }
             } catch (t: Throwable) {
                 Log.w("OsmMapView", "Follow mode animateTo fallito: ${t.message}")
@@ -298,6 +302,7 @@ fun OsmMapView(
                 if (lat != 0.0 && lon != 0.0 && !lat.isNaN() && !lon.isNaN()) {
                     mapViewInstance?.controller?.animateTo(GeoPoint(lat, lon))
                     mapViewInstance?.controller?.setZoom(17.0)
+                    currentOnMapCenterChanged(Pair(lat, lon))
                 }
             } catch (t: Throwable) {
                 Log.w("OsmMapView", "Error animating to focus point: ${t.message}")
@@ -387,6 +392,24 @@ fun OsmMapView(
                         GeoPoint(41.9028, 12.4964)
                     }
                     controller.setCenter(initialCenter)
+                    currentOnMapCenterChanged(Pair(initialCenter.latitude, initialCenter.longitude))
+
+                    addMapListener(object : MapListener {
+                        override fun onScroll(event: ScrollEvent?): Boolean {
+                            val center = mapCenter
+                            if (center != null && center.latitude != 0.0 && !center.latitude.isNaN()) {
+                                currentOnMapCenterChanged(Pair(center.latitude, center.longitude))
+                            }
+                            return false
+                        }
+                        override fun onZoom(event: ZoomEvent?): Boolean {
+                            val center = mapCenter
+                            if (center != null && center.latitude != 0.0 && !center.latitude.isNaN()) {
+                                currentOnMapCenterChanged(Pair(center.latitude, center.longitude))
+                            }
+                            return false
+                        }
+                    })
 
                     // Distingue il tocco secco dal trascinamento confrontando lo
                     // spostamento del dito con il touch slop di sistema. Serve

@@ -282,6 +282,7 @@ fun MainRadarScreen(
     var targetMapFocus by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     // Il token forza il ri-centraggio anche quando le coordinate non cambiano.
     var focusToken by remember { mutableIntStateOf(0) }
+    var currentMapCenter by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var fullScreenImageSource by remember { mutableStateOf<Any?>(null) }
     var selectedSnapshotClusterForGallery by remember { mutableStateOf<PlaceSnapshotCluster?>(null) }
     var capturedSnapshotUri by remember { mutableStateOf<Uri?>(null) }
@@ -671,6 +672,7 @@ fun MainRadarScreen(
                 onMemberSelected = { selectedMemberForSheet = it },
                 onPlaceSelected = { selectedPlaceForSheet = it },
                 onSnapshotClusterSelected = { selectedSnapshotClusterForGallery = it },
+                onMapCenterChanged = { center -> currentMapCenter = center },
                 modifier = Modifier.fillMaxSize()
             )
 
@@ -1078,9 +1080,11 @@ fun MainRadarScreen(
 
     if (showAddPlaceDialog) {
         val myLoc = locations.find { it.userId == currentUserId } ?: locations.firstOrNull()
+        val initialLat = currentMapCenter?.first ?: myLoc?.latitude ?: 41.9028
+        val initialLon = currentMapCenter?.second ?: myLoc?.longitude ?: 12.4964
         AddPlaceDialog(
-            initialLat = myLoc?.latitude ?: 41.9028,
-            initialLon = myLoc?.longitude ?: 12.4964,
+            initialLat = initialLat,
+            initialLon = initialLon,
             onDismiss = { showAddPlaceDialog = false },
             onPlaceAdded = { place ->
                 showAddPlaceDialog = false

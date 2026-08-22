@@ -534,6 +534,7 @@ fun MainRadarScreen(
                 }
             },
             onAddPlace = { showAddPlaceDialog = true },
+            onTakeSnapshot = { showSnapshotSourceDialog = true },
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .padding(start = Spacing.md)

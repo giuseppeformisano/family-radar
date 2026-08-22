@@ -441,40 +441,253 @@ fun MainRadarScreen(
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val sheetContentHeight = screenHeight * 0.86f
 
-    BottomSheetScaffold(
-        modifier = modifier,
-        scaffoldState = scaffoldState,
-        sheetPeekHeight = Sizes.sheetPeek,
-        sheetShape = RoundedCornerShape(topStart = Radius.xl, topEnd = Radius.xl),
-        sheetContainerColor = MaterialTheme.colorScheme.surface,
-        sheetShadowElevation = Elevation.overlay,
-        sheetDragHandle = { SheetHandle(expanded = isSheetExpanded) },
-        containerColor = MaterialTheme.colorScheme.background,
-        sheetContent = {
-            Column(modifier = Modifier
-                .fillMaxWidth()
-                .height(sheetContentHeight)
-            ) {
-                PanelSelector(
-                    selected = panel,
-                    chatCount = unreadChatCount,
-                    pendingCount = if (isOwnerOrAdmin) pendingMembers.size else 0,
-                    memberCount = activeMembers.size,
-                    placeCount = places.size,
-                    tripCount = groupTrips.size,
-                    onSelect = { openPanel(it) }
-                )
+    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
+        OsmMapView(
+            locations = locations,
+            places = places,
+            snapshots = snapshots,
+            trips = remember(groupTrips, selectedTripId, selectedTripTrack) {
+                groupTrips.map {
+                    if (it.id == selectedTripId && selectedTripTrack.isNotEmpty())
+                        it.copy(points = selectedTripTrack) else it
+                }
+            },
+            followedUserId = followedUserId,
+            activeTripPoints = activeTrip?.points ?: emptyList(),
+            selectedTripId = selectedTripId,
+            fitSelectedTripToken = fitTripToken,
+            currentUserId = currentUserId,
+            targetFocusPoint = targetMapFocus,
+            focusToken = focusToken,
+            followPoint = followPoint,
+            onMapTap = { activeFullPanel = null },
+            onUserPan = {
+                if (followedUserId != null) followedUserId = null
+            },
+            onMemberSelected = { selectedMemberForSheet = it },
+            onPlaceSelected = { selectedPlaceForSheet = it },
+            onSnapshotClusterSelected = { selectedSnapshotClusterForGallery = it },
+            onMapCenterChanged = { center -> currentMapCenter = center },
+            modifier = Modifier.fillMaxSize()
+        )
 
-                Box(modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
+        // Sfumatura in alto
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp)
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            RadarTheme.palette.gradients.mapScrimTop,
+                            RadarTheme.palette.gradients.mapScrimBottom
+                        )
+                    )
+                )
+        )
+
+        // Header in alto
+        MapTopBar(
+            groupName = currentGroup?.name ?: stringResource(R.string.label_radar_fallback),
+            joinCode = currentGroup?.joinCode,
+            memberCount = activeMembers.size,
+            onlineCount = locations.count { loc ->
+                System.currentTimeMillis() - loc.timestamp < PRESENCE_ONLINE_MS &&
+                    activeMembers.any { it.userId == loc.userId }
+            },
+            onSwitchGroup = onSwitchGroup,
+            onOpenSettings = { openPanel(RadarPanel.SETTINGS) },
+            onSos = { showSosConfirmDialog = true },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(horizontal = Spacing.lg, vertical = Spacing.sm)
+        )
+
+        // Controlli Mappa: Posizionati AL CENTRO A SINISTRA (CenterStart)
+        MapActionRail(
+            isFollowing = followedUserId != null,
+            onToggleFollow = {
+                if (followedUserId != null) {
+                    followedUserId = null
+                    Toast.makeText(context, strFollowOff, Toast.LENGTH_SHORT).show()
+                } else {
+                    val targetId = focusTargetUserId ?: currentUserId
+                    val target = locations.find { it.userId == targetId }
+                    if (target != null) {
+                        followedUserId = targetId
+                        focusMapOn(target.latitude, target.longitude, collapse = false)
+                        val label = if (targetId == currentUserId) context.getString(R.string.label_you_follow) else (target.nickname ?: target.userName)
+                        Toast.makeText(context, strFollowOn.format(label), Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, strFollowTargetUnavailable, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+            onLocateSelf = {
+                val myLoc = locations.find { it.userId == currentUserId }
+                if (myLoc != null) {
+                    focusTargetUserId = currentUserId
+                    focusMapOn(myLoc.latitude, myLoc.longitude, collapse = false)
+                } else {
+                    Toast.makeText(context, strPositionUnavailable, Toast.LENGTH_SHORT).show()
+                }
+            },
+            isRecording = activeTrip != null,
+            onToggleTrip = {
+                if (activeTrip != null) {
+                    coroutineScope.launch {
+                        repository.stopAndSaveTrip()
+                        Toast.makeText(context, strTripSaved, Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    repository.startTrip()
+                }
+            },
+            onAddPlace = { showAddPlaceDialog = true },
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = Spacing.md)
+        )
+
+        // Pill di registrazione viaggio: in basso a destra
+        AnimatedVisibility(
+            visible = activeTrip != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = Spacing.lg, bottom = 80.dp)
+        ) {
+            activeTrip?.let { trip ->
+                var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+                LaunchedEffect(trip.startTime) {
+                    while (true) {
+                        nowMs = System.currentTimeMillis()
+                        delay(1000)
+                    }
+                }
+                val elapsedMs = nowMs - trip.startTime
+                val elapsedMin = (elapsedMs / 60000).toInt()
+                val elapsedSec = ((elapsedMs / 1000) % 60).toInt()
+                val km = trip.distanceMeters / 1000.0
+
+                Surface(
+                    shape = RoundedCornerShape(Radius.pill),
+                    color = Color(0xCC18181B),
+                    border = BorderStroke(1.dp, Color(0x1F71717A)),
+                    modifier = Modifier.padding(Spacing.xs)
                 ) {
-                    AnimatedContent(
-                        targetState = panel,
-                        transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
-                        label = "panel_switch"
-                    ) { current ->
-                        when (current) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs)
+                    ) {
+                        RadarPulseAnimation(
+                            color = Color(0xFFF43F5E),
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Text(
+                            text = "%02d:%02d  •  %.2f km".format(elapsedMin, elapsedSec, km),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        }
+
+        // Persone Live / Carosello Membri: In Basso a Sinistra (BottomStart) sopra la dock
+        AnimatedVisibility(
+            visible = activeFullPanel == null && locations.isNotEmpty(),
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .navigationBarsPadding()
+                .padding(start = Spacing.md, bottom = 80.dp)
+        ) {
+            MemberCarousel(
+                locations = locations,
+                currentUserId = currentUserId,
+                followedUserId = followedUserId,
+                onMemberClick = { loc ->
+                    focusTargetUserId = loc.userId
+                    focusMapOn(loc.latitude, loc.longitude, collapse = false)
+                    if (followedUserId != null) followedUserId = loc.userId
+                },
+                onMemberLongClick = { selectedMemberForSheet = it }
+            )
+        }
+
+        // Dock Fluttuante in Basso al Centro (BottomCenter)
+        FloatingDock(
+            selectedPanel = activeFullPanel,
+            chatCount = unreadChatCount,
+            pendingCount = if (isOwnerOrAdmin) pendingMembers.size else 0,
+            memberCount = activeMembers.size,
+            placeCount = places.size,
+            tripCount = groupTrips.size,
+            onSelectPanel = { target ->
+                if (activeFullPanel == target) activeFullPanel = null
+                else openPanel(target)
+            },
+            onTakeSnapshot = { showSnapshotSourceDialog = true },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = Spacing.xs)
+        )
+    }
+
+    // SCHERMATE E PANNELLI FULL-SCREEN SEPARATI (quando activeFullPanel != null)
+    activeFullPanel?.let { currentPanel ->
+        Dialog(
+            onDismissRequest = { activeFullPanel = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color.Black
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
+                ) {
+                    // Intestazione con pulsante di chiusura/indietro
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { activeFullPanel = null }) {
+                            Icon(
+                                Icons.Default.ArrowBack,
+                                contentDescription = stringResource(R.string.action_back),
+                                tint = Color(0xFFF2F2F7)
+                            )
+                        }
+                        Text(
+                            text = stringResource(currentPanel.labelRes),
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                            ),
+                            color = Color(0xFFF2F2F7),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        when (currentPanel) {
                             RadarPanel.MEMBERS -> MembersPanel(
                                 members = activeMembers,
                                 pendingMembers = pendingMembers,
@@ -484,9 +697,12 @@ fun MainRadarScreen(
                                 isLoading = members.isEmpty() && currentGroup != null,
                                 onMemberClick = { loc ->
                                     selectedMemberForSheet = loc
-                                    collapseSheet()
+                                    activeFullPanel = null
                                 },
-                                onFocusMember = { loc -> focusMapOn(loc.latitude, loc.longitude) },
+                                onFocusMember = { loc ->
+                                    focusMapOn(loc.latitude, loc.longitude)
+                                    activeFullPanel = null
+                                },
                                 onKickMember = { memberToKick = it },
                                 onApprove = { memberId ->
                                     val gid = currentGroup?.id ?: return@MembersPanel
@@ -527,9 +743,12 @@ fun MainRadarScreen(
                                 alerts = geofenceAlerts,
                                 onPlaceClick = {
                                     selectedPlaceForSheet = it
-                                    collapseSheet()
+                                    activeFullPanel = null
                                 },
-                                onFocusPlace = { place -> focusMapOn(place.latitude, place.longitude) },
+                                onFocusPlace = { place ->
+                                    focusMapOn(place.latitude, place.longitude)
+                                    activeFullPanel = null
+                                },
                                 onAddPlaceClick = { showAddPlaceDialog = true },
                                 onEditPlace = { placeToEdit = it },
                                 onDeletePlace = { placeId ->
@@ -542,8 +761,6 @@ fun MainRadarScreen(
                                 activeTrip = activeTrip,
                                 currentUserId = currentUserId,
                                 selectedTripId = selectedTripId,
-                                // Il tap apre la scheda di dettaglio; e' da li'
-                                // che si sceglie se portare la traccia in mappa.
                                 onTripSelected = { tripId ->
                                     tripForDetail = groupTrips.find { it.id == tripId }
                                 },
@@ -628,7 +845,7 @@ fun MainRadarScreen(
                                 onToggleSimulation = { isSimulationRunning = it },
                                 onRequestLeaveGroup = { showLeaveDialog = true },
                                 onRequestDeleteGroup = { showDeleteGroupDialog = true },
-                                                onLogout = {
+                                onLogout = {
                                     LocationTrackingService.stop(context)
                                     repository.signOut()
                                 },
@@ -641,209 +858,7 @@ fun MainRadarScreen(
                 }
             }
         }
-    ) { _ ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            OsmMapView(
-                locations = locations,
-                places = places,
-                snapshots = snapshots,
-                // I viaggi conclusi arrivano senza punti: la traccia di quello
-                // aperto viene letta a parte e reinnestata qui, così la mappa
-                // riceve solo cio' che deve davvero disegnare.
-                trips = remember(groupTrips, selectedTripId, selectedTripTrack) {
-                    groupTrips.map {
-                        if (it.id == selectedTripId && selectedTripTrack.isNotEmpty())
-                            it.copy(points = selectedTripTrack) else it
-                    }
-                },
-                followedUserId = followedUserId,
-                activeTripPoints = activeTrip?.points ?: emptyList(),
-                selectedTripId = selectedTripId,
-                fitSelectedTripToken = fitTripToken,
-                currentUserId = currentUserId,
-                targetFocusPoint = targetMapFocus,
-                focusToken = focusToken,
-                followPoint = followPoint,
-                onMapTap = { if (isSheetExpanded) collapseSheet() },
-                onUserPan = {
-                    // Trascinare la mappa e' il modo naturale per dire "lasciami
-                    // guardare dove voglio": spegne l'inseguimento.
-                    if (followedUserId != null) followedUserId = null
-                },
-                onMemberSelected = { selectedMemberForSheet = it },
-                onPlaceSelected = { selectedPlaceForSheet = it },
-                onSnapshotClusterSelected = { selectedSnapshotClusterForGallery = it },
-                onMapCenterChanged = { center -> currentMapCenter = center },
-                modifier = Modifier.fillMaxSize()
-            )
-
-            // Sfumatura in alto: rende leggibile la barra sopra qualunque tipo di mappa.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(160.dp)
-                    .align(Alignment.TopCenter)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                RadarTheme.palette.gradients.mapScrimTop,
-                                RadarTheme.palette.gradients.mapScrimBottom
-                            )
-                        )
-                    )
-            )
-
-            MapTopBar(
-                groupName = currentGroup?.name ?: stringResource(R.string.label_radar_fallback),
-                joinCode = currentGroup?.joinCode,
-                memberCount = activeMembers.size,
-                // Stessa soglia del PresenceDot: con due valori separati il
-                // conteggio in intestazione poteva contraddire i pallini sotto.
-                // Solo i membri ACTIVE contano come "online": un membro PENDING
-                // puo' avere una posizione nella collection ma non e' ancora nel
-                // gruppo, e mostrarlo come online contraddirebbe il conteggio membri.
-                onlineCount = locations.count { loc ->
-                    System.currentTimeMillis() - loc.timestamp < PRESENCE_ONLINE_MS &&
-                        activeMembers.any { it.userId == loc.userId }
-                },
-                onSwitchGroup = onSwitchGroup,
-                onOpenSettings = { openPanel(RadarPanel.SETTINGS) },
-                onSos = { showSosConfirmDialog = true },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(horizontal = Spacing.lg, vertical = Spacing.sm)
-            )
-
-            MapActionRail(
-                isFollowing = followedUserId != null,
-                onToggleFollow = {
-                    if (followedUserId != null) {
-                        followedUserId = null
-                        Toast.makeText(context, strFollowOff, Toast.LENGTH_SHORT).show()
-                    } else {
-                        val targetId = focusTargetUserId ?: currentUserId
-                        val target = locations.find { it.userId == targetId }
-                        if (target != null) {
-                            followedUserId = targetId
-                            focusMapOn(target.latitude, target.longitude, collapse = false)
-                            val label = if (targetId == currentUserId) context.getString(R.string.label_you_follow) else (target.nickname ?: target.userName)
-                            Toast.makeText(context, strFollowOn.format(label), Toast.LENGTH_SHORT).show()
-                        } else {
-                            Toast.makeText(context, strFollowTargetUnavailable, Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                },
-                onLocateSelf = {
-                    val myLoc = locations.find { it.userId == currentUserId }
-                    if (myLoc != null) {
-                        focusTargetUserId = currentUserId
-                        focusMapOn(myLoc.latitude, myLoc.longitude, collapse = false)
-                    } else {
-                        Toast.makeText(context, strPositionUnavailable, Toast.LENGTH_SHORT).show()
-                    }
-                },
-                isRecording = activeTrip != null,
-                onToggleTrip = {
-                    if (activeTrip != null) {
-                        coroutineScope.launch {
-                            repository.stopAndSaveTrip()
-                            Toast.makeText(context, strTripSaved, Toast.LENGTH_SHORT).show()
-                        }
-                    } else {
-                        repository.startTrip()
-                    }
-                },
-                onAddPlace = { showAddPlaceDialog = true },
-                onTakeSnapshot = { showSnapshotSourceDialog = true },
-                // A sinistra e in basso: la colonna a destra e' gia' occupata dai
-                // controlli interni della mappa (layer, zoom, inquadra gruppo).
-                // Il padding inferiore tiene i pulsanti sopra il bottom sheet.
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .navigationBarsPadding()
-                    .padding(start = Spacing.lg, bottom = Sizes.sheetPeek + Spacing.lg)
-            )
-
-            // Pill di registrazione: in basso a destra, sopra il bottom sheet.
-            // Solo pallino rosso pulsante + tempo + km; lo stop si fa dal pulsante
-            // rosso nel rail a sinistra, per non avere due comandi identici.
-            AnimatedVisibility(
-                visible = activeTrip != null,
-                enter = fadeIn(),
-                exit = fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(end = Spacing.lg, bottom = Sizes.sheetPeek + Spacing.lg)
-            ) {
-                activeTrip?.let { trip ->
-                    // Il tempo trascorso deve derivare da uno *stato* letto in
-                    // composizione, altrimenti resta congelato al primo valore:
-                    // un contatore che incrementa senza essere letto non provoca
-                    // ricomposizione.
-                    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
-                    LaunchedEffect(trip.startTime) {
-                        while (true) {
-                            nowMs = System.currentTimeMillis()
-                            delay(1000)
-                        }
-                    }
-                    val elapsedMs = nowMs - trip.startTime
-                    val elapsedMin = (elapsedMs / 60000).toInt()
-                    val elapsedSec = ((elapsedMs / 1000) % 60).toInt()
-                    val km = trip.distanceMeters / 1000.0
-
-                    GlassSurface(
-                        shape = RoundedCornerShape(Radius.pill),
-                        contentPadding = Spacing.xs
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs)
-                        ) {
-                            RadarPulseAnimation(
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(10.dp)
-                            )
-                            Text(
-                                text = "%02d:%02d  •  %.2f km".format(elapsedMin, elapsedSec, km),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Carosello membri: visibile solo con il pannello chiuso, così a sheet
-            // aperto lo schermo non mostra due volte la stessa informazione.
-            AnimatedVisibility(
-                visible = !isSheetExpanded && locations.isNotEmpty(),
-                enter = fadeIn(),
-                exit = fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(top = 76.dp)
-            ) {
-                MemberCarousel(
-                    locations = locations,
-                    currentUserId = currentUserId,
-                    followedUserId = followedUserId,
-                    onMemberClick = { loc ->
-                        // Tap sul carosello = centra subito su quel membro con zoom
-                        // ravvicinato. Il dettaglio resta raggiungibile dalla lista
-                        // nel pannello Membri.
-                        focusTargetUserId = loc.userId
-                        focusMapOn(loc.latitude, loc.longitude, collapse = false)
-                        // Se stavamo inseguendo qualcun altro, il bersaglio passa a lui.
-                        if (followedUserId != null) followedUserId = loc.userId
-                    },
-                    onMemberLongClick = { selectedMemberForSheet = it }
-                )
-            }
+    }
 
             // Banner dell'inseguimento. Sostituisce l'etichetta minuscola che
             // stava nella barra laterale: li' diceva che stavi seguendo qualcuno
@@ -1397,7 +1412,6 @@ private fun MapActionRail(
     isRecording: Boolean,
     onToggleTrip: () -> Unit,
     onAddPlace: () -> Unit,
-    onTakeSnapshot: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -1409,7 +1423,7 @@ private fun MapActionRail(
             icon = if (isFollowing) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed,
             contentDescription = if (isFollowing) stringResource(R.string.action_follow_off) else stringResource(R.string.action_follow_on_label),
             onClick = onToggleFollow,
-            container = if (isFollowing) Color(0xFF6366F1) else Color(0x0A71717A),
+            container = if (isFollowing) Color(0xFF6366F1) else Color(0xCC18181B),
             content = if (isFollowing) Color.White else Color(0xFFF2F2F7),
             testTag = "follow_mode_fab"
         )
@@ -1423,7 +1437,7 @@ private fun MapActionRail(
             icon = if (isRecording) Icons.Default.Stop else Icons.Default.DirectionsCar,
             contentDescription = if (isRecording) stringResource(R.string.action_stop_trip) else stringResource(R.string.action_record_trip),
             onClick = onToggleTrip,
-            container = if (isRecording) Color(0xFFF43F5E) else Color(0x0A71717A),
+            container = if (isRecording) Color(0xFFF43F5E) else Color(0xCC18181B),
             content = Color.White,
             testTag = "trip_record_fab"
         )
@@ -1432,14 +1446,6 @@ private fun MapActionRail(
             contentDescription = stringResource(R.string.action_add_place),
             onClick = onAddPlace,
             testTag = "add_place_fab"
-        )
-        RailButton(
-            icon = Icons.Default.AddAPhoto,
-            contentDescription = stringResource(R.string.action_take_snapshot),
-            onClick = onTakeSnapshot,
-            container = Color(0xFFF59E0B),
-            content = Color.White,
-            testTag = "take_geo_snapshot_fab"
         )
     }
 }
@@ -1450,7 +1456,7 @@ private fun RailButton(
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    container: Color = Color(0x0A71717A),
+    container: Color = Color(0xCC18181B),
     content: Color = Color(0xFFF2F2F7),
     testTag: String? = null
 ) {
@@ -1460,7 +1466,7 @@ private fun RailButton(
         color = container,
         border = BorderStroke(1.dp, Color(0x1F71717A)),
         modifier = modifier
-            .size(Sizes.fab)
+            .size(44.dp)
             .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -1468,7 +1474,7 @@ private fun RailButton(
                 imageVector = icon,
                 contentDescription = contentDescription,
                 tint = content,
-                modifier = Modifier.size(Sizes.iconLg)
+                modifier = Modifier.size(22.dp)
             )
         }
     }
@@ -1484,177 +1490,160 @@ private fun MemberCarousel(
     modifier: Modifier = Modifier
 ) {
     LazyRow(
-        modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = Spacing.lg),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = Spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         items(locations, key = { it.userId }) { loc ->
             val isSelf = loc.userId == currentUserId
-            val isFollowed = loc.userId == followedUserId
+            val isFollowed = loc.userId == followedUserId || (followedUserId == null && isSelf)
             val name = if (!loc.nickname.isNullOrBlank()) loc.nickname!! else loc.userName
+            val isOnline = System.currentTimeMillis() - loc.timestamp < PRESENCE_ONLINE_MS
 
-            Surface(
-                shape = RoundedCornerShape(Radius.pill),
-                color = Color(0x0A71717A),
-                border = BorderStroke(1.dp, Color(0x1F71717A)),
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.combinedClickable(
                     onClick = { onMemberClick(loc) },
                     onLongClick = { onMemberLongClick(loc) }
                 )
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    modifier = Modifier.padding(start = Spacing.xs, end = Spacing.sm, top = Spacing.xs, bottom = Spacing.xs)
-                ) {
-                    Box {
-                        RadarAvatar(
-                            name = loc.userName,
-                            photoBase64 = loc.photoBase64,
-                            size = Sizes.avatarSm,
-                            ringColor = if (isFollowed) Color(0xFF6366F1) else null,
-                            containerColor = if (isSelf) Color(0xFF6366F1)
-                            else Color(0xFF27272A),
-                            contentColor = Color.White
-                        )
-                        PresenceDot(
-                            lastSeenMillis = loc.timestamp,
-                            modifier = Modifier.align(Alignment.BottomEnd)
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = if (isSelf) stringResource(R.string.label_you) else name,
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
-                            color = Color(0xFFF2F2F7),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        BatteryBadge(level = loc.batteryLevel, isCharging = loc.isCharging)
-                    }
+                Box(contentAlignment = Alignment.Center) {
+                    RadarAvatar(
+                        name = loc.userName,
+                        photoBase64 = loc.photoBase64,
+                        size = 46.dp,
+                        ringColor = if (isFollowed) Color(0xFF34D399) else Color(0x3371717A),
+                        containerColor = Color(0xFF27272A),
+                        contentColor = Color.White
+                    )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(13.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black)
+                            .padding(2.dp)
+                            .clip(CircleShape)
+                            .background(if (isOnline) Color(0xFF34D399) else Color(0xFFF43F5E))
+                    )
                 }
+                Text(
+                    text = if (isSelf) stringResource(R.string.label_you) else name,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                    color = Color(0xFFF2F2F7),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
             }
         }
     }
 }
 
 // ============================================================================
-// SELETTORE DI PANNELLO (BARRA DI NAVIGAZIONE INFERIORE FLOATING DOCK)
+// BARRA DI NAVIGAZIONE INFERIORE (FLOATING DOCK CON TASTO FOTOCAMERA AMBRA)
 // ============================================================================
 
 @Composable
-private fun PanelSelector(
-    selected: RadarPanel,
+private fun FloatingDock(
+    selectedPanel: RadarPanel?,
     chatCount: Int,
     pendingCount: Int,
     memberCount: Int,
     placeCount: Int,
     tripCount: Int,
-    onSelect: (RadarPanel) -> Unit,
+    onSelectPanel: (RadarPanel) -> Unit,
+    onTakeSnapshot: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val entries = listOf(
-        PanelEntry(RadarPanel.MEMBERS, Icons.Default.Group, memberCount, pendingCount, "nav_members_tab"),
-        PanelEntry(RadarPanel.PLACES, Icons.Default.Place, placeCount, 0, "nav_places_tab"),
-        PanelEntry(RadarPanel.TRIPS, Icons.Default.Route, tripCount.takeIf { it > 0 }, 0, "nav_trips_tab"),
-        PanelEntry(RadarPanel.CHAT, Icons.Default.Chat, null, chatCount.coerceAtMost(99), "nav_chat_tab")
-    )
-
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = Spacing.md, vertical = Spacing.xs),
-        shape = RoundedCornerShape(Radius.pill),
-        color = Color(0x0A71717A),
-        border = BorderStroke(1.dp, Color(0x1F71717A))
+            .padding(horizontal = Spacing.md),
+        shape = RoundedCornerShape(24.dp),
+        color = Color(0xEE18181B),
+        border = BorderStroke(1.dp, Color(0x1F71717A)),
+        shadowElevation = 8.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            entries.forEach { entry ->
-                PanelSelectorItem(
-                    entry = entry,
-                    isSelected = selected == entry.panel,
-                    onClick = { onSelect(entry.panel) },
-                    modifier = Modifier.weight(1f)
+            IconButton(
+                onClick = { onSelectPanel(RadarPanel.MEMBERS) },
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    Icons.Default.Home,
+                    contentDescription = "Home",
+                    tint = if (selectedPanel == RadarPanel.MEMBERS) Color(0xFF6366F1) else Color(0xFFF2F2F7)
                 )
             }
-        }
-    }
-}
 
-private data class PanelEntry(
-    val panel: RadarPanel,
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    val count: Int?,
-    val badge: Int,
-    val testTag: String
-)
+            IconButton(
+                onClick = { onSelectPanel(RadarPanel.PLACES) },
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    Icons.Default.Place,
+                    contentDescription = "Places",
+                    tint = if (selectedPanel == RadarPanel.PLACES) Color(0xFF6366F1) else Color(0xFFA1A1AA)
+                )
+            }
 
-@Composable
-private fun PanelSelectorItem(
-    entry: PanelEntry,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val indicatorColor by animateColorAsState(
-        targetValue = if (isSelected) Color(0xFF6366F1).copy(alpha = 0.25f) else Color.Transparent,
-        animationSpec = tween(220),
-        label = "panel_indicator"
-    )
-    val contentColor by animateColorAsState(
-        targetValue = if (isSelected) Color(0xFF6366F1) else Color(0xFFA1A1AA),
-        animationSpec = tween(220),
-        label = "panel_content"
-    )
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                IconButton(onClick = { onSelectPanel(RadarPanel.CHAT) }) {
+                    Icon(
+                        Icons.Default.ChatBubbleOutline,
+                        contentDescription = "Chat",
+                        tint = if (selectedPanel == RadarPanel.CHAT) Color(0xFF6366F1) else Color(0xFFA1A1AA)
+                    )
+                }
+                if (chatCount > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .offset(x = (-8).dp, y = 6.dp)
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFF43F5E))
+                    )
+                }
+            }
 
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(Radius.pill))
-            .clickable(onClick = onClick)
-            .padding(vertical = Spacing.xs)
-            .testTag(entry.testTag),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Box(
+            IconButton(
+                onClick = { onSelectPanel(RadarPanel.TRIPS) },
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    Icons.Default.Route,
+                    contentDescription = "Trips",
+                    tint = if (selectedPanel == RadarPanel.TRIPS) Color(0xFF6366F1) else Color(0xFFA1A1AA)
+                )
+            }
+
+            Surface(
+                onClick = onTakeSnapshot,
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFFF59E0B),
                 modifier = Modifier
-                    .size(width = 52.dp, height = 30.dp)
-                    .clip(RoundedCornerShape(Radius.pill))
-                    .background(indicatorColor)
-            )
-            Icon(
-                imageVector = entry.icon,
-                contentDescription = stringResource(entry.panel.labelRes),
-                tint = contentColor,
-                modifier = Modifier.size(Sizes.iconSm)
-            )
-            if (entry.badge > 0) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .offset(x = 10.dp, y = (-2).dp)
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(Color(0xFFF43F5E))
-                )
+                    .height(44.dp)
+                    .width(52.dp)
+                    .testTag("take_geo_snapshot_fab")
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.PhotoCamera,
+                        contentDescription = stringResource(R.string.action_take_snapshot),
+                        tint = Color.Black,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         }
-        Spacer(Modifier.height(2.dp))
-        val panelLabel = stringResource(entry.panel.labelRes)
-        Text(
-            text = if (entry.count != null) "$panelLabel ${entry.count}" else panelLabel,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = if (isSelected) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium
-            ),
-            color = contentColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 

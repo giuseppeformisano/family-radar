@@ -95,9 +95,7 @@ fun AuthScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(listOf(gradients.heroTop, gradients.heroBottom))
-            )
+            .background(Color.Black)
     ) {
         Column(
             modifier = Modifier
@@ -109,13 +107,41 @@ fun AuthScreen(
                 .padding(horizontal = Spacing.xxl, vertical = Spacing.lg),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(Spacing.xxl))
+            Spacer(Modifier.height(Spacing.xl))
 
-            // ---- Hero ----
-            Box(contentAlignment = Alignment.Center) {
+            // ---- Header ----
+            Text(
+                text = "Family Radar",
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                ),
+                color = Color(0xFFF2F2F7),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.xs, vertical = Spacing.xs)
+            )
+
+            Text(
+                text = stringResource(R.string.auth_tagline),
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+                ),
+                color = Color(0xFFA1A1AA),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.xs, top = Spacing.xxs)
+            )
+
+            Spacer(Modifier.height(Spacing.xl))
+
+            // ---- Illustrazione Radar Centrale ----
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.padding(vertical = Spacing.md)
+            ) {
                 RadarPulseAnimation(
                     modifier = Modifier.size(150.dp),
-                    color = MaterialTheme.colorScheme.primary
+                    color = Color(0xFF6366F1)
                 )
                 Box(
                     modifier = Modifier
@@ -124,8 +150,8 @@ fun AuthScreen(
                         .background(
                             Brush.linearGradient(
                                 listOf(
-                                    MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.colorScheme.secondary
+                                    Color(0xFF6366F1),
+                                    Color(0xFF4F46E5)
                                 )
                             )
                         ),
@@ -142,26 +168,11 @@ fun AuthScreen(
 
             Spacer(Modifier.height(Spacing.xl))
 
-            Text(
-                text = "Family Radar",
-                style = MaterialTheme.typography.displaySmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = stringResource(R.string.auth_tagline),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = Spacing.xs)
-            )
-
-            Spacer(Modifier.height(Spacing.xxl))
-
-            // ---- Card di accesso ----
+            // ---- Card dei Contenuti (Login Area) ----
             Surface(
-                shape = RoundedCornerShape(Radius.xl),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 12.dp,
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0x0A71717A),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x1F71717A)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -170,8 +181,8 @@ fun AuthScreen(
                         .padding(Spacing.xl),
                     verticalArrangement = Arrangement.spacedBy(Spacing.lg)
                 ) {
-                    // Google: azione primaria
-                    OutlinedButton(
+                    // Google Login: Rettangolare con angoli arrotondati e sfondo pulito
+                    Button(
                         onClick = {
                             clearFeedback()
                             isLoading = true
@@ -187,52 +198,100 @@ fun AuthScreen(
                             }
                         },
                         enabled = !isLoading,
-                        shape = RoundedCornerShape(Radius.sm),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = Color.Black
+                        ),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(54.dp)
+                            .height(52.dp)
                             .testTag("google_sign_in_button")
                     ) {
                         if (isLoading) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary
+                                color = Color.Black
                             )
                             Spacer(Modifier.width(Spacing.md))
-                            Text(stringResource(R.string.auth_connecting), style = MaterialTheme.typography.labelLarge)
+                            Text(
+                                stringResource(R.string.auth_connecting),
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                                color = Color.Black
+                            )
                         } else {
                             GoogleIcon(modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(Spacing.md))
                             Text(
                                 text = stringResource(R.string.auth_google_button),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurface
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                                ),
+                                color = Color.Black
                             )
                         }
                     }
 
                     LabeledDivider(stringResource(R.string.label_or))
 
-                    // Selettore metodo
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                    // Selettore metodo di accesso (Phone / Email)
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = Color(0x0EFFFFFF),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        PillChip(
-                            label = stringResource(R.string.auth_method_phone),
-                            icon = Icons.Default.PhoneAndroid,
-                            selected = selectedMethod == AuthMethod.PHONE,
-                            onClick = { selectedMethod = AuthMethod.PHONE; clearFeedback() },
-                            modifier = Modifier.weight(1f)
-                        )
-                        PillChip(
-                            label = stringResource(R.string.auth_method_email),
-                            icon = Icons.Default.Email,
-                            selected = selectedMethod == AuthMethod.EMAIL,
-                            onClick = { selectedMethod = AuthMethod.EMAIL; clearFeedback() },
-                            modifier = Modifier.weight(1f)
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+                        ) {
+                            val isPhone = selectedMethod == AuthMethod.PHONE
+                            Button(
+                                onClick = { selectedMethod = AuthMethod.PHONE; clearFeedback() },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isPhone) Color(0xFF6366F1) else Color.Transparent,
+                                    contentColor = if (isPhone) Color.White else Color(0xFFA1A1AA)
+                                ),
+                                contentPadding = PaddingValues(vertical = Spacing.sm),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    Icons.Default.PhoneAndroid,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(Sizes.iconSm)
+                                )
+                                Spacer(Modifier.width(Spacing.xs))
+                                Text(
+                                    stringResource(R.string.auth_method_phone),
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                                )
+                            }
+                            Button(
+                                onClick = { selectedMethod = AuthMethod.EMAIL; clearFeedback() },
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (!isPhone) Color(0xFF6366F1) else Color.Transparent,
+                                    contentColor = if (!isPhone) Color.White else Color(0xFFA1A1AA)
+                                ),
+                                contentPadding = PaddingValues(vertical = Spacing.sm),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    Icons.Default.Email,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(Sizes.iconSm)
+                                )
+                                Spacer(Modifier.width(Spacing.xs))
+                                Text(
+                                    stringResource(R.string.auth_method_email),
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                                )
+                            }
+                        }
                     }
 
                     AnimatedContent(
@@ -612,7 +671,11 @@ private fun PrimaryActionButton(
     Button(
         onClick = onClick,
         enabled = !isLoading,
-        shape = RoundedCornerShape(Radius.sm),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color(0xFF4F46E5),
+            contentColor = Color.White
+        ),
         modifier = modifier
             .fillMaxWidth()
             .height(52.dp)
@@ -622,12 +685,17 @@ private fun PrimaryActionButton(
             CircularProgressIndicator(
                 modifier = Modifier.size(20.dp),
                 strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.onPrimary
+                color = Color.White
             )
         } else {
             Icon(icon, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
             Spacer(Modifier.width(Spacing.sm))
-            Text(label, style = MaterialTheme.typography.labelLarge)
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                )
+            )
         }
     }
 }

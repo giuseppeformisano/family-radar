@@ -1393,6 +1393,7 @@ private fun MapActionRail(
     isRecording: Boolean,
     onToggleTrip: () -> Unit,
     onAddPlace: () -> Unit,
+    onTakeSnapshot: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -1428,6 +1429,14 @@ private fun MapActionRail(
             onClick = onAddPlace,
             testTag = "add_place_fab"
         )
+        RailButton(
+            icon = Icons.Default.AddAPhoto,
+            contentDescription = stringResource(R.string.action_take_snapshot),
+            onClick = onTakeSnapshot,
+            container = Color(0xFF6366F1),
+            content = Color.White,
+            testTag = "take_geo_snapshot_fab"
+        )
     }
 }
 
@@ -1447,7 +1456,7 @@ private fun RailButton(
         color = container,
         border = BorderStroke(1.dp, Color(0x1F71717A)),
         modifier = modifier
-            .size(44.dp)
+            .size(48.dp)
             .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -1455,7 +1464,7 @@ private fun RailButton(
                 imageVector = icon,
                 contentDescription = contentDescription,
                 tint = content,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
     }
@@ -1542,14 +1551,14 @@ private fun FloatingDock(
             .fillMaxWidth()
             .padding(horizontal = Spacing.md),
         shape = RoundedCornerShape(24.dp),
-        color = Color(0xEE18181B),
+        color = Color(0xEE121216),
         border = BorderStroke(1.dp, Color(0x1F71717A)),
         shadowElevation = 8.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -1604,25 +1613,6 @@ private fun FloatingDock(
                     contentDescription = "Trips",
                     tint = if (selectedPanel == RadarPanel.TRIPS) Color(0xFF6366F1) else Color(0xFFA1A1AA)
                 )
-            }
-
-            Surface(
-                onClick = onTakeSnapshot,
-                shape = RoundedCornerShape(16.dp),
-                color = Color(0xFFF59E0B),
-                modifier = Modifier
-                    .height(44.dp)
-                    .width(52.dp)
-                    .testTag("take_geo_snapshot_fab")
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Default.PhotoCamera,
-                        contentDescription = stringResource(R.string.action_take_snapshot),
-                        tint = Color.Black,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
             }
         }
     }
@@ -2035,7 +2025,7 @@ private fun ChatPanel(
         }
 
         Surface(
-            color = MaterialTheme.colorScheme.surface,
+            color = Color(0xEE121216),
             tonalElevation = Elevation.raised,
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -2053,7 +2043,7 @@ private fun ChatPanel(
                     Icon(
                         Icons.Default.PhotoCamera,
                         contentDescription = stringResource(R.string.chat_take_photo_desc),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = Color(0xFF6366F1)
                     )
                 }
                 IconButton(
@@ -2063,22 +2053,24 @@ private fun ChatPanel(
                     Icon(
                         Icons.Default.AddPhotoAlternate,
                         contentDescription = stringResource(R.string.chat_attach_image_desc),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = Color(0xFF6366F1)
                     )
                 }
 
                 OutlinedTextField(
                     value = inputText,
                     onValueChange = { inputText = it },
-                    placeholder = { Text(stringResource(R.string.chat_input_placeholder)) },
+                    placeholder = { Text(stringResource(R.string.chat_input_placeholder), color = Color(0xFFA1A1AA)) },
                     modifier = Modifier
                         .weight(1f)
                         .testTag("chat_input_field"),
                     shape = RoundedCornerShape(Radius.pill),
                     maxLines = 4,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        focusedBorderColor = Color(0xFF6366F1),
+                        unfocusedBorderColor = Color(0x1F71717A),
+                        focusedTextColor = Color(0xFFF2F2F7),
+                        unfocusedTextColor = Color(0xFFF2F2F7)
                     ),
                     keyboardOptions = KeyboardOptions(
                         capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
@@ -2092,8 +2084,7 @@ private fun ChatPanel(
                     onClick = { sendText() },
                     enabled = canSend,
                     shape = CircleShape,
-                    color = if (canSend) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.surfaceVariant,
+                    color = if (canSend) Color(0xFF6366F1) else Color(0x3371717A),
                     modifier = Modifier
                         .size(Sizes.fab)
                         .testTag("send_message_button")
@@ -2102,8 +2093,7 @@ private fun ChatPanel(
                         Icon(
                             Icons.Default.Send,
                             contentDescription = stringResource(R.string.chat_send_desc),
-                            tint = if (canSend) MaterialTheme.colorScheme.onPrimary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = Color.White,
                             modifier = Modifier.size(Sizes.iconMd)
                         )
                     }
@@ -2124,7 +2114,7 @@ private fun ChatBubble(
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Surface(
                     shape = RoundedCornerShape(Radius.pill),
-                    color = MaterialTheme.colorScheme.secondaryContainer
+                    color = Color(0x266366F1)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
@@ -2134,18 +2124,18 @@ private fun ChatBubble(
                         Icon(
                             Icons.Default.NotificationsActive,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            tint = Color(0xFF818CF8),
                             modifier = Modifier.size(Sizes.iconSm)
                         )
                         Text(
                             text = message.text,
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            color = Color(0xFFF2F2F7)
                         )
                         Text(
                             text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+                            color = Color(0xFFA1A1AA)
                         )
                     }
                 }
@@ -2156,7 +2146,8 @@ private fun ChatBubble(
         MessageType.SOS_ALERT -> {
             Surface(
                 shape = RoundedCornerShape(Radius.md),
-                color = MaterialTheme.colorScheme.errorContainer,
+                color = Color(0x33F43F5E),
+                border = BorderStroke(1.dp, Color(0xFFF43F5E)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -2167,19 +2158,19 @@ private fun ChatBubble(
                     Icon(
                         Icons.Default.CrisisAlert,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
+                        tint = Color(0xFFF43F5E),
                         modifier = Modifier.size(Sizes.iconXl)
                     )
                     Column {
                         Text(
                             text = stringResource(R.string.chat_sos_alert_label, message.senderName),
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.error
+                            color = Color(0xFFF43F5E)
                         )
                         Text(
                             text = message.text,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                            color = Color(0xFFF2F2F7)
                         )
                     }
                 }
@@ -2198,7 +2189,7 @@ private fun ChatBubble(
             Text(
                 text = message.senderName,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
+                color = Color(0xFF818CF8),
                 modifier = Modifier.padding(start = Spacing.md, bottom = Spacing.xxs)
             )
         }
@@ -2210,8 +2201,7 @@ private fun ChatBubble(
                 bottomStart = if (isMe) Radius.md else Radius.xs,
                 bottomEnd = if (isMe) Radius.xs else Radius.md
             ),
-            color = if (isMe) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.surfaceVariant,
+            color = if (isMe) Color(0xFF6366F1) else Color(0xFF27272A),
             modifier = Modifier.widthIn(max = 300.dp)
         ) {
             Column(modifier = Modifier.padding(Spacing.sm)) {
@@ -2254,8 +2244,7 @@ private fun ChatBubble(
                     Text(
                         text = message.text,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (isMe) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.onSurface
+                        color = Color(0xFFF2F2F7)
                     )
                 }
 
@@ -2309,8 +2298,8 @@ private fun PlacesPanel(
                         contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                         modifier = Modifier.testTag("add_place_tab_fab"),
                         colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = MaterialTheme.colorScheme.tertiary,
-                            contentColor = MaterialTheme.colorScheme.onTertiary
+                            containerColor = Color(0xFF6366F1),
+                            contentColor = Color.White
                         )
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
@@ -2370,8 +2359,9 @@ private fun PlaceRow(
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(Radius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0x0A71717A),
+        border = BorderStroke(1.dp, Color(0x1F71717A)),
         modifier = Modifier
             .fillMaxWidth()
             .testTag("place_card_${place.id}")
@@ -2404,18 +2394,16 @@ private fun PlaceRow(
                     Text(
                         text = place.name,
                         style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = Color(0xFFF2F2F7),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
-                    // Un luogo senza avvisi resta in elenco identico agli altri:
-                    // senza questo segno non si capirebbe perche' non notifica.
                     if (!place.geofenceEnabled) {
                         Icon(
                             Icons.Default.NotificationsOff,
                             contentDescription = stringResource(R.string.content_desc_alerts_disabled),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = Color(0xFFA1A1AA),
                             modifier = Modifier.size(Sizes.iconSm)
                         )
                     }
@@ -3944,7 +3932,11 @@ private fun TripsPanel(
                 val elapsedSec = ((elapsedMs / 1000) % 60).toInt()
                 val km = activeTrip.distanceMeters / 1000.0
 
-                GlassSurface(shape = RoundedCornerShape(Radius.lg)) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0x0A71717A),
+                    border = BorderStroke(1.dp, Color(0xFFF43F5E))
+                ) {
                     Column(
                         modifier = Modifier.padding(Spacing.md),
                         verticalArrangement = Arrangement.spacedBy(Spacing.xs)
@@ -3954,13 +3946,13 @@ private fun TripsPanel(
                             horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
                         ) {
                             RadarPulseAnimation(
-                                color = MaterialTheme.colorScheme.error,
+                                color = Color(0xFFF43F5E),
                                 modifier = Modifier.size(10.dp)
                             )
                             Text(
                                 stringResource(R.string.trip_recording),
                                 style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.error
+                                color = Color(0xFFF43F5E)
                             )
                         }
                         Text(
@@ -3968,11 +3960,11 @@ private fun TripsPanel(
                                 elapsedMin, elapsedSec, km, activeTrip.points.size
                             ),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color(0xFFA1A1AA)
                         )
                         Button(
                             onClick = onStopTrip,
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF43F5E)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
@@ -3986,6 +3978,7 @@ private fun TripsPanel(
             item {
                 Button(
                     onClick = onStartTrip,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.DirectionsCar, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
@@ -4013,9 +4006,12 @@ private fun TripsPanel(
 
             Surface(
                 onClick = { onTripSelected(trip.id) },
-                shape = RoundedCornerShape(Radius.lg),
-                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0x0A71717A),
+                border = BorderStroke(
+                    if (isSelected) 1.5.dp else 1.dp,
+                    if (isSelected) Color(0xFF6366F1) else Color(0x1F71717A)
+                ),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -4027,9 +4023,9 @@ private fun TripsPanel(
                         if (trip.isLive) Icons.Default.DirectionsCar else Icons.Default.Route,
                         contentDescription = null,
                         tint = when {
-                            trip.isLive -> MaterialTheme.colorScheme.error
-                            isSelected -> MaterialTheme.colorScheme.primary
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            trip.isLive -> Color(0xFFF43F5E)
+                            isSelected -> Color(0xFF6366F1)
+                            else -> Color(0xFFA1A1AA)
                         },
                         modifier = Modifier.size(Sizes.iconMd)
                     )
@@ -4041,22 +4037,20 @@ private fun TripsPanel(
                             Text(
                                 trip.userName,
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = Color(0xFFF2F2F7)
                             )
-                            // Distinguere a colpo d'occhio cosa ha premuto una
-                            // persona da cosa ha dedotto l'app.
                             TripBadge(
                                 text = if (trip.isLive) stringResource(R.string.trip_badge_live) else trip.source.label(context).uppercase(),
                                 color = when {
-                                    trip.isLive -> MaterialTheme.colorScheme.error
-                                    trip.source == TripSource.AUTO -> MaterialTheme.colorScheme.tertiary
-                                    else -> MaterialTheme.colorScheme.primary
+                                    trip.isLive -> Color(0xFFF43F5E)
+                                    trip.source == TripSource.AUTO -> Color(0xFF34D399)
+                                    else -> Color(0xFF6366F1)
                                 }
                             )
                             if (trip.isPrivate) {
                                 TripBadge(
                                     text = stringResource(R.string.trip_badge_private),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = Color(0xFFA1A1AA)
                                 )
                             }
                         }
@@ -4065,7 +4059,7 @@ private fun TripsPanel(
                             if (route.size == 2) "${route[0]} → ${route[1]}"
                             else dateFormat.format(java.util.Date(trip.startTime)),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = Color(0xFFA1A1AA),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )

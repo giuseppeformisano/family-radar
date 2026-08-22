@@ -374,17 +374,12 @@ fun MainRadarScreen(
             repository.selectGroup(target.groupId)
         }
         when (target.destination.uppercase()) {
-            "CHAT" -> { panel = RadarPanel.CHAT; sheetState.expand() }
-            "ALERT" -> { panel = RadarPanel.MEMBERS; sheetState.expand() }
-            // MEMBERS e SETTINGS sono destinazioni diverse e vanno tenute
-            // separate: le notifiche join_request e low_battery hanno
-            // destination MEMBERS, e le azioni Approva/Rifiuta vivono nel
-            // pannello Membri. Mandandole a SETTINGS l'admin apriva un pannello
-            // dove la richiesta non e' nemmeno mostrata.
-            "MEMBERS" -> { panel = RadarPanel.MEMBERS; sheetState.expand() }
-            "SETTINGS" -> { panel = RadarPanel.SETTINGS; sheetState.expand() }
+            "CHAT" -> openPanel(RadarPanel.CHAT)
+            "ALERT" -> openPanel(RadarPanel.MEMBERS)
+            "MEMBERS" -> openPanel(RadarPanel.MEMBERS)
+            "SETTINGS" -> openPanel(RadarPanel.SETTINGS)
             "MAP" -> {
-                sheetState.partialExpand()
+                activeFullPanel = null
                 if (target.latitude != null && target.longitude != null &&
                     !target.latitude.isNaN() && !target.longitude.isNaN()
                 ) {
@@ -396,11 +391,9 @@ fun MainRadarScreen(
     }
 
     // Aprire la chat equivale a leggerla: azzera badge e notifiche in status bar.
-    // Dipende anche da messages.size perche' i messaggi che arrivano a pannello
-    // gia' aperto sono letti anch'essi.
-    LaunchedEffect(panel, currentGroup?.id, messages.size) {
+    LaunchedEffect(activeFullPanel, currentGroup?.id, messages.size) {
         val gid = currentGroup?.id
-        if (panel == RadarPanel.CHAT && !gid.isNullOrBlank() && isSheetExpanded) {
+        if (activeFullPanel == RadarPanel.CHAT && !gid.isNullOrBlank()) {
             repository.markChatRead(gid)
         }
     }

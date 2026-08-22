@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -116,7 +118,7 @@ fun GroupSelectScreen(
 
     Scaffold(
         modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Color.Black,
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = {
@@ -126,11 +128,17 @@ fun GroupSelectScreen(
                     newGroupIsPublic = false
                     showCreateDialog = true
                 },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text(stringResource(R.string.action_new_group)) },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(Radius.md),
+                icon = { Icon(Icons.Default.Add, contentDescription = null, tint = Color.White) },
+                text = {
+                    Text(
+                        stringResource(R.string.action_new_group),
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+                        color = Color.White
+                    )
+                },
+                containerColor = Color(0xFF4F46E5),
+                contentColor = Color.White,
+                shape = RoundedCornerShape(14.dp),
                 modifier = Modifier.testTag("create_group_fab")
             )
         }
@@ -138,12 +146,7 @@ fun GroupSelectScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(gradients.heroTop, gradients.heroBottom),
-                        endY = 700f
-                    )
-                )
+                .background(Color.Black)
                 .padding(innerPadding),
             contentPadding = PaddingValues(
                 start = Spacing.lg,
@@ -168,15 +171,17 @@ fun GroupSelectScreen(
                                 R.string.greeting_user,
                                 currentUser?.displayName ?: stringResource(R.string.label_user_fallback)
                             ),
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                            ),
+                            color = Color(0xFFF2F2F7),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = stringResource(R.string.group_select_subtitle),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color(0xFFA1A1AA)
                         )
                     }
                     IconButton(
@@ -186,7 +191,7 @@ fun GroupSelectScreen(
                         Icon(
                             Icons.Default.Logout,
                             contentDescription = stringResource(R.string.action_sign_out),
-                            tint = MaterialTheme.colorScheme.error
+                            tint = Color(0xFFF43F5E)
                         )
                     }
                 }
@@ -197,19 +202,27 @@ fun GroupSelectScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text(stringResource(R.string.search_group_hint)) },
+                    placeholder = { Text(stringResource(R.string.search_group_hint), color = Color(0xFFA1A1AA)) },
                     leadingIcon = {
                         if (isSearching) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color(0xFF6366F1))
                         } else {
-                            Icon(Icons.Default.Search, contentDescription = null)
+                            Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFFA1A1AA))
                         }
                     },
                     trailingIcon = if (searchQuery.isNotBlank()) {
-                        { IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Clear, contentDescription = null) } }
+                        { IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Clear, contentDescription = null, tint = Color(0xFFA1A1AA)) } }
                     } else null,
                     singleLine = true,
-                    shape = RoundedCornerShape(Radius.md),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color(0x0A71717A),
+                        unfocusedContainerColor = Color(0x0A71717A),
+                        focusedBorderColor = Color(0xFF6366F1),
+                        unfocusedBorderColor = Color(0x1F71717A),
+                        focusedTextColor = Color(0xFFF2F2F7),
+                        unfocusedTextColor = Color(0xFFF2F2F7)
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -248,15 +261,13 @@ fun GroupSelectScreen(
                         Text(
                             text = stringResource(R.string.no_search_results),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = Color(0xFFA1A1AA)
                         )
-                        // Diagnostica: se la query Firestore e' fallita (regole o
-                        // indice), mostra il motivo invece di lasciare vuoto.
                         searchError?.let { err ->
                             Text(
                                 text = stringResource(R.string.search_error_detail, err),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
+                                color = Color(0xFFF43F5E),
                                 modifier = Modifier.padding(top = Spacing.xs)
                             )
                         }
@@ -273,8 +284,9 @@ fun GroupSelectScreen(
                         infoMessage = null
                         showJoinDialog = true
                     },
-                    shape = RoundedCornerShape(Radius.lg),
-                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0x0A71717A),
+                    border = BorderStroke(1.dp, Color(0x1F71717A)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("join_with_code_button")
@@ -287,33 +299,33 @@ fun GroupSelectScreen(
                         Box(
                             modifier = Modifier
                                 .size(Sizes.avatarMd)
-                                .clip(RoundedCornerShape(Radius.sm))
-                                .background(MaterialTheme.colorScheme.primary),
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF6366F1)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.VpnKey,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimary,
+                                tint = Color.White,
                                 modifier = Modifier.size(Sizes.iconMd)
                             )
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = stringResource(R.string.join_code_prompt),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+                                color = Color(0xFFF2F2F7)
                             )
                             Text(
                                 text = stringResource(R.string.join_code_hint),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                color = Color(0xFFA1A1AA)
                             )
                         }
                         Icon(
                             Icons.Default.ChevronRight,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = Color(0xFFA1A1AA)
                         )
                     }
                 }
@@ -478,17 +490,19 @@ private fun GroupCard(
     onSelect: () -> Unit
 ) {
     val accent = when {
-        isPending -> MaterialTheme.colorScheme.tertiary
-        isCurrent -> MaterialTheme.colorScheme.primary
-        else -> MaterialTheme.colorScheme.secondary
+        isPending -> Color(0xFFF59E0B)
+        isCurrent -> Color(0xFF6366F1)
+        else -> Color(0xFF34D399)
     }
 
     Surface(
         onClick = onSelect,
-        shape = RoundedCornerShape(Radius.lg),
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = if (isCurrent) 6.dp else 1.dp,
-        border = if (isCurrent) androidx.compose.foundation.BorderStroke(2.dp, accent) else null,
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0x0A71717A),
+        border = BorderStroke(
+            if (isCurrent) 1.5.dp else 1.dp,
+            if (isCurrent) Color(0xFF6366F1) else Color(0x1F71717A)
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .testTag("group_card_${group.id}")
@@ -501,7 +515,7 @@ private fun GroupCard(
             Box(
                 modifier = Modifier
                     .size(Sizes.avatarLg)
-                    .clip(RoundedCornerShape(Radius.md))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(
                         Brush.linearGradient(
                             listOf(accent, accent.copy(alpha = 0.65f))
@@ -509,9 +523,6 @@ private fun GroupCard(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                // L'immagine del gruppo era gia' letta dal repository ma qui non
-                // veniva mai guardata: la card mostrava sempre l'iniziale, quindi
-                // cambiare la foto non si vedeva nell'elenco.
                 val groupBitmap = remember(group.photoBase64) {
                     ImageUtils.base64ToBitmap(group.photoBase64.ifBlank { null })
                 }
@@ -519,7 +530,7 @@ private fun GroupCard(
                     isPending -> Icon(
                         Icons.Default.HourglassTop,
                         contentDescription = null,
-                        tint = androidx.compose.ui.graphics.Color.White,
+                        tint = Color.White,
                         modifier = Modifier.size(Sizes.iconLg)
                     )
 
@@ -533,7 +544,7 @@ private fun GroupCard(
                     else -> Text(
                         text = group.name.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "G",
                         style = MaterialTheme.typography.headlineSmall,
-                        color = androidx.compose.ui.graphics.Color.White
+                        color = Color.White
                     )
                 }
             }
@@ -545,8 +556,8 @@ private fun GroupCard(
                 ) {
                     Text(
                         text = group.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+                        color = Color(0xFFF2F2F7),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
@@ -554,10 +565,14 @@ private fun GroupCard(
                     when {
                         isPending -> RadarBadge(
                             text = stringResource(R.string.status_pending),
-                            containerColor = MaterialTheme.colorScheme.tertiary,
-                            contentColor = MaterialTheme.colorScheme.onTertiary
+                            containerColor = Color(0x26F59E0B),
+                            contentColor = Color(0xFFF59E0B)
                         )
-                        isCurrent -> RadarBadge(stringResource(R.string.status_active))
+                        isCurrent -> RadarBadge(
+                            text = stringResource(R.string.status_active),
+                            containerColor = Color(0x266366F1),
+                            contentColor = Color(0xFF6366F1)
+                        )
                     }
                 }
 
@@ -568,8 +583,7 @@ private fun GroupCard(
                         else -> stringResource(R.string.label_no_description)
                     },
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (isPending) MaterialTheme.colorScheme.tertiary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isPending) Color(0xFFF59E0B) else Color(0xFFA1A1AA),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -583,13 +597,13 @@ private fun GroupCard(
                     Icon(
                         Icons.Default.Tag,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = Color(0xFFA1A1AA),
                         modifier = Modifier.size(Sizes.iconSm)
                     )
                     Text(
                         text = group.joinCode,
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = Color(0xFFA1A1AA)
                     )
                 }
             }
@@ -597,8 +611,7 @@ private fun GroupCard(
             Icon(
                 imageVector = if (isPending) Icons.Default.Info else Icons.Default.ChevronRight,
                 contentDescription = null,
-                tint = if (isPending) MaterialTheme.colorScheme.tertiary
-                else MaterialTheme.colorScheme.onSurfaceVariant
+                tint = if (isPending) Color(0xFFF59E0B) else Color(0xFFA1A1AA)
             )
         }
     }

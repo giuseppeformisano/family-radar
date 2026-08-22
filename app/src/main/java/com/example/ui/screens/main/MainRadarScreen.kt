@@ -1749,9 +1749,12 @@ private fun MemberRow(
     Surface(
         onClick = onClick,
         enabled = location != null,
-        shape = RoundedCornerShape(Radius.md),
-        color = if (isSelf) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0x0A71717A),
+        border = BorderStroke(
+            if (isSelf) 1.5.dp else 1.dp,
+            if (isSelf) Color(0xFF6366F1) else Color(0x1F71717A)
+        ),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -1763,7 +1766,9 @@ private fun MemberRow(
                 RadarAvatar(
                     name = member.displayName,
                     photoBase64 = member.photoBase64,
-                    size = Sizes.avatarMd
+                    size = Sizes.avatarMd,
+                    containerColor = if (isSelf) Color(0xFF6366F1) else Color(0xFF27272A),
+                    contentColor = Color.White
                 )
                 if (location != null) {
                     PresenceDot(
@@ -1780,18 +1785,22 @@ private fun MemberRow(
                 ) {
                     Text(
                         text = if (isSelf) stringResource(R.string.member_name_self, member.displayName) else member.displayName,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
+                        color = Color(0xFFF2F2F7),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     when (member.role) {
-                        "owner" -> RadarBadge(stringResource(R.string.role_owner))
+                        "owner" -> RadarBadge(
+                            text = stringResource(R.string.role_owner),
+                            containerColor = Color(0x266366F1),
+                            contentColor = Color(0xFF6366F1)
+                        )
                         "admin" -> RadarBadge(
                             text = stringResource(R.string.role_admin),
-                            containerColor = MaterialTheme.colorScheme.secondary,
-                            contentColor = MaterialTheme.colorScheme.onSecondary
+                            containerColor = Color(0x2634D399),
+                            contentColor = Color(0xFF34D399)
                         )
                     }
                 }
@@ -1808,7 +1817,7 @@ private fun MemberRow(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color(0xFFA1A1AA),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1824,7 +1833,7 @@ private fun MemberRow(
                     Icon(
                         Icons.Default.NearMe,
                         contentDescription = stringResource(R.string.action_show_on_map),
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = Color(0xFF6366F1),
                         modifier = Modifier.size(Sizes.iconMd)
                     )
                 }
@@ -1834,7 +1843,7 @@ private fun MemberRow(
                     Icon(
                         Icons.Default.PersonRemove,
                         contentDescription = stringResource(R.string.action_remove_member),
-                        tint = MaterialTheme.colorScheme.error,
+                        tint = Color(0xFFF43F5E),
                         modifier = Modifier.size(Sizes.iconMd)
                     )
                 }

@@ -35,6 +35,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size as GeometrySize
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -1297,23 +1298,28 @@ private fun MapTopBar(
     onSos: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    GlassSurface(
+    Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(Radius.lg),
-        contentPadding = Spacing.sm
+        shape = RoundedCornerShape(20.dp),
+        color = Color(0x0A71717A),
+        border = BorderStroke(1.dp, Color(0x1F71717A))
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm)
         ) {
             RadarPulseCompact(modifier = Modifier.size(Sizes.avatarSm))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = groupName,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                    ),
+                    color = Color(0xFFF2F2F7),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1323,15 +1329,15 @@ private fun MapTopBar(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(6.dp)
+                            .size(7.dp)
                             .clip(CircleShape)
-                            .background(RadarSemantic.Online)
+                            .background(Color(0xFF34D399))
                     )
                     val subtitle = stringResource(R.string.map_topbar_subtitle, onlineCount, memberCount)
                     Text(
                         text = if (!joinCode.isNullOrBlank()) "$subtitle · $joinCode" else subtitle,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Color(0xFFA1A1AA),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -1345,17 +1351,10 @@ private fun MapTopBar(
                 Icon(
                     Icons.Default.SwapHoriz,
                     contentDescription = stringResource(R.string.action_change_group),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = Color(0xFFF2F2F7)
                 )
             }
 
-            // Le impostazioni stanno qui e non fra le schede del foglio: le altre
-            // sezioni mostrano dati del gruppo che vivono sulla mappa, questa e'
-            // configurazione. Tenendola fra le schede costringeva a cinque voci
-            // in scorrimento orizzontale, con l'ultima fuori schermo.
-            //
-            // Nessun pallino di notifica qui: le richieste di adesione si
-            // approvano nel pannello Membri, ed e' li' che sta il loro badge.
             IconButton(
                 onClick = onOpenSettings,
                 modifier = Modifier.testTag("open_settings_button")
@@ -1363,15 +1362,16 @@ private fun MapTopBar(
                 Icon(
                     Icons.Default.Settings,
                     contentDescription = stringResource(R.string.tab_settings),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = Color(0xFFF2F2F7)
                 )
             }
 
-            // SOS: unico elemento sempre a piena saturazione, per essere trovato al volo.
+            // Pulsante SOS corallo con bagliore soffuso
             Surface(
                 onClick = onSos,
                 shape = CircleShape,
-                color = RadarSemantic.Sos,
+                color = Color(0x26F43F5E),
+                border = BorderStroke(1.dp, Color(0x66F43F5E)),
                 modifier = Modifier
                     .size(Sizes.fab)
                     .testTag("sos_button")
@@ -1380,7 +1380,7 @@ private fun MapTopBar(
                     Icon(
                         Icons.Default.Warning,
                         contentDescription = stringResource(R.string.action_send_sos),
-                        tint = Color.White,
+                        tint = Color(0xFFF43F5E),
                         modifier = Modifier.size(Sizes.iconLg)
                     )
                 }
@@ -1405,16 +1405,12 @@ private fun MapActionRail(
         verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         horizontalAlignment = Alignment.Start
     ) {
-        // L'etichetta di stato e' salita in un banner sopra la mappa: qui era
-        // minuscola e in mezzo agli altri pulsanti, quindi non si notava.
         RailButton(
             icon = if (isFollowing) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed,
             contentDescription = if (isFollowing) stringResource(R.string.action_follow_off) else stringResource(R.string.action_follow_on_label),
             onClick = onToggleFollow,
-            container = if (isFollowing) MaterialTheme.colorScheme.primary
-            else RadarTheme.palette.gradients.glassTint,
-            content = if (isFollowing) MaterialTheme.colorScheme.onPrimary
-            else MaterialTheme.colorScheme.onSurface,
+            container = if (isFollowing) Color(0xFF6366F1) else Color(0x0A71717A),
+            content = if (isFollowing) Color.White else Color(0xFFF2F2F7),
             testTag = "follow_mode_fab"
         )
         RailButton(
@@ -1427,8 +1423,8 @@ private fun MapActionRail(
             icon = if (isRecording) Icons.Default.Stop else Icons.Default.DirectionsCar,
             contentDescription = if (isRecording) stringResource(R.string.action_stop_trip) else stringResource(R.string.action_record_trip),
             onClick = onToggleTrip,
-            container = if (isRecording) MaterialTheme.colorScheme.error else RadarTheme.palette.gradients.glassTint,
-            content = if (isRecording) Color.White else MaterialTheme.colorScheme.onSurface,
+            container = if (isRecording) Color(0xFFF43F5E) else Color(0x0A71717A),
+            content = Color.White,
             testTag = "trip_record_fab"
         )
         RailButton(
@@ -1441,7 +1437,7 @@ private fun MapActionRail(
             icon = Icons.Default.AddAPhoto,
             contentDescription = stringResource(R.string.action_take_snapshot),
             onClick = onTakeSnapshot,
-            container = RadarSemantic.Snapshot,
+            container = Color(0xFFF59E0B),
             content = Color.White,
             testTag = "take_geo_snapshot_fab"
         )
@@ -1454,15 +1450,15 @@ private fun RailButton(
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    container: Color = RadarTheme.palette.gradients.glassTint,
-    content: Color = MaterialTheme.colorScheme.onSurface,
+    container: Color = Color(0x0A71717A),
+    content: Color = Color(0xFFF2F2F7),
     testTag: String? = null
 ) {
     Surface(
         onClick = onClick,
         shape = CircleShape,
         color = container,
-        shadowElevation = Elevation.floating,
+        border = BorderStroke(1.dp, Color(0x1F71717A)),
         modifier = modifier
             .size(Sizes.fab)
             .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
@@ -1497,9 +1493,10 @@ private fun MemberCarousel(
             val isFollowed = loc.userId == followedUserId
             val name = if (!loc.nickname.isNullOrBlank()) loc.nickname!! else loc.userName
 
-            GlassSurface(
+            Surface(
                 shape = RoundedCornerShape(Radius.pill),
-                contentPadding = Spacing.xs,
+                color = Color(0x0A71717A),
+                border = BorderStroke(1.dp, Color(0x1F71717A)),
                 modifier = Modifier.combinedClickable(
                     onClick = { onMemberClick(loc) },
                     onLongClick = { onMemberLongClick(loc) }
@@ -1508,18 +1505,17 @@ private fun MemberCarousel(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    modifier = Modifier.padding(end = Spacing.sm)
+                    modifier = Modifier.padding(start = Spacing.xs, end = Spacing.sm, top = Spacing.xs, bottom = Spacing.xs)
                 ) {
                     Box {
                         RadarAvatar(
                             name = loc.userName,
                             photoBase64 = loc.photoBase64,
                             size = Sizes.avatarSm,
-                            ringColor = if (isFollowed) MaterialTheme.colorScheme.primary else null,
-                            containerColor = if (isSelf) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = if (isSelf) MaterialTheme.colorScheme.onPrimary
-                            else MaterialTheme.colorScheme.onSecondaryContainer
+                            ringColor = if (isFollowed) Color(0xFF6366F1) else null,
+                            containerColor = if (isSelf) Color(0xFF6366F1)
+                            else Color(0xFF27272A),
+                            contentColor = Color.White
                         )
                         PresenceDot(
                             lastSeenMillis = loc.timestamp,
@@ -1529,8 +1525,8 @@ private fun MemberCarousel(
                     Column {
                         Text(
                             text = if (isSelf) stringResource(R.string.label_you) else name,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                            color = Color(0xFFF2F2F7),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -1543,23 +1539,9 @@ private fun MemberCarousel(
 }
 
 // ============================================================================
-// SELETTORE DI PANNELLO
+// SELETTORE DI PANNELLO (BARRA DI NAVIGAZIONE INFERIORE FLOATING DOCK)
 // ============================================================================
 
-/**
- * Barra di navigazione del foglio.
- *
- * Erano cinque PillChip in scorrimento orizzontale: su un telefono stretto
- * l'ultima restava fuori schermo, e una destinazione che si scopre scorrendo
- * non è una destinazione. In più la chip, in Material 3, è il componente che
- * filtra una lista — non quello che cambia sezione.
- *
- * Ora sono quattro voci a larghezza uguale che entrano su qualsiasi schermo,
- * con la pastiglia dell'indicatore attivo dietro l'icona: la stessa grammatica
- * della NavigationBar, ma costruita sui token del progetto invece che sui
- * default di Material, così segue la palette anche in Material You.
- * Impostazioni è salita nella barra sopra la mappa.
- */
 @Composable
 private fun PanelSelector(
     selected: RadarPanel,
@@ -1573,23 +1555,33 @@ private fun PanelSelector(
 ) {
     val entries = listOf(
         PanelEntry(RadarPanel.MEMBERS, Icons.Default.Group, memberCount, pendingCount, "nav_members_tab"),
-        PanelEntry(RadarPanel.CHAT, Icons.Default.Chat, null, chatCount.coerceAtMost(99), "nav_chat_tab"),
         PanelEntry(RadarPanel.PLACES, Icons.Default.Place, placeCount, 0, "nav_places_tab"),
-        PanelEntry(RadarPanel.TRIPS, Icons.Default.Route, tripCount.takeIf { it > 0 }, 0, "nav_trips_tab")
+        PanelEntry(RadarPanel.TRIPS, Icons.Default.Route, tripCount.takeIf { it > 0 }, 0, "nav_trips_tab"),
+        PanelEntry(RadarPanel.CHAT, Icons.Default.Chat, null, chatCount.coerceAtMost(99), "nav_chat_tab")
     )
 
-    Row(
+    Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = Spacing.sm, vertical = Spacing.xs)
+            .padding(horizontal = Spacing.md, vertical = Spacing.xs),
+        shape = RoundedCornerShape(Radius.pill),
+        color = Color(0x0A71717A),
+        border = BorderStroke(1.dp, Color(0x1F71717A))
     ) {
-        entries.forEach { entry ->
-            PanelSelectorItem(
-                entry = entry,
-                isSelected = selected == entry.panel,
-                onClick = { onSelect(entry.panel) },
-                modifier = Modifier.weight(1f)
-            )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.xs, vertical = Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            entries.forEach { entry ->
+                PanelSelectorItem(
+                    entry = entry,
+                    isSelected = selected == entry.panel,
+                    onClick = { onSelect(entry.panel) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }
@@ -1597,9 +1589,7 @@ private fun PanelSelector(
 private data class PanelEntry(
     val panel: RadarPanel,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    /** Conteggio mostrato accanto all'etichetta, se ha senso per quella sezione. */
     val count: Int?,
-    /** Notifiche non lette o richieste in attesa: pallino rosso, non conteggio neutro. */
     val badge: Int,
     val testTag: String
 )
@@ -1611,24 +1601,20 @@ private fun PanelSelectorItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Il colore va animato: cambiando scheda l'indicatore deve scorrere, non
-    // saltare. Nessun clip e nessun layer sopra la mappa, siamo dentro il foglio.
     val indicatorColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.secondaryContainer
-        else Color.Transparent,
+        targetValue = if (isSelected) Color(0xFF6366F1).copy(alpha = 0.25f) else Color.Transparent,
         animationSpec = tween(220),
         label = "panel_indicator"
     )
     val contentColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer
-        else MaterialTheme.colorScheme.onSurfaceVariant,
+        targetValue = if (isSelected) Color(0xFF6366F1) else Color(0xFFA1A1AA),
         animationSpec = tween(220),
         label = "panel_content"
     )
 
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(Radius.md))
+            .clip(RoundedCornerShape(Radius.pill))
             .clickable(onClick = onClick)
             .padding(vertical = Spacing.xs)
             .testTag(entry.testTag),
@@ -1637,7 +1623,7 @@ private fun PanelSelectorItem(
         Box(contentAlignment = Alignment.Center) {
             Box(
                 modifier = Modifier
-                    .size(width = 56.dp, height = 30.dp)
+                    .size(width = 52.dp, height = 30.dp)
                     .clip(RoundedCornerShape(Radius.pill))
                     .background(indicatorColor)
             )
@@ -1654,7 +1640,7 @@ private fun PanelSelectorItem(
                         .offset(x = 10.dp, y = (-2).dp)
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.error)
+                        .background(Color(0xFFF43F5E))
                 )
             }
         }
@@ -1662,7 +1648,9 @@ private fun PanelSelectorItem(
         val panelLabel = stringResource(entry.panel.labelRes)
         Text(
             text = if (entry.count != null) "$panelLabel ${entry.count}" else panelLabel,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = if (isSelected) androidx.compose.ui.text.font.FontWeight.SemiBold else androidx.compose.ui.text.font.FontWeight.Medium
+            ),
             color = contentColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

@@ -142,7 +142,7 @@ class LocationTrackingService : Service() {
     private fun intervalMsFrom(intent: Intent?): Long {
         val seconds = intent?.getIntExtra(EXTRA_INTERVAL_SEC, FirebaseRepository.DEFAULT_TRACKING_INTERVAL_SEC)
             ?: FirebaseRepository.DEFAULT_TRACKING_INTERVAL_SEC
-        return (seconds.coerceIn(5, 86_400) * 1000).toLong()
+        return (seconds.coerceIn(1, 86_400) * 1000).toLong()
     }
 
     private fun startForegroundTracking() {

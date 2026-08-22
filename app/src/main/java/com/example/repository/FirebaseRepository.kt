@@ -4301,7 +4301,7 @@ class FirebaseRepository private constructor(private val context: Context) {
          * punti lontanissimi. Durante un viaggio si campiona fitto e si torna
          * all'intervallo dell'utente appena si ferma la registrazione.
          */
-        const val TRIP_TRACKING_INTERVAL_SEC = 5
+        const val TRIP_TRACKING_INTERVAL_SEC = 1
 
         /** Oltre questo raggio d'incertezza il fix non entra nella traccia. */
         const val TRIP_MAX_ACCURACY_METERS = 50f

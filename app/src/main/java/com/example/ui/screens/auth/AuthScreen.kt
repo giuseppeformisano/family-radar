@@ -129,7 +129,7 @@ fun AuthScreen(
                 color = Color(0xFFA1A1AA),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = Spacing.xs, top = Spacing.xxs)
+                    .padding(start = Spacing.xs, end = Spacing.xs, top = Spacing.xxs)
             )
 
             Spacer(Modifier.height(Spacing.xl))

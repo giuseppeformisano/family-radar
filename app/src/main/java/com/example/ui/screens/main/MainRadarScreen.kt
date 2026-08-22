@@ -250,22 +250,17 @@ fun MainRadarScreen(
         }
     }
 
-    // --- Stato del bottom sheet ---
-    val sheetState = rememberStandardBottomSheetState(
-        initialValue = SheetValue.PartiallyExpanded,
-        skipHiddenState = true
-    )
-    val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
-    val isSheetExpanded = sheetState.currentValue == SheetValue.Expanded
+    val isSheetExpanded = false
     var panel by remember { mutableStateOf(RadarPanel.MEMBERS) }
+    var activeFullPanel by remember { mutableStateOf<RadarPanel?>(null) }
 
     fun openPanel(target: RadarPanel) {
         panel = target
-        coroutineScope.launch { sheetState.expand() }
+        activeFullPanel = target
     }
 
     fun collapseSheet() {
-        coroutineScope.launch { sheetState.partialExpand() }
+        activeFullPanel = null
     }
 
     // --- Stato UI locale ---
@@ -640,6 +635,60 @@ fun MainRadarScreen(
                 .navigationBarsPadding()
                 .padding(bottom = Spacing.xs)
         )
+
+        // Banner dell'inseguimento
+        AnimatedVisibility(
+            visible = followedUserId != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(
+                    start = Spacing.lg,
+                    top = if (locations.isNotEmpty()) 148.dp else 76.dp
+                )
+        ) {
+            val bannerName = followedLocation?.let {
+                if (!it.nickname.isNullOrBlank()) it.nickname!! else it.userName
+            } ?: followedMember?.let {
+                if (!it.nickname.isNullOrBlank()) it.nickname!! else it.displayName
+            } ?: "…"
+            val bannerPhoto = followedLocation?.photoBase64 ?: followedMember?.photoBase64
+            GlassSurface(
+                shape = RoundedCornerShape(Radius.pill),
+                contentPadding = Spacing.xs
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                    modifier = Modifier.padding(start = Spacing.xs, end = Spacing.xs)
+                ) {
+                    RadarAvatar(
+                        name = bannerName,
+                        photoBase64 = bannerPhoto,
+                        size = Sizes.avatarSm,
+                        ringColor = MaterialTheme.colorScheme.primary
+                    )
+                    Surface(
+                        onClick = { followedUserId = null },
+                        shape = RoundedCornerShape(Radius.pill),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.testTag("stop_following_button")
+                    ) {
+                        Text(
+                            text = stringResource(R.string.action_stop),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(
+                                horizontal = Spacing.sm,
+                                vertical = Spacing.xs
+                            )
+                        )
+                    }
+                }
+            }
+        }
     }
 
     // SCHERMATE E PANNELLI FULL-SCREEN SEPARATI (quando activeFullPanel != null)
@@ -668,7 +717,7 @@ fun MainRadarScreen(
                         IconButton(onClick = { activeFullPanel = null }) {
                             Icon(
                                 Icons.Default.ArrowBack,
-                                contentDescription = stringResource(R.string.action_back),
+                                contentDescription = stringResource(R.string.action_close),
                                 tint = Color(0xFFF2F2F7)
                             )
                         }
@@ -852,67 +901,6 @@ fun MainRadarScreen(
                                 onSendFeedback = { text -> repository.sendFeedback(text) },
                                 onFetchFeedback = { repository.fetchFeedback() },
                                 onUpdateFeedbackStatus = { id, status -> repository.updateFeedbackStatus(id, status) }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-            // Banner dell'inseguimento. Sostituisce l'etichetta minuscola che
-            // stava nella barra laterale: li' diceva che stavi seguendo qualcuno
-            // ma si perdeva fra i pulsanti, e soprattutto non era ovvio come
-            // uscirne — bisognava sapere che quel pulsante faceva da interruttore.
-            // Qui c'e' la faccia di chi stai seguendo e un modo esplicito per
-            // smettere.
-            AnimatedVisibility(
-                visible = followedUserId != null,
-                enter = fadeIn(),
-                exit = fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(
-                        start = Spacing.lg,
-                        top = if (!isSheetExpanded && locations.isNotEmpty()) 148.dp else 76.dp
-                    )
-            ) {
-                val bannerName = followedLocation?.let {
-                    if (!it.nickname.isNullOrBlank()) it.nickname!! else it.userName
-                } ?: followedMember?.let {
-                    if (!it.nickname.isNullOrBlank()) it.nickname!! else it.displayName
-                } ?: "…"
-                val bannerPhoto = followedLocation?.photoBase64 ?: followedMember?.photoBase64
-                GlassSurface(
-                    shape = RoundedCornerShape(Radius.pill),
-                    contentPadding = Spacing.xs
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                        modifier = Modifier.padding(start = Spacing.xs, end = Spacing.xs)
-                    ) {
-                        RadarAvatar(
-                            name = bannerName,
-                            photoBase64 = bannerPhoto,
-                            size = Sizes.avatarSm,
-                            ringColor = MaterialTheme.colorScheme.primary
-                        )
-                        Surface(
-                            onClick = { followedUserId = null },
-                            shape = RoundedCornerShape(Radius.pill),
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.testTag("stop_following_button")
-                        ) {
-                            Text(
-                                text = stringResource(R.string.action_stop),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.padding(
-                                    horizontal = Spacing.sm,
-                                    vertical = Spacing.xs
-                                )
                             )
                         }
                     }

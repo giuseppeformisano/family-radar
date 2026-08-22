@@ -182,6 +182,13 @@ fun OsmMapView(
     // senza ricostruire l'intero overlay a ogni tick del dead reckoning.
     val memberMarkerMap = remember { mutableMapOf<String, Marker>() }
 
+    // Polilinee live dei viaggi attivi (proprio e degli altri membri), per aggiornarle
+    // in modo fluido a ogni tick del dead reckoning senza ricostruire gli overlay.
+    var activeTripPolylineRef by remember { mutableStateOf<Polyline?>(null) }
+    val liveTripPolylineMap = remember { mutableMapOf<String, Polyline>() }
+    val baseActiveTripPoints = remember { mutableListOf<GeoPoint>() }
+    val baseLiveTripPointsMap = remember { mutableMapOf<String, List<GeoPoint>>() }
+
     // Fix reale precedente per utente e stima di moto calcolata dai delta.
     // La velocita'/direzione del GPS (campi speed/bearing) sono spesso a 0,
     // quindi si ricavano dalla differenza fra gli ultimi due fix reali.
@@ -192,9 +199,12 @@ fun OsmMapView(
     // Fuori da un viaggio il marker resta sul fix reale — anticiparlo mentre uno
     // e' solo "in giro" produceva derive fastidiose senza un percorso a coprirle.
     val liveTripUserIds = remember { mutableSetOf<String>() }
-    LaunchedEffect(trips) {
+    LaunchedEffect(trips, activeTripPoints, currentUserId) {
         liveTripUserIds.clear()
         trips.forEach { if (it.isLive && it.endTime == 0L) liveTripUserIds.add(it.userId) }
+        if (activeTripPoints.isNotEmpty() && !currentUserId.isNullOrBlank()) {
+            liveTripUserIds.add(currentUserId)
+        }
     }
 
     // A ogni nuovo set di posizioni reali ricalcola la stima di moto per utente.
@@ -225,7 +235,8 @@ fun OsmMapView(
     }
 
     // Ticker del dead reckoning: ogni 100 ms calcola la posizione estrapolata
-    // di ogni membro in movimento e aggiorna direttamente il marker osmdroid.
+    // di ogni membro in movimento e aggiorna direttamente il marker osmdroid e
+    // la polilinea del tragitto in corso per seguire l'interpolazione con continuita'.
     // Il LaunchedEffect si cancella automaticamente quando il composable esce
     // dalla composizione.
     LaunchedEffect(Unit) {
@@ -247,8 +258,24 @@ fun OsmMapView(
                 val dLat = deltaMeters * cos(bearingRad) / 111320.0
                 val dLon = deltaMeters * sin(bearingRad) /
                     (111320.0 * cos(Math.toRadians(tag.latitude)))
-                marker.position = GeoPoint(tag.latitude + dLat, tag.longitude + dLon)
+                val newPos = GeoPoint(tag.latitude + dLat, tag.longitude + dLon)
+                marker.position = newPos
                 changed = true
+
+                // Aggiorna la polilinea estendendola fino alla posizione interpolata corrente
+                if (userId == currentUserId) {
+                    activeTripPolylineRef?.let { poly ->
+                        if (baseActiveTripPoints.isNotEmpty()) {
+                            poly.setPoints(baseActiveTripPoints + newPos)
+                        }
+                    }
+                }
+                liveTripPolylineMap[userId]?.let { poly ->
+                    val base = baseLiveTripPointsMap[userId]
+                    if (!base.isNullOrEmpty()) {
+                        poly.setPoints(base + newPos)
+                    }
+                }
             }
             if (changed) mapView.invalidate()
         }
@@ -594,6 +621,11 @@ fun OsmMapView(
 
                 // 4. Trip overlays
                 tripOverlays.clear()
+                activeTripPolylineRef = null
+                liveTripPolylineMap.clear()
+                baseActiveTripPoints.clear()
+                baseLiveTripPointsMap.clear()
+
                 val tripColors = listOf(
                     AndroidColor.rgb(99, 102, 241),
                     AndroidColor.rgb(16, 185, 129),
@@ -650,34 +682,59 @@ fun OsmMapView(
                         )
                     }
                 }
-                if (activeTripPoints.size >= 2) {
-                    val activePoly = Polyline(mapView).apply {
-                        setPoints(activeTripPoints.map { GeoPoint(it.latitude, it.longitude) })
-                        outlinePaint.color = AndroidColor.rgb(239, 68, 68)
-                        outlinePaint.strokeWidth = 7f
-                        outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
-                        outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
-                        outlinePaint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(20f, 10f), 0f)
+
+                // Polilinea del viaggio attivo dell'utente corrente: include la cronologia
+                // piu' la posizione interpolata del marker per un disegno fluido e continuo.
+                if (activeTripPoints.isNotEmpty()) {
+                    baseActiveTripPoints.addAll(activeTripPoints.map { GeoPoint(it.latitude, it.longitude) })
+                    val myMarkerPos = currentUserId?.let { memberMarkerMap[it]?.position }
+                    val displayPoints = if (myMarkerPos != null) {
+                        baseActiveTripPoints + myMarkerPos
+                    } else {
+                        baseActiveTripPoints
                     }
-                    tripOverlays.add(activePoly)
+                    if (displayPoints.size >= 2) {
+                        val activePoly = Polyline(mapView).apply {
+                            setPoints(displayPoints)
+                            outlinePaint.color = AndroidColor.rgb(239, 68, 68)
+                            outlinePaint.strokeWidth = 7f
+                            outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                            outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                            outlinePaint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(20f, 10f), 0f)
+                        }
+                        tripOverlays.add(activePoly)
+                        activeTripPolylineRef = activePoly
+                    }
                 }
 
                 // Polilinee live degli altri membri: si usano i punti accumulati
-                // via arrayUnion (liveTrack), più fitti di quelli RDP-semplificati.
+                // via arrayUnion (liveTrack), più fitti di quelli RDP-semplificati,
+                // estesi in tempo reale fino al marker anticipato.
                 trips.forEach { trip ->
                     if (trip.userId == currentUserId) return@forEach   // la propria è già in activeTripPoints
                     if (!trip.isLive || trip.endTime != 0L) return@forEach
-                    if (trip.liveTrack.size < 2) return@forEach
-                    val geo = trip.liveTrack.map { GeoPoint(it.latitude, it.longitude) }
-                    val poly = Polyline(mapView).apply {
-                        setPoints(geo)
-                        outlinePaint.color = AndroidColor.CYAN
-                        outlinePaint.strokeWidth = 6f
-                        outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
-                        outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
-                        outlinePaint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(20f, 10f), 0f)
+                    val track = if (trip.liveTrack.isNotEmpty()) trip.liveTrack else trip.points
+                    if (track.isEmpty()) return@forEach
+                    val baseGeo = track.map { GeoPoint(it.latitude, it.longitude) }
+                    baseLiveTripPointsMap[trip.userId] = baseGeo
+                    val memberMarkerPos = memberMarkerMap[trip.userId]?.position
+                    val displayPoints = if (memberMarkerPos != null) {
+                        baseGeo + memberMarkerPos
+                    } else {
+                        baseGeo
                     }
-                    tripOverlays.add(poly)
+                    if (displayPoints.size >= 2) {
+                        val poly = Polyline(mapView).apply {
+                            setPoints(displayPoints)
+                            outlinePaint.color = AndroidColor.CYAN
+                            outlinePaint.strokeWidth = 6f
+                            outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                            outlinePaint.strokeJoin = android.graphics.Paint.Join.ROUND
+                            outlinePaint.pathEffect = android.graphics.DashPathEffect(floatArrayOf(20f, 10f), 0f)
+                        }
+                        tripOverlays.add(poly)
+                        liveTripPolylineMap[trip.userId] = poly
+                    }
                 }
 
                 // Apply active overlays

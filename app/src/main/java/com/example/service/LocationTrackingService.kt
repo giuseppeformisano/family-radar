@@ -140,6 +140,8 @@ class LocationTrackingService : Service() {
     }
 
     private fun intervalMsFrom(intent: Intent?): Long {
+        val ms = intent?.getLongExtra(EXTRA_INTERVAL_MS, -1L) ?: -1L
+        if (ms > 0) return ms.coerceIn(200L, 86_400_000L)
         val seconds = intent?.getIntExtra(EXTRA_INTERVAL_SEC, FirebaseRepository.DEFAULT_TRACKING_INTERVAL_SEC)
             ?: FirebaseRepository.DEFAULT_TRACKING_INTERVAL_SEC
         return (seconds.coerceIn(1, 86_400) * 1000).toLong()
@@ -372,6 +374,7 @@ class LocationTrackingService : Service() {
         const val ACTION_UPDATE_POWER_MODE = "com.example.action.UPDATE_POWER_MODE"
         const val ACTION_FORCE_SYNC = "com.example.action.FORCE_SYNC"
         const val EXTRA_INTERVAL_SEC = "extra_interval_sec"
+        const val EXTRA_INTERVAL_MS = "extra_interval_ms"
 
         /** Oltre questo silenzio dal GPS ripresentiamo l'ultima posizione nota. */
         private const val HEARTBEAT_SAFETY_MS = 4 * 60_000L
@@ -411,6 +414,10 @@ class LocationTrackingService : Service() {
 
         fun updateInterval(context: Context, intervalSec: Int) {
             sendAction(context, ACTION_UPDATE_INTERVAL) { putExtra(EXTRA_INTERVAL_SEC, intervalSec) }
+        }
+
+        fun updateIntervalMs(context: Context, intervalMs: Long) {
+            sendAction(context, ACTION_UPDATE_INTERVAL) { putExtra(EXTRA_INTERVAL_MS, intervalMs) }
         }
 
         fun updatePowerMode(context: Context) = sendAction(context, ACTION_UPDATE_POWER_MODE)

@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.familyradar.rkwvpm"
     minSdk = 24
     targetSdk = 36
-    versionCode = 99
-    versionName = "0.12.72-beta"
+    versionCode = 100
+    versionName = "0.12.73-beta"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

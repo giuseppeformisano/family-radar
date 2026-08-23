@@ -2336,10 +2336,12 @@ class FirebaseRepository private constructor(private val context: Context) {
 
             stopSilentLocationTracking()
 
-            val interval = (effectiveTrackingIntervalSec() * 1000L).coerceAtLeast(5000L)
-            val request = LocationRequest.Builder(locationPriority(), interval).apply {
-                setMinUpdateIntervalMillis(interval / 2)
+            val intervalMs = effectiveTrackingIntervalMs().coerceAtLeast(200L)
+            val request = LocationRequest.Builder(locationPriority(), intervalMs).apply {
+                setMinUpdateIntervalMillis(intervalMs / 2)
                 setWaitForAccurateLocation(false)
+                setMaxUpdateDelayMillis(intervalMs)
+                setMinUpdateDistanceMeters(0f)
             }.build()
 
             silentLocationCallback = object : LocationCallback() {
@@ -3362,18 +3364,20 @@ class FirebaseRepository private constructor(private val context: Context) {
     // ================== TRIP RECORDING ==================
 
     /**
-     * Intervallo di campionamento realmente in uso: quello fitto del viaggio se
+     * Intervallo di campionamento realmente in uso: quello ad altissima frequenza (500ms) del viaggio se
      * ce n'e' uno in registrazione, altrimenti quello scelto dall'utente.
      */
-    private fun effectiveTrackingIntervalSec(): Int = when {
-        _activeTrip.value != null -> TRIP_TRACKING_INTERVAL_SEC
+    private fun effectiveTrackingIntervalMs(): Long = when {
+        _activeTrip.value != null -> TRIP_TRACKING_INTERVAL_MS
         // Col rilevamento automatico attivo non si puo' aspettare l'intervallo
         // dell'utente: l'app si accorge della partenza solo quando guarda dove
         // sei, quindi con 10 minuti perderebbe l'inizio del tragitto — o un giro
         // breve per intero. Da fermi si guarda al massimo ogni minuto.
-        _isAutoTripEnabled.value -> minOf(_trackingFrequencySeconds.value, AUTO_TRIP_MAX_IDLE_SEC)
-        else -> _trackingFrequencySeconds.value
+        _isAutoTripEnabled.value -> minOf(_trackingFrequencySeconds.value, AUTO_TRIP_MAX_IDLE_SEC) * 1000L
+        else -> _trackingFrequencySeconds.value * 1000L
     }
+
+    private fun effectiveTrackingIntervalSec(): Int = (effectiveTrackingIntervalMs() / 1000L).toInt().coerceAtLeast(1)
 
     /**
      * Riallinea i due produttori di posizione all'intervallo effettivo. Va
@@ -3386,8 +3390,8 @@ class FirebaseRepository private constructor(private val context: Context) {
             startSilentLocationTracking()
         }
         if (_isBackgroundTrackingEnabled.value) {
-            com.example.service.LocationTrackingService.updateInterval(
-                context, effectiveTrackingIntervalSec()
+            com.example.service.LocationTrackingService.updateIntervalMs(
+                context, effectiveTrackingIntervalMs()
             )
         }
     }
@@ -3998,8 +4002,8 @@ class FirebaseRepository private constructor(private val context: Context) {
             fixBoostStartedAt = System.currentTimeMillis()
             if (silentLocationCallback != null) startSilentLocationTracking()
             if (_isBackgroundTrackingEnabled.value) {
-                com.example.service.LocationTrackingService.updateInterval(
-                    context, TRIP_TRACKING_INTERVAL_SEC
+                com.example.service.LocationTrackingService.updateIntervalMs(
+                    context, TRIP_TRACKING_INTERVAL_MS
                 )
             }
         } catch (e: Exception) {
@@ -4293,14 +4297,13 @@ class FirebaseRepository private constructor(private val context: Context) {
         const val DEFAULT_TRACKING_INTERVAL_SEC = 30
 
         /**
-         * Cadenza dei fix mentre un viaggio e' in registrazione.
+         * Cadenza dei fix mentre un viaggio e' in registrazione (500 ms = 2 fix/sec).
          *
-         * L'intervallo scelto dall'utente e' pensato per il radar (di default 90
-         * secondi: a 50 km/h sono oltre un chilometro fra un punto e l'altro), ma
-         * una traccia campionata cosi' non e' una traccia, e' un segmento fra due
-         * punti lontanissimi. Durante un viaggio si campiona fitto e si torna
-         * all'intervallo dell'utente appena si ferma la registrazione.
+         * Durante un viaggio si campiona ad altissima frequenza (500ms) per ottenere
+         * tracce curve perfette e ultra-fluide, e si torna all'intervallo standard
+         * dell'utente appena si ferma la registrazione.
          */
+        const val TRIP_TRACKING_INTERVAL_MS = 500L
         const val TRIP_TRACKING_INTERVAL_SEC = 1
 
         /** Oltre questo raggio d'incertezza il fix non entra nella traccia. */

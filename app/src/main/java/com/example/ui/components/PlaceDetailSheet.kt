@@ -56,7 +56,8 @@ fun PlaceDetailSheet(
                 .fillMaxWidth()
                 .padding(Spacing.lg),
             shape = RoundedCornerShape(Radius.xl),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg),
+            border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder)
         ) {
             Column(
                 modifier = Modifier
@@ -93,7 +94,7 @@ fun PlaceDetailSheet(
                     text = place.name.ifBlank { stringResource(R.string.place_fallback_name) },
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = RadarDark.TextPrimary
                 )
 
                 Spacer(modifier = Modifier.height(Spacing.xs))
@@ -117,7 +118,8 @@ fun PlaceDetailSheet(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(Radius.lg),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                    colors = CardDefaults.cardColors(containerColor = RadarDark.Surface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder)
                 ) {
                     Column(
                         modifier = Modifier
@@ -133,17 +135,17 @@ fun PlaceDetailSheet(
                             Text(
                                 text = stringResource(R.string.label_gps_coordinates),
                                 fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = RadarDark.TextMuted
                             )
                             Text(
                                 text = String.format(java.util.Locale.US, "%.5f, %.5f", place.latitude, place.longitude),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = RadarDark.TextPrimary
                             )
                         }
 
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                        HorizontalDivider(color = RadarDark.Divider)
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -153,7 +155,7 @@ fun PlaceDetailSheet(
                             Text(
                                 text = stringResource(R.string.label_geofencing),
                                 fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = RadarDark.TextMuted
                             )
                             Text(
                                 text = stringResource(R.string.geofence_active_status),
@@ -191,7 +193,7 @@ fun PlaceDetailSheet(
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(Radius.md),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
+                        colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Surface, contentColor = RadarDark.TextPrimary)
                     ) {
                         Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(Spacing.sm))
@@ -205,7 +207,7 @@ fun PlaceDetailSheet(
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(Radius.md),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)
+                        colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)
                     ) {
                         Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(Spacing.sm))
@@ -219,7 +221,8 @@ fun PlaceDetailSheet(
                 // non vale la pena passare dal dialog completo per farla.
                 Surface(
                     shape = RoundedCornerShape(Radius.md),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    color = RadarDark.Surface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -233,20 +236,21 @@ fun PlaceDetailSheet(
                             imageVector = if (place.geofenceEnabled) Icons.Default.NotificationsActive
                             else Icons.Default.NotificationsOff,
                             contentDescription = null,
-                            tint = if (place.geofenceEnabled) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (place.geofenceEnabled) RadarDark.AccentLight
+                            else RadarDark.TextMuted,
                             modifier = Modifier.size(Sizes.iconMd)
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 stringResource(R.string.place_geofence_toggle_label),
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = RadarDark.TextPrimary
                             )
                             Text(
                                 if (place.geofenceEnabled) stringResource(R.string.place_geofence_on_desc)
                                 else stringResource(R.string.place_geofence_off_desc),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = RadarDark.TextMuted
                             )
                         }
                         Switch(
@@ -271,7 +275,9 @@ fun PlaceDetailSheet(
                         modifier = Modifier
                             .weight(1f)
                             .testTag("edit_place_button"),
-                        shape = RoundedCornerShape(Radius.md)
+                        shape = RoundedCornerShape(Radius.md),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(Spacing.sm))
@@ -282,6 +288,7 @@ fun PlaceDetailSheet(
                         onClick = { showDeleteConfirm = true },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(Radius.md),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
                     ) {
                         Icon(Icons.Default.DeleteOutline, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -299,7 +306,7 @@ fun PlaceDetailSheet(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             shape = RoundedCornerShape(20.dp),
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = RadarDark.Bg,
             icon = {
                 Box(
                     modifier = Modifier
@@ -319,6 +326,7 @@ fun PlaceDetailSheet(
                 Text(
                     stringResource(R.string.dialog_delete_place_title),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = RadarDark.TextPrimary,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             },
@@ -326,7 +334,7 @@ fun PlaceDetailSheet(
                 Text(
                     stringResource(R.string.dialog_delete_place_body, place.name),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = RadarDark.TextMuted,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             },
@@ -346,7 +354,9 @@ fun PlaceDetailSheet(
             dismissButton = {
                 OutlinedButton(
                     onClick = { showDeleteConfirm = false },
-                    shape = RoundedCornerShape(Radius.md)
+                    shape = RoundedCornerShape(Radius.md),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
                 ) {
                     Text(stringResource(R.string.action_cancel))
                 }

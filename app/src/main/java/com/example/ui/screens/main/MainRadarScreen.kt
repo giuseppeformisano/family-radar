@@ -38,6 +38,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -2731,7 +2732,9 @@ private fun SettingsPanel(
     }
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(RadarDark.Bg),
         contentPadding = PaddingValues(
             start = Spacing.lg,
             end = Spacing.lg,
@@ -2762,7 +2765,7 @@ private fun SettingsPanel(
                         Text(
                             text = currentUser?.displayName ?: stringResource(R.string.label_user_name_fallback),
                             style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = RadarDark.TextPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -2772,7 +2775,7 @@ private fun SettingsPanel(
                         Text(
                             text = secondary,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = RadarDark.TextMuted,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -2780,6 +2783,10 @@ private fun SettingsPanel(
                     FilledTonalButton(
                         onClick = onEditProfileClick,
                         shape = RoundedCornerShape(Radius.sm),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = RadarDark.Surface,
+                            contentColor = RadarDark.TextPrimary
+                        ),
                         contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
@@ -2803,7 +2810,7 @@ private fun SettingsPanel(
                     description = stringResource(R.string.settings_ghost_mode_desc),
                     icon = if (isGlobalGhostMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                     iconTint = if (isGlobalGhostMode) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.primary,
+                    else RadarDark.AccentLight,
                     checked = isGlobalGhostMode,
                     onCheckedChange = onToggleGlobalGhostMode,
                     testTag = "global_ghost_mode_switch"
@@ -2843,7 +2850,7 @@ private fun SettingsPanel(
                     description = stringResource(R.string.settings_power_saving_desc),
                     icon = Icons.Default.BatterySaver,
                     iconTint = if (isPowerSavingMode) RadarSemantic.BatteryOk
-                    else MaterialTheme.colorScheme.primary,
+                    else RadarDark.AccentLight,
                     checked = isPowerSavingMode,
                     onCheckedChange = onTogglePowerSaving,
                     testTag = "power_saving_switch"
@@ -2852,12 +2859,12 @@ private fun SettingsPanel(
                 Text(
                     text = stringResource(R.string.settings_update_frequency),
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = RadarDark.TextPrimary
                 )
                 Text(
                     text = stringResource(R.string.settings_update_frequency_desc),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = RadarDark.TextMuted
                 )
                 Spacer(Modifier.height(Spacing.sm))
                 Row(
@@ -2899,13 +2906,13 @@ private fun SettingsPanel(
                 Text(
                     text = stringResource(R.string.settings_effective_interval, formatInterval(effective, context)),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = RadarDark.AccentLight
                 )
                 Spacer(Modifier.height(Spacing.xs))
                 Text(
                     text = stringResource(R.string.settings_trip_speed_note),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = RadarDark.TextMuted
                 )
             }
         }
@@ -2959,7 +2966,8 @@ private fun SettingsPanel(
                         modifier = Modifier
                             .size(Sizes.avatarMd)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer),
+                            .background(RadarDark.Surface)
+                            .border(1.dp, RadarDark.SurfaceBorder, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         if (groupBitmap != null) {
@@ -2973,7 +2981,7 @@ private fun SettingsPanel(
                             Icon(
                                 Icons.Default.Group,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                tint = RadarDark.TextPrimary,
                                 modifier = Modifier.size(Sizes.iconMd)
                             )
                         }
@@ -2982,13 +2990,13 @@ private fun SettingsPanel(
                         Text(
                             text = stringResource(R.string.label_active_group),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
+                            color = RadarDark.AccentLight
                         )
                         Spacer(Modifier.height(Spacing.xxs))
                         Text(
                             text = currentGroup?.name ?: stringResource(R.string.label_no_group),
                             style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = RadarDark.TextPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -2999,7 +3007,7 @@ private fun SettingsPanel(
                             else
                                 stringResource(R.string.label_active_members, activeMemberCount),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = RadarDark.TextMuted
                         )
                     }
                 }
@@ -3017,6 +3025,8 @@ private fun SettingsPanel(
                     OutlinedButton(
                         onClick = onSwitchGroup,
                         shape = RoundedCornerShape(Radius.sm),
+                        border = BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary),
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm)
                     ) {
@@ -3028,6 +3038,8 @@ private fun SettingsPanel(
                         OutlinedButton(
                             onClick = onEditGroupClick,
                             shape = RoundedCornerShape(Radius.sm),
+                            border = BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary),
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag("edit_group_button"),
@@ -3089,7 +3101,8 @@ private fun SettingsPanel(
 
                 Surface(
                     shape = RoundedCornerShape(Radius.sm),
-                    color = MaterialTheme.colorScheme.primaryContainer,
+                    color = RadarDark.Surface,
+                    border = BorderStroke(1.dp, RadarDark.SurfaceBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -3100,12 +3113,12 @@ private fun SettingsPanel(
                             Text(
                                 text = stringResource(R.string.label_invite_code_section),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = RadarDark.TextPrimary
                             )
                             Text(
                                 text = currentGroup?.joinCode ?: "——————",
                                 style = MaterialTheme.typography.headlineSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = RadarDark.TextPrimary
                             )
                         }
                         FilledTonalButton(
@@ -3116,6 +3129,10 @@ private fun SettingsPanel(
                                 )
                                 Toast.makeText(context, context.getString(R.string.toast_code_copied), Toast.LENGTH_SHORT).show()
                             },
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = RadarDark.Accent,
+                                contentColor = Color.White
+                            ),
                             shape = RoundedCornerShape(Radius.sm)
                         ) {
                             Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
@@ -3257,12 +3274,12 @@ private fun SettingsPanel(
                     Text(
                         stringResource(R.string.label_version),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = RadarDark.TextMuted
                     )
                     Text(
                         "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                         style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = RadarDark.TextPrimary
                     )
                 }
                 Spacer(Modifier.height(Spacing.sm))
@@ -3282,13 +3299,15 @@ private fun SettingsPanel(
                         }
                     },
                     shape = RoundedCornerShape(Radius.sm),
+                    border = BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     if (checking) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(Sizes.iconMd),
                             strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
+                            color = RadarDark.AccentLight
                         )
                         Spacer(Modifier.width(Spacing.sm))
                     }
@@ -3300,7 +3319,8 @@ private fun SettingsPanel(
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(Spacing.md),
                             shape = RoundedCornerShape(Radius.xl),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            border = BorderStroke(1.dp, RadarDark.CardBorder),
+                            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
                         ) {
                             Column(
                                 modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
@@ -3311,22 +3331,22 @@ private fun SettingsPanel(
                                     modifier = Modifier
                                         .size(Sizes.avatarLg)
                                         .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                                        .background(RadarDark.AccentLight.copy(alpha = 0.15f)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(Icons.Default.SystemUpdate, contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
+                                        tint = RadarDark.AccentLight, modifier = Modifier.size(Sizes.iconLg))
                                 }
                                 Text(
                                     text = stringResource(R.string.update_available_body, result.info.versionName),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = RadarDark.TextMuted,
                                     textAlign = TextAlign.Center
                                 )
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                                    OutlinedButton(onClick = { checkResult = null }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm)) { Text(stringResource(R.string.action_later)) }
+                                    OutlinedButton(onClick = { checkResult = null }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm), border = BorderStroke(1.dp, RadarDark.SurfaceBorder), colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)) { Text(stringResource(R.string.action_later)) }
                                     Button(onClick = { checkResult = null; AppUpdater.downloadAndInstall(context, result.info.apkUrl) },
-                                        modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm)) { Text(stringResource(R.string.action_update)) }
+                                        modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm), colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)) { Text(stringResource(R.string.action_update)) }
                                 }
                             }
                         }
@@ -3335,7 +3355,8 @@ private fun SettingsPanel(
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(Spacing.md),
                             shape = RoundedCornerShape(Radius.xl),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            border = BorderStroke(1.dp, RadarDark.CardBorder),
+                            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
                         ) {
                             Column(
                                 modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
@@ -3346,19 +3367,19 @@ private fun SettingsPanel(
                                     modifier = Modifier
                                         .size(Sizes.avatarLg)
                                         .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)),
+                                        .background(RadarDark.AccentLight.copy(alpha = 0.15f)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(Icons.Default.CheckCircle, contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(Sizes.iconLg))
+                                        tint = RadarDark.AccentLight, modifier = Modifier.size(Sizes.iconLg))
                                 }
                                 Text(
                                     text = stringResource(R.string.up_to_date_body, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = RadarDark.TextMuted,
                                     textAlign = TextAlign.Center
                                 )
-                                Button(onClick = { checkResult = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) { Text(stringResource(R.string.action_ok)) }
+                                Button(onClick = { checkResult = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm), colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)) { Text(stringResource(R.string.action_ok)) }
                             }
                         }
                     }
@@ -3366,7 +3387,8 @@ private fun SettingsPanel(
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(Spacing.md),
                             shape = RoundedCornerShape(Radius.xl),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                            border = BorderStroke(1.dp, RadarDark.CardBorder),
+                            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
                         ) {
                             Column(
                                 modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
@@ -3386,10 +3408,10 @@ private fun SettingsPanel(
                                 Text(
                                     text = stringResource(R.string.update_network_error_body),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = RadarDark.TextMuted,
                                     textAlign = TextAlign.Center
                                 )
-                                Button(onClick = { checkResult = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) { Text(stringResource(R.string.action_ok)) }
+                                Button(onClick = { checkResult = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm), colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)) { Text(stringResource(R.string.action_ok)) }
                             }
                         }
                     }
@@ -3415,13 +3437,15 @@ private fun SettingsPanel(
                     Text(
                         text = stringResource(R.string.feedback_thanks),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = RadarDark.AccentLight,
                         modifier = Modifier.padding(vertical = Spacing.xs)
                     )
                     Spacer(Modifier.height(Spacing.sm))
                     OutlinedButton(
                         onClick = { feedbackSent = false },
                         modifier = Modifier.fillMaxWidth(),
+                        border = BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary),
                         shape = RoundedCornerShape(Radius.sm)
                     ) { Text(stringResource(R.string.action_send_more_feedback)) }
                 } else {
@@ -3450,10 +3474,11 @@ private fun SettingsPanel(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(Radius.sm),
+                        colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White),
                         enabled = !feedbackSending && feedbackText.isNotBlank()
                     ) {
                         if (feedbackSending) {
-                            CircularProgressIndicator(modifier = Modifier.size(Sizes.iconMd), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                            CircularProgressIndicator(modifier = Modifier.size(Sizes.iconMd), strokeWidth = 2.dp, color = Color.White)
                             Spacer(Modifier.width(Spacing.sm))
                         }
                         Text(stringResource(R.string.action_send_feedback))
@@ -3533,7 +3558,8 @@ private fun FeedbackDevDialog(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(Radius.xl),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                border = BorderStroke(1.dp, RadarDark.CardBorder),
+                colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
@@ -3541,18 +3567,18 @@ private fun FeedbackDevDialog(
                 ) {
                     Box(
                         modifier = Modifier.size(Sizes.avatarLg).clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                            .background(RadarDark.AccentLight.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Default.Lock, contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
+                            tint = RadarDark.AccentLight, modifier = Modifier.size(Sizes.iconLg))
                     }
                     Spacer(Modifier.height(Spacing.sm))
-                    Text(stringResource(R.string.dev_area_title), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.dev_area_title), style = MaterialTheme.typography.titleLarge, color = RadarDark.TextPrimary, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(Spacing.xs))
                     Text(stringResource(R.string.dev_area_body),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = RadarDark.TextMuted,
                         textAlign = TextAlign.Center)
                     Spacer(Modifier.height(Spacing.lg))
                     OutlinedTextField(
@@ -3569,11 +3595,11 @@ private fun FeedbackDevDialog(
                         keyboardActions = KeyboardActions(onDone = { tryUnlock() })
                     )
                     Spacer(Modifier.height(Spacing.lg))
-                    Button(onClick = { tryUnlock() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) {
+                    Button(onClick = { tryUnlock() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm), colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)) {
                         Text(stringResource(R.string.action_sign_in))
                     }
                     Spacer(Modifier.height(Spacing.sm))
-                    TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.action_cancel)) }
+                    TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.textButtonColors(contentColor = RadarDark.TextMuted)) { Text(stringResource(R.string.action_cancel)) }
                 }
             }
         }
@@ -3584,19 +3610,20 @@ private fun FeedbackDevDialog(
             Card(
                 modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f),
                 shape = RoundedCornerShape(Radius.xl),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                border = BorderStroke(1.dp, RadarDark.CardBorder),
+                colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
             ) {
                 Column(modifier = Modifier.fillMaxSize().padding(Spacing.xl)) {
                     Box(
                         modifier = Modifier.size(Sizes.avatarLg).clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                            .background(RadarDark.AccentLight.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Default.AdminPanelSettings, contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
+                            tint = RadarDark.AccentLight, modifier = Modifier.size(Sizes.iconLg))
                     }
                     Spacer(Modifier.height(Spacing.sm))
-                    Text(stringResource(R.string.dev_feedback_list_title), style = MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.dev_feedback_list_title), style = MaterialTheme.typography.titleLarge, color = RadarDark.TextPrimary)
                     Spacer(Modifier.height(Spacing.md))
                     if (loading) {
                         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -3605,14 +3632,15 @@ private fun FeedbackDevDialog(
                     } else if (list.isEmpty()) {
                         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                             Text(stringResource(R.string.dev_feedback_empty), style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                                color = RadarDark.TextMuted, textAlign = TextAlign.Center)
                         }
                     } else {
                         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             items(list, key = { it.id }) { entry ->
                                 Surface(
                                     shape = RoundedCornerShape(Radius.md),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                    color = RadarDark.Surface,
+                                    border = BorderStroke(1.dp, RadarDark.SurfaceBorder),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(modifier = Modifier.padding(Spacing.md)) {
@@ -3621,12 +3649,12 @@ private fun FeedbackDevDialog(
                                             verticalAlignment = Alignment.CenterVertically) {
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(entry.userName, style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.primary)
+                                                    color = RadarDark.AccentLight)
                                                 Text(dateFormat.format(java.util.Date(entry.timestamp)),
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    color = RadarDark.TextMuted)
                                                 Text("v${entry.versionName}", style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    color = RadarDark.TextMuted)
                                             }
                                             Row {
                                                 IconButton(onClick = {
@@ -3634,7 +3662,7 @@ private fun FeedbackDevDialog(
                                                     scope.launch { onUpdateFeedbackStatus(entry.id, "done") }
                                                 }) {
                                                     Icon(Icons.Default.CheckCircle, contentDescription = stringResource(R.string.content_desc_mark_done),
-                                                        tint = MaterialTheme.colorScheme.tertiary, modifier = Modifier.size(Sizes.iconMd))
+                                                        tint = RadarDark.AccentLight, modifier = Modifier.size(Sizes.iconMd))
                                                 }
                                                 IconButton(onClick = {
                                                     list = list.filter { it.id != entry.id }
@@ -3647,14 +3675,14 @@ private fun FeedbackDevDialog(
                                         }
                                         Spacer(Modifier.height(Spacing.xs))
                                         Text(entry.text, style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurface)
+                                            color = RadarDark.TextPrimary)
                                     }
                                 }
                             }
                         }
                     }
                     Spacer(Modifier.height(Spacing.md))
-                    OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm)) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm), border = BorderStroke(1.dp, RadarDark.SurfaceBorder), colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)) {
                         Text(stringResource(R.string.action_close))
                     }
                 }
@@ -3687,7 +3715,7 @@ private fun SettingsSectionHeader(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = RadarDark.AccentLight,
                 modifier = Modifier.size(Sizes.iconMd)
             )
         }
@@ -3695,7 +3723,7 @@ private fun SettingsSectionHeader(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = RadarDark.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -3704,7 +3732,7 @@ private fun SettingsSectionHeader(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = RadarDark.TextMuted,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -3719,7 +3747,8 @@ private fun SettingsSectionHeader(
 private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Surface(
         shape = RoundedCornerShape(Radius.lg),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        color = RadarDark.Card,
+        border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -3737,7 +3766,7 @@ private fun SettingsToggleRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    iconTint: Color = MaterialTheme.colorScheme.primary,
+    iconTint: Color = RadarDark.AccentLight,
     testTag: String? = null
 ) {
     Row(
@@ -3760,12 +3789,12 @@ private fun SettingsToggleRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
+                color = RadarDark.TextPrimary
             )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = RadarDark.TextMuted
             )
         }
         Switch(
@@ -3782,7 +3811,7 @@ private fun SettingsClickRow(
     description: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,
-    iconTint: Color = MaterialTheme.colorScheme.primary
+    iconTint: Color = RadarDark.AccentLight
 ) {
     Surface(
         onClick = onClick,
@@ -3795,10 +3824,10 @@ private fun SettingsClickRow(
         ) {
             Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(Sizes.iconMd))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
-                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(title, style = MaterialTheme.typography.titleSmall, color = RadarDark.TextPrimary)
+                Text(description, style = MaterialTheme.typography.bodySmall, color = RadarDark.TextMuted)
             }
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconMd))
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = RadarDark.TextMuted, modifier = Modifier.size(Sizes.iconMd))
         }
     }
 }

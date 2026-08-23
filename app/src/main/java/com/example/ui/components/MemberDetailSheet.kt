@@ -54,7 +54,8 @@ fun MemberDetailSheet(
                 .fillMaxWidth()
                 .padding(Spacing.lg),
             shape = RoundedCornerShape(Radius.xl),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg),
+            border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder)
         ) {
             Column(
                 modifier = Modifier
@@ -68,7 +69,7 @@ fun MemberDetailSheet(
                     modifier = Modifier
                         .size(76.dp)
                         .clip(CircleShape)
-                        .background(if (isSelf) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer),
+                        .background((if (isSelf) RadarDark.Accent else RadarDark.AccentLight).copy(alpha = 0.20f)),
                     contentAlignment = Alignment.Center
                 ) {
                     if (avatarBitmap != null) {
@@ -82,7 +83,7 @@ fun MemberDetailSheet(
                         Text(
                             text = location.userName.firstOrNull()?.uppercaseChar()?.toString() ?: "U",
                             style = MaterialTheme.typography.headlineMedium.copy(
-                                color = if (isSelf) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                                color = RadarDark.AccentLight,
                                 fontWeight = FontWeight.Bold
                             )
                         )
@@ -93,14 +94,15 @@ fun MemberDetailSheet(
 
                 Text(
                     text = if (isSelf) stringResource(R.string.member_self_label, location.userName) else location.userName,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = RadarDark.TextPrimary
                 )
 
                 if (!location.nickname.isNullOrBlank()) {
                     Text(
                         text = "“${location.nickname}”",
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            color = MaterialTheme.colorScheme.primary,
+                            color = RadarDark.AccentLight,
                             fontWeight = FontWeight.SemiBold
                         ),
                         modifier = Modifier.padding(top = 2.dp)
@@ -112,7 +114,8 @@ fun MemberDetailSheet(
                     Spacer(modifier = Modifier.height(Spacing.sm))
                     Surface(
                         shape = RoundedCornerShape(Radius.lg),
-                        color = MaterialTheme.colorScheme.primaryContainer
+                        color = RadarDark.Surface,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder)
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = Spacing.md, vertical = 6.dp),
@@ -123,12 +126,12 @@ fun MemberDetailSheet(
                                 Icons.Default.Place,
                                 contentDescription = null,
                                 modifier = Modifier.size(Sizes.iconSm),
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = RadarDark.AccentLight
                             )
                             Text(
                                 text = stringResource(R.string.member_at_place, location.currentPlaceName ?: ""),
                                 style = MaterialTheme.typography.labelLarge.copy(
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    color = RadarDark.TextPrimary,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             )
@@ -159,7 +162,7 @@ fun MemberDetailSheet(
                         icon = Icons.Default.Speed,
                         label = stringResource(R.string.label_speed),
                         value = if (speedKmH > 2) "$speedKmH km/h" else stringResource(R.string.speed_stationary),
-                        iconColor = MaterialTheme.colorScheme.primary,
+                        iconColor = RadarDark.AccentLight,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -174,7 +177,7 @@ fun MemberDetailSheet(
                         icon = Icons.Default.GpsFixed,
                         label = stringResource(R.string.label_accuracy),
                         value = "±${location.accuracy.toInt()} m",
-                        iconColor = MaterialTheme.colorScheme.tertiary,
+                        iconColor = Color(0xFF22D3EE),
                         modifier = Modifier.weight(1f)
                     )
 
@@ -182,7 +185,7 @@ fun MemberDetailSheet(
                         icon = Icons.Default.AccessTime,
                         label = stringResource(R.string.label_last_fix),
                         value = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(location.timestamp)),
-                        iconColor = MaterialTheme.colorScheme.secondary,
+                        iconColor = Color(0xFFA78BFA),
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -212,13 +215,13 @@ fun MemberDetailSheet(
                             Icon(
                                 imageVector = activityIcon,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.secondary,
+                                tint = RadarDark.AccentLight,
                                 modifier = Modifier.size(18.dp)
                             )
                             Text(
                                 text = activityLabel,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = RadarDark.TextMuted
                             )
                         }
                     }
@@ -230,7 +233,7 @@ fun MemberDetailSheet(
                 Text(
                     text = "Coordinate: ${String.format(java.util.Locale.US, "%.5f, %.5f", location.latitude, location.longitude)} • $timeFormatted",
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        color = RadarDark.TextMuted
                     )
                 )
 
@@ -249,7 +252,9 @@ fun MemberDetailSheet(
                         modifier = Modifier
                             .weight(1f)
                             .testTag("navigate_button"),
-                        shape = RoundedCornerShape(Radius.md)
+                        shape = RoundedCornerShape(Radius.md),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
                     ) {
                         Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -265,7 +270,11 @@ fun MemberDetailSheet(
                         modifier = Modifier
                             .weight(1f)
                             .testTag("chat_action_button"),
-                        shape = RoundedCornerShape(Radius.md)
+                        shape = RoundedCornerShape(Radius.md),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = RadarDark.Accent,
+                            contentColor = Color.White
+                        )
                     ) {
                         Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -275,13 +284,17 @@ fun MemberDetailSheet(
 
                 if (isSelf && onEditProfileClick != null) {
                     Spacer(modifier = Modifier.height(10.dp))
-                    FilledTonalButton(
+                    Button(
                         onClick = {
                             onDismiss()
                             onEditProfileClick()
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(Radius.md)
+                        shape = RoundedCornerShape(Radius.md),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = RadarDark.Surface,
+                            contentColor = RadarDark.TextPrimary
+                        )
                     ) {
                         Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(Spacing.sm))
@@ -306,8 +319,9 @@ private fun MetricCard(
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            containerColor = RadarDark.Surface
         ),
+        border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
         shape = RoundedCornerShape(Radius.lg)
     ) {
         Row(
@@ -329,12 +343,13 @@ private fun MetricCard(
             Column(modifier = Modifier.weight(1f, fill = false)) {
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                    style = MaterialTheme.typography.labelMedium.copy(color = RadarDark.TextMuted),
                     maxLines = 1
                 )
                 Text(
                     text = value,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = RadarDark.TextPrimary,
                     maxLines = 1
                 )
             }

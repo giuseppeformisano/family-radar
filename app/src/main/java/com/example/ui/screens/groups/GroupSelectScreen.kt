@@ -40,11 +40,7 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.model.GroupData
 import com.example.repository.FirebaseRepository
-import com.example.ui.components.EmptyState
-import com.example.ui.components.GroupPhotoPicker
-import com.example.ui.components.InfoBanner
-import com.example.ui.components.RadarBadge
-import com.example.ui.components.SectionHeader
+import com.example.ui.components.*
 import com.example.ui.theme.RadarTheme
 import com.example.ui.theme.Radius
 import com.example.ui.theme.Sizes

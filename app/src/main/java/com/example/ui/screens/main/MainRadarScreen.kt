@@ -1554,7 +1554,7 @@ private fun MemberCarousel(
                                 .background(if (isOnline) Color(0xFF34D399) else Color(0xFFF43F5E))
                         )
                         Text(
-                            text = if (isOnline) stringResource(R.string.presence_online) else stringResource(R.string.presence_offline),
+                            text = if (isOnline) "Online" else "Offline",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,

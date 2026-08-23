@@ -691,7 +691,6 @@ fun MainRadarScreen(
                 }
             }
         }
-    }
 
     // SCHERMATE E PANNELLI FULL-SCREEN SEPARATI (quando activeFullPanel != null)
     activeFullPanel?.let { currentPanel ->

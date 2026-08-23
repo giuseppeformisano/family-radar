@@ -697,7 +697,7 @@ fun MainRadarScreen(
     activeFullPanel?.let { currentPanel ->
         Dialog(
             onDismissRequest = { activeFullPanel = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
         ) {
             Surface(
                 modifier = Modifier.fillMaxSize(),
@@ -751,7 +751,11 @@ fun MainRadarScreen(
                                     activeFullPanel = null
                                 },
                                 onFocusMember = { loc ->
-                                    focusMapOn(loc.latitude, loc.longitude)
+                                    focusTargetUserId = loc.userId
+                                    if (followedUserId != null) {
+                                        followedUserId = loc.userId
+                                    }
+                                    focusMapOn(loc.latitude, loc.longitude, collapse = true)
                                     activeFullPanel = null
                                 },
                                 onKickMember = { memberToKick = it },
@@ -792,12 +796,15 @@ fun MainRadarScreen(
                             RadarPanel.PLACES -> PlacesPanel(
                                 places = places,
                                 alerts = geofenceAlerts,
-                                onPlaceClick = {
-                                    selectedPlaceForSheet = it
+                                onPlaceClick = { place ->
+                                    selectedPlaceForSheet = place
+                                    followedUserId = null
+                                    focusMapOn(place.latitude, place.longitude, collapse = true)
                                     activeFullPanel = null
                                 },
                                 onFocusPlace = { place ->
-                                    focusMapOn(place.latitude, place.longitude)
+                                    followedUserId = null
+                                    focusMapOn(place.latitude, place.longitude, collapse = true)
                                     activeFullPanel = null
                                 },
                                 onAddPlaceClick = { showAddPlaceDialog = true },
@@ -935,6 +942,7 @@ fun MainRadarScreen(
             onDismiss = { selectedPlaceForSheet = null },
             onShowOnMap = {
                 if (it.latitude != 0.0 && it.longitude != 0.0 && !it.latitude.isNaN() && !it.longitude.isNaN()) {
+                    followedUserId = null
                     focusMapOn(it.latitude, it.longitude)
                 } else {
                     Toast.makeText(context, strInvalidPlaceCoords, Toast.LENGTH_SHORT).show()
@@ -1073,6 +1081,7 @@ fun MainRadarScreen(
                         Toast.makeText(context, strTrackUnavailable, Toast.LENGTH_SHORT).show()
                         return@launch
                     }
+                    followedUserId = null
                     selectedTripTrack = track
                     selectedTripId = trip.id
                     collapseSheet()
@@ -1531,9 +1540,14 @@ private fun PerspectiveMemberCoverFlow(
 
     val activeMemberLoc = locations[centerIndex % listCount]
 
-    // Quando lo scatto/scorrimento si ferma, sincronizza la mappa sull'utente centrato
+    var hasUserScrolled by remember { mutableStateOf(false) }
+
+    // Quando lo scatto/scorrimento avviato dall'utente si ferma, sincronizza la mappa sull'utente centrato
     LaunchedEffect(listState.isScrollInProgress) {
-        if (!listState.isScrollInProgress) {
+        if (listState.isScrollInProgress) {
+            hasUserScrolled = true
+        } else if (hasUserScrolled) {
+            hasUserScrolled = false
             onMemberClick(activeMemberLoc)
         }
     }
@@ -2194,8 +2208,8 @@ private fun ChatPanel(
         ) {
             Row(
                 modifier = Modifier
-                    .navigationBarsPadding()
-                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
             ) {
@@ -2228,7 +2242,7 @@ private fun ChatPanel(
                         .weight(1f)
                         .testTag("chat_input_field"),
                     shape = RoundedCornerShape(Radius.pill),
-                    maxLines = 4,
+                    maxLines = 3,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color(0xFF6366F1),
                         unfocusedBorderColor = Color(0x1F71717A),

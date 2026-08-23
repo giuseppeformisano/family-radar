@@ -780,62 +780,67 @@ fun OsmMapView(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 if (isLayerMenuExpanded) {
-                    IconButton(
+                    Surface(
                         onClick = { showMembers = !showMembers },
+                        shape = CircleShape,
+                        color = if (showMembers) Color(0xFF6366F1) else Color(0xCC18181B),
+                        border = BorderStroke(1.dp, Color(0x1F71717A)),
                         modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(if (showMembers) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
+                            .size(48.dp)
                             .testTag("layer_toggle_members")
                     ) {
-                        Icon(Icons.Default.People, contentDescription = strShowMembers, tint = if (showMembers) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.People, contentDescription = strShowMembers, tint = if (showMembers) Color.White else Color(0xFFF2F2F7), modifier = Modifier.size(24.dp))
+                        }
                     }
-                    IconButton(
+                    Surface(
                         onClick = { showSnapshots = !showSnapshots },
+                        shape = CircleShape,
+                        color = if (showSnapshots) Color(0xFFEA580C) else Color(0xCC18181B),
+                        border = BorderStroke(1.dp, Color(0x1F71717A)),
                         modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(if (showSnapshots) Color(0xFFFFEDD5) else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
+                            .size(48.dp)
                             .testTag("layer_toggle_snapshots")
                     ) {
-                        Icon(Icons.Default.PhotoCamera, contentDescription = strShowSnapshots, tint = if (showSnapshots) Color(0xFFEA580C) else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.PhotoCamera, contentDescription = strShowSnapshots, tint = if (showSnapshots) Color.White else Color(0xFFF2F2F7), modifier = Modifier.size(24.dp))
+                        }
                     }
-                    IconButton(
+                    Surface(
                         onClick = { showPlaces = !showPlaces },
+                        shape = CircleShape,
+                        color = if (showPlaces) Color(0xFF10B981) else Color(0xCC18181B),
+                        border = BorderStroke(1.dp, Color(0x1F71717A)),
                         modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(if (showPlaces) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
+                            .size(48.dp)
                             .testTag("layer_toggle_places")
                     ) {
-                        Icon(Icons.Default.Place, contentDescription = strShowPlaces, tint = if (showPlaces) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Place, contentDescription = strShowPlaces, tint = if (showPlaces) Color.White else Color(0xFFF2F2F7), modifier = Modifier.size(24.dp))
+                        }
                     }
                 } else {
-                    // 3 * 40dp + 2 * 8dp di gap: stessa larghezza dei pulsanti,
-                    // cosi' il FAB non si sposta mai. Lo Spacer lascia passare i tocchi.
-                    Spacer(Modifier.size(width = 136.dp, height = 40.dp))
+                    Spacer(Modifier.size(width = 160.dp, height = 48.dp))
                 }
 
                 // Layer toggle FAB
-                FloatingActionButton(
+                Surface(
                     onClick = { isLayerMenuExpanded = !isLayerMenuExpanded },
+                    shape = CircleShape,
+                    color = if (isLayerMenuExpanded) Color(0xFF6366F1) else Color(0xCC18181B),
+                    border = BorderStroke(1.dp, Color(0x1F71717A)),
                     modifier = Modifier
-                        .size(44.dp)
-                        .border(1.dp, Color(0x1F71717A), CircleShape)
-                        .testTag("expandable_layer_button"),
-                    containerColor = if (isLayerMenuExpanded) Color(0xFF6366F1) else Color(0xCC18181B),
-                    contentColor = Color(0xFFF2F2F7),
-                    shape = CircleShape
+                        .size(48.dp)
+                        .testTag("expandable_layer_button")
                 ) {
-                    Icon(Icons.Default.Layers, contentDescription = strLayerManage, modifier = Modifier.size(22.dp))
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Layers, contentDescription = strLayerManage, tint = if (isLayerMenuExpanded) Color.White else Color(0xFFF2F2F7), modifier = Modifier.size(24.dp))
+                    }
                 }
             }
 
             // Group Extent View
-            FloatingActionButton(
+            Surface(
                 onClick = {
                     val validLocs = locations.filter { it.latitude != 0.0 && it.longitude != 0.0 && !it.latitude.isNaN() && !it.longitude.isNaN() }
                     if (validLocs.isNotEmpty() && mapViewInstance != null) {
@@ -844,7 +849,7 @@ fun OsmMapView(
                             mapViewInstance?.controller?.setZoom(16.0)
                         } else {
                             var minLat = validLocs[0].latitude
-                            var maxLat = validLocs[0].latitude
+                            maxLat = validLocs[0].latitude
                             var minLon = validLocs[0].longitude
                             var maxLon = validLocs[0].longitude
                             validLocs.forEach {
@@ -866,43 +871,46 @@ fun OsmMapView(
                         }
                     }
                 },
+                shape = CircleShape,
+                color = Color(0xCC18181B),
+                border = BorderStroke(1.dp, Color(0x1F71717A)),
                 modifier = Modifier
-                    .size(44.dp)
-                    .border(1.dp, Color(0x1F71717A), CircleShape)
-                    .testTag("group_view_button"),
-                containerColor = Color(0xCC18181B),
-                contentColor = Color(0xFFF2F2F7),
-                shape = CircleShape
+                    .size(48.dp)
+                    .testTag("group_view_button")
             ) {
-                Icon(Icons.Default.Group, contentDescription = strGroupView, modifier = Modifier.size(22.dp))
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Group, contentDescription = strGroupView, tint = Color(0xFFF2F2F7), modifier = Modifier.size(24.dp))
+                }
             }
 
             // Zoom In
-            FloatingActionButton(
+            Surface(
                 onClick = { mapViewInstance?.controller?.zoomIn() },
-                containerColor = Color(0xCC18181B),
-                contentColor = Color(0xFFF2F2F7),
                 shape = CircleShape,
+                color = Color(0xCC18181B),
+                border = BorderStroke(1.dp, Color(0x1F71717A)),
                 modifier = Modifier
-                    .size(44.dp)
-                    .border(1.dp, Color(0x1F71717A), CircleShape)
+                    .size(48.dp)
                     .testTag("zoom_in_button")
             ) {
-                Icon(Icons.Default.Add, contentDescription = strZoomIn, modifier = Modifier.size(22.dp))
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Add, contentDescription = strZoomIn, tint = Color(0xFFF2F2F7), modifier = Modifier.size(24.dp))
+                }
             }
 
             // Zoom Out
-            FloatingActionButton(
+            Surface(
                 onClick = { mapViewInstance?.controller?.zoomOut() },
-                containerColor = Color(0xCC18181B),
-                contentColor = Color(0xFFF2F2F7),
                 shape = CircleShape,
+                color = Color(0xCC18181B),
+                border = BorderStroke(1.dp, Color(0x1F71717A)),
                 modifier = Modifier
-                    .size(44.dp)
-                    .border(1.dp, Color(0x1F71717A), CircleShape)
+                    .size(48.dp)
                     .testTag("zoom_out_button")
             ) {
-                Icon(Icons.Default.Remove, contentDescription = strZoomOut, modifier = Modifier.size(22.dp))
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Remove, contentDescription = strZoomOut, tint = Color(0xFFF2F2F7), modifier = Modifier.size(24.dp))
+                }
             }
         }
     }

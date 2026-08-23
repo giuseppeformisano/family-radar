@@ -487,8 +487,10 @@ fun MainRadarScreen(
                 System.currentTimeMillis() - loc.timestamp < PRESENCE_ONLINE_MS &&
                     activeMembers.any { it.userId == loc.userId }
             },
+            currentUser = currentUser,
             onSwitchGroup = onSwitchGroup,
             onOpenSettings = { openPanel(RadarPanel.SETTINGS) },
+            onEditProfile = { showEditProfileDialog = true },
             onSos = { showSosConfirmDialog = true },
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -726,6 +728,19 @@ fun MainRadarScreen(
                             color = Color(0xFFF2F2F7),
                             modifier = Modifier.weight(1f)
                         )
+                        IconButton(
+                            onClick = { showEditProfileDialog = true },
+                            modifier = Modifier.testTag("header_edit_profile_button")
+                        ) {
+                            RadarAvatar(
+                                name = currentUser?.displayName ?: "Utente",
+                                photoBase64 = currentUser?.photoBase64,
+                                size = 32.dp,
+                                ringColor = Color(0xFF6366F1),
+                                containerColor = Color(0xFF27272A),
+                                contentColor = Color.White
+                            )
+                        }
                     }
 
                     Box(
@@ -1293,8 +1308,10 @@ private fun MapTopBar(
     joinCode: String?,
     memberCount: Int,
     onlineCount: Int,
+    currentUser: UserData?,
     onSwitchGroup: () -> Unit,
     onOpenSettings: () -> Unit,
+    onEditProfile: () -> Unit,
     onSos: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1352,6 +1369,20 @@ private fun MapTopBar(
                     Icons.Default.SwapHoriz,
                     contentDescription = stringResource(R.string.action_change_group),
                     tint = Color(0xFFF2F2F7)
+                )
+            }
+
+            IconButton(
+                onClick = onEditProfile,
+                modifier = Modifier.testTag("open_profile_topbar_button")
+            ) {
+                RadarAvatar(
+                    name = currentUser?.displayName ?: "Utente",
+                    photoBase64 = currentUser?.photoBase64,
+                    size = 32.dp,
+                    ringColor = Color(0xFF6366F1),
+                    containerColor = Color(0xFF27272A),
+                    contentColor = Color.White
                 )
             }
 

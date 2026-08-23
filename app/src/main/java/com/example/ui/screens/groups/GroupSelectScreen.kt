@@ -205,7 +205,7 @@ fun GroupSelectScreen(
                     placeholder = { Text(stringResource(R.string.search_group_hint), color = Color(0xFFA1A1AA)) },
                     leadingIcon = {
                         if (isSearching) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color(0xFF6366F1))
+                            RadarProgressIndicator(size = 20.dp, strokeWidth = 2.dp)
                         } else {
                             Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFFA1A1AA))
                         }
@@ -782,7 +782,8 @@ private fun CreateGroupDialog(
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
                     )
                 } else {
                     Text(stringResource(R.string.action_create))
@@ -902,10 +903,11 @@ private fun JoinGroupDialog(
                         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                         accentColor = MaterialTheme.colorScheme.tertiary,
                         trailing = {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
+                            RadarProgressIndicator(
+                                size = 18.dp,
                                 strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.tertiary
+                                color = MaterialTheme.colorScheme.tertiary,
+                                trackColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)
                             )
                         }
                     )
@@ -923,7 +925,8 @@ private fun JoinGroupDialog(
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
                     )
                 } else {
                     Text(stringResource(R.string.action_send_request))
@@ -1118,7 +1121,8 @@ private fun GroupCodePreviewDialog(
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
                     )
                 } else {
                     Text(stringResource(R.string.group_preview_confirm))

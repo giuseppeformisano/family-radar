@@ -152,9 +152,8 @@ fun EditGroupProfileDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         if (isProcessingImage) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(32.dp),
-                                color = MaterialTheme.colorScheme.primary,
+                            RadarProgressIndicator(
+                                size = 32.dp,
                                 strokeWidth = 3.dp
                             )
                         } else if (avatarBitmap != null) {
@@ -293,6 +292,7 @@ fun EditGroupProfileDialog(
                             CircularProgressIndicator(
                                 modifier = Modifier.size(18.dp),
                                 color = MaterialTheme.colorScheme.onPrimary,
+                                trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f),
                                 strokeWidth = 2.dp
                             )
                         } else {

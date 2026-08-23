@@ -225,6 +225,7 @@ fun AddPlaceSnapshotDialog(
                         CircularProgressIndicator(
                             modifier = Modifier.size(22.dp),
                             color = MaterialTheme.colorScheme.onPrimary,
+                            trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f),
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(10.dp))

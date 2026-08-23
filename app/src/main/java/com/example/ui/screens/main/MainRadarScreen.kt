@@ -2195,7 +2195,7 @@ private fun ChatPanel(
         }
 
         AnimatedVisibility(visible = isUploading) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            RadarLinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
 
         // Barra di input stile Floating Capsule
@@ -3323,10 +3323,9 @@ private fun SettingsPanel(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     if (checking) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(Sizes.iconMd),
-                            strokeWidth = 2.dp,
-                            color = RadarDark.AccentLight
+                        RadarProgressIndicator(
+                            size = Sizes.iconMd,
+                            strokeWidth = 2.dp
                         )
                         Spacer(Modifier.width(Spacing.sm))
                     }
@@ -3497,7 +3496,12 @@ private fun SettingsPanel(
                         enabled = !feedbackSending && feedbackText.isNotBlank()
                     ) {
                         if (feedbackSending) {
-                            CircularProgressIndicator(modifier = Modifier.size(Sizes.iconMd), strokeWidth = 2.dp, color = Color.White)
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(Sizes.iconMd),
+                                strokeWidth = 2.dp,
+                                color = Color.White,
+                                trackColor = Color(0x33FFFFFF)
+                            )
                             Spacer(Modifier.width(Spacing.sm))
                         }
                         Text(stringResource(R.string.action_send_feedback))
@@ -3646,7 +3650,7 @@ private fun FeedbackDevDialog(
                     Spacer(Modifier.height(Spacing.md))
                     if (loading) {
                         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
+                            RadarProgressIndicator(size = 36.dp, strokeWidth = 3.dp)
                         }
                     } else if (list.isEmpty()) {
                         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {

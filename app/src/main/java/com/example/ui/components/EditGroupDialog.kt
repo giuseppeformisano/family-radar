@@ -277,6 +277,7 @@ fun EditGroupDialog(
                             CircularProgressIndicator(
                                 modifier = Modifier.size(Sizes.iconMd),
                                 color = MaterialTheme.colorScheme.onPrimary,
+                                trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f),
                                 strokeWidth = 2.dp
                             )
                         } else {
@@ -319,9 +320,8 @@ fun GroupPhotoPicker(
             contentAlignment = Alignment.Center
         ) {
             when {
-                isLoading -> CircularProgressIndicator(
-                    modifier = Modifier.size(Sizes.iconXl),
-                    color = MaterialTheme.colorScheme.primary,
+                isLoading -> RadarProgressIndicator(
+                    size = Sizes.iconXl,
                     strokeWidth = 3.dp
                 )
 

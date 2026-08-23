@@ -212,7 +212,8 @@ fun AuthScreen(
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
-                                color = Color.Black
+                                color = Color(0xFF4F46E5),
+                                trackColor = Color(0x334F46E5)
                             )
                             Spacer(Modifier.width(Spacing.md))
                             Text(
@@ -685,7 +686,8 @@ private fun PrimaryActionButton(
             CircularProgressIndicator(
                 modifier = Modifier.size(20.dp),
                 strokeWidth = 2.dp,
-                color = Color.White
+                color = Color.White,
+                trackColor = Color(0x33FFFFFF)
             )
         } else {
             Icon(icon, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))

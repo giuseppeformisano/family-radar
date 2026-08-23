@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.BatteryFull
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -578,5 +580,40 @@ fun EmphasisText(
         modifier = modifier,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis
+    )
+}
+
+/**
+ * Spinner circolare di caricamento coerente con l'identità visiva dell'app (nero / viola indigo).
+ */
+@Composable
+fun RadarProgressIndicator(
+    modifier: Modifier = Modifier,
+    size: Dp = 24.dp,
+    strokeWidth: Dp = 2.5.dp,
+    color: Color = Color(0xFF6366F1),
+    trackColor: Color = Color(0x336366F1)
+) {
+    CircularProgressIndicator(
+        modifier = modifier.size(size),
+        color = color,
+        trackColor = trackColor,
+        strokeWidth = strokeWidth
+    )
+}
+
+/**
+ * Barra lineare di progresso / caricamento coerente col tema scuro / viola indigo.
+ */
+@Composable
+fun RadarLinearProgressIndicator(
+    modifier: Modifier = Modifier,
+    color: Color = Color(0xFF6366F1),
+    trackColor: Color = Color(0x336366F1)
+) {
+    LinearProgressIndicator(
+        modifier = modifier,
+        color = color,
+        trackColor = trackColor
     )
 }

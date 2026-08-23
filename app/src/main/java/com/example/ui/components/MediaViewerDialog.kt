@@ -167,6 +167,7 @@ fun FullScreenMediaViewer(
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 color = Color.White,
+                                trackColor = Color(0x33FFFFFF),
                                 strokeWidth = 2.dp
                             )
                         } else {
@@ -345,6 +346,7 @@ fun SnapshotClusterGalleryDialog(
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(20.dp),
                                     color = Color.White,
+                                    trackColor = Color(0x33FFFFFF),
                                     strokeWidth = 2.dp
                                 )
                             } else {

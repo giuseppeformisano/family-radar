@@ -281,7 +281,7 @@ fun AddPlaceDialog(
                     },
                     trailingIcon = {
                         if (isSearching) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            RadarProgressIndicator(size = 20.dp, strokeWidth = 2.dp)
                         } else if (searchQuery.isNotBlank()) {
                             IconButton(onClick = { searchQuery = ""; searchFeedback = null; searchSuccess = false }) {
                                 Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.action_clear))

@@ -823,21 +823,16 @@ fun OsmMapView(
                 FloatingActionButton(
                     onClick = { isLayerMenuExpanded = !isLayerMenuExpanded },
                     modifier = Modifier
-                        .size(48.dp)
-                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
+                        .size(44.dp)
+                        .border(1.dp, Color(0x1F71717A), CircleShape)
                         .testTag("expandable_layer_button"),
-                    containerColor = if (isLayerMenuExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                    contentColor = if (isLayerMenuExpanded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                    containerColor = if (isLayerMenuExpanded) Color(0xFF6366F1) else Color(0xCC18181B),
+                    contentColor = Color(0xFFF2F2F7),
                     shape = CircleShape
                 ) {
-                    Icon(Icons.Default.Layers, contentDescription = strLayerManage, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Default.Layers, contentDescription = strLayerManage, modifier = Modifier.size(22.dp))
                 }
             }
-
-            // "Centra su di me" vive nella rail di MainRadarScreen: la' oltre a
-            // centrare imposta anche il bersaglio del Follow Mode, cosa che qui
-            // non sarebbe possibile. Averlo in due posti creava due pulsanti
-            // identici con comportamenti diversi.
 
             // Group Extent View
             FloatingActionButton(
@@ -860,10 +855,6 @@ fun OsmMapView(
                             }
                             val latSpan = maxLat - minLat
                             val lonSpan = maxLon - minLon
-                            // Margine proporzionale: 20% del lato maggiore, minimo 0.003°
-                            // (~330 m) per non incollare i marker agli angoli anche su
-                            // brevi distanze. Il secondo parametro di zoomToBoundingBox
-                            // aggiunge 80 px di bordo schermo sopra il bounding box calcolato.
                             val margin = maxOf(0.003, maxOf(latSpan, lonSpan) * 0.20)
                             val boundingBox = BoundingBox(
                                 maxLat + margin,
@@ -876,40 +867,42 @@ fun OsmMapView(
                     }
                 },
                 modifier = Modifier
-                    .size(48.dp)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
+                    .size(44.dp)
+                    .border(1.dp, Color(0x1F71717A), CircleShape)
                     .testTag("group_view_button"),
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary,
+                containerColor = Color(0xCC18181B),
+                contentColor = Color(0xFFF2F2F7),
                 shape = CircleShape
             ) {
-                Icon(Icons.Default.Group, contentDescription = strGroupView)
+                Icon(Icons.Default.Group, contentDescription = strGroupView, modifier = Modifier.size(22.dp))
             }
 
             // Zoom In
-            SmallFloatingActionButton(
+            FloatingActionButton(
                 onClick = { mapViewInstance?.controller?.zoomIn() },
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                shape = RoundedCornerShape(10.dp),
+                containerColor = Color(0xCC18181B),
+                contentColor = Color(0xFFF2F2F7),
+                shape = CircleShape,
                 modifier = Modifier
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                    .size(44.dp)
+                    .border(1.dp, Color(0x1F71717A), CircleShape)
                     .testTag("zoom_in_button")
             ) {
-                Icon(Icons.Default.Add, contentDescription = strZoomIn)
+                Icon(Icons.Default.Add, contentDescription = strZoomIn, modifier = Modifier.size(22.dp))
             }
 
             // Zoom Out
-            SmallFloatingActionButton(
+            FloatingActionButton(
                 onClick = { mapViewInstance?.controller?.zoomOut() },
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                shape = RoundedCornerShape(10.dp),
+                containerColor = Color(0xCC18181B),
+                contentColor = Color(0xFFF2F2F7),
+                shape = CircleShape,
                 modifier = Modifier
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(10.dp))
+                    .size(44.dp)
+                    .border(1.dp, Color(0x1F71717A), CircleShape)
                     .testTag("zoom_out_button")
             ) {
-                Icon(Icons.Default.Remove, contentDescription = strZoomOut)
+                Icon(Icons.Default.Remove, contentDescription = strZoomOut, modifier = Modifier.size(22.dp))
             }
         }
     }

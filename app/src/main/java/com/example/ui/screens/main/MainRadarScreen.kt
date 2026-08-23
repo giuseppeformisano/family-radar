@@ -478,25 +478,51 @@ fun MainRadarScreen(
                 )
         )
 
-        // Header in alto
-        MapTopBar(
-            groupName = currentGroup?.name ?: stringResource(R.string.label_radar_fallback),
-            joinCode = currentGroup?.joinCode,
-            memberCount = activeMembers.size,
-            onlineCount = locations.count { loc ->
-                System.currentTimeMillis() - loc.timestamp < PRESENCE_ONLINE_MS &&
-                    activeMembers.any { it.userId == loc.userId }
-            },
-            currentUser = currentUser,
-            onSwitchGroup = onSwitchGroup,
-            onOpenSettings = { openPanel(RadarPanel.SETTINGS) },
-            onEditProfile = { showEditProfileDialog = true },
-            onSos = { showSosConfirmDialog = true },
+        // Header in alto con Cover Flow dei Membri integrato
+        Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
+                .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = Spacing.lg, vertical = Spacing.sm)
-        )
+                .padding(top = Spacing.sm),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            MapTopBar(
+                groupName = currentGroup?.name ?: stringResource(R.string.label_radar_fallback),
+                joinCode = currentGroup?.joinCode,
+                memberCount = activeMembers.size,
+                onlineCount = locations.count { loc ->
+                    System.currentTimeMillis() - loc.timestamp < PRESENCE_ONLINE_MS &&
+                        activeMembers.any { it.userId == loc.userId }
+                },
+                currentUser = currentUser,
+                onSwitchGroup = onSwitchGroup,
+                onOpenSettings = { openPanel(RadarPanel.SETTINGS) },
+                onEditProfile = { showEditProfileDialog = true },
+                onSos = { showSosConfirmDialog = true },
+                modifier = Modifier.padding(horizontal = Spacing.lg)
+            )
+
+            // Cover Flow Membri Prospettico Infinito: Posizionato subito sotto il TopBar del gruppo
+            AnimatedVisibility(
+                visible = activeFullPanel == null && locations.isNotEmpty(),
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.padding(top = Spacing.sm)
+            ) {
+                PerspectiveMemberCoverFlow(
+                    locations = locations,
+                    currentUserId = currentUserId,
+                    followedUserId = followedUserId,
+                    onMemberClick = { loc ->
+                        focusTargetUserId = loc.userId
+                        focusMapOn(loc.latitude, loc.longitude, collapse = false)
+                        if (followedUserId != null) followedUserId = loc.userId
+                    },
+                    onMemberLongClick = { selectedMemberForSheet = it }
+                )
+            }
+        }
 
         // Controlli Mappa: Posizionati AL CENTRO A SINISTRA (CenterStart)
         MapActionRail(
@@ -593,29 +619,6 @@ fun MainRadarScreen(
             }
         }
 
-        // Persone Live / Carosello Membri: In Basso a Sinistra (BottomStart) sopra la dock
-        AnimatedVisibility(
-            visible = activeFullPanel == null && locations.isNotEmpty(),
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .navigationBarsPadding()
-                .padding(start = Spacing.md, bottom = 80.dp)
-        ) {
-            MemberCarousel(
-                locations = locations,
-                currentUserId = currentUserId,
-                followedUserId = followedUserId,
-                onMemberClick = { loc ->
-                    focusTargetUserId = loc.userId
-                    focusMapOn(loc.latitude, loc.longitude, collapse = false)
-                    if (followedUserId != null) followedUserId = loc.userId
-                },
-                onMemberLongClick = { selectedMemberForSheet = it }
-            )
-        }
-
         // Dock Fluttuante in Basso al Centro (BottomCenter)
         FloatingDock(
             selectedPanel = activeFullPanel,
@@ -645,7 +648,7 @@ fun MainRadarScreen(
                 .statusBarsPadding()
                 .padding(
                     start = Spacing.lg,
-                    top = if (locations.isNotEmpty()) 148.dp else 76.dp
+                    top = if (locations.isNotEmpty()) 210.dp else 76.dp
                 )
         ) {
             val bannerName = followedLocation?.let {
@@ -1506,7 +1509,7 @@ private fun RailButton(
 }
 
 @Composable
-private fun MemberCarousel(
+private fun PerspectiveMemberCoverFlow(
     locations: List<UserLocation>,
     currentUserId: String,
     followedUserId: String?,
@@ -1514,103 +1517,170 @@ private fun MemberCarousel(
     onMemberLongClick: (UserLocation) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LazyRow(
-        modifier = modifier,
-        contentPadding = PaddingValues(horizontal = Spacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.Bottom
-    ) {
-        items(locations, key = { it.userId }) { loc ->
-            val isSelf = loc.userId == currentUserId
-            val isFollowed = loc.userId == followedUserId || (followedUserId == null && isSelf)
-            val name = if (!loc.nickname.isNullOrBlank()) loc.nickname!! else loc.userName
-            val isOnline = System.currentTimeMillis() - loc.timestamp < PRESENCE_ONLINE_MS
+    if (locations.isEmpty()) return
 
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.combinedClickable(
-                    onClick = { onMemberClick(loc) },
-                    onLongClick = { onMemberLongClick(loc) }
-                )
-            ) {
-                Box(contentAlignment = Alignment.Center) {
+    val listCount = locations.size
+    val loopMultiplier = 1000
+    val totalCount = listCount * loopMultiplier
+    val initialCenter = (totalCount / 2) - ((totalCount / 2) % listCount)
+
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialCenter)
+    val coroutineScope = rememberCoroutineScope()
+
+    // Calcola l'indice dell'elemento più vicino al centro visibile
+    val centerIndex by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val visibleItems = layoutInfo.visibleItemsInfo
+            if (visibleItems.isEmpty()) initialCenter
+            else {
+                val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+                visibleItems.minByOrNull { item ->
+                    val itemCenter = item.offset + item.size / 2
+                    kotlin.math.abs(itemCenter - viewportCenter)
+                }?.index ?: initialCenter
+            }
+        }
+    }
+
+    val activeMemberLoc = locations[centerIndex % listCount]
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Riga orizzontale prospettica (Cover Flow)
+        LazyRow(
+            state = listState,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 140.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items(count = totalCount) { index ->
+                val actualIndex = index % listCount
+                val loc = locations[actualIndex]
+                val isCenter = index == centerIndex
+                val isOnline = System.currentTimeMillis() - loc.timestamp < PRESENCE_ONLINE_MS
+
+                // Distanza dal centro (0 = al centro, 1, 2, ...)
+                val distance = kotlin.math.abs(index - centerIndex)
+                val scale = when (distance) {
+                    0 -> 1.0f
+                    1 -> 0.72f
+                    2 -> 0.55f
+                    else -> 0.42f
+                }
+                val alpha = when (distance) {
+                    0 -> 1.0f
+                    1 -> 0.85f
+                    2 -> 0.60f
+                    else -> 0.35f
+                }
+
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            this.alpha = alpha
+                        }
+                        .combinedClickable(
+                            onClick = {
+                                coroutineScope.launch {
+                                    listState.animateScrollToItem(index)
+                                }
+                                onMemberClick(loc)
+                            },
+                            onLongClick = { onMemberLongClick(loc) }
+                        )
+                ) {
+                    // Avatar con cerchio luminoso verde salvia quando al centro (#34D399)
                     RadarAvatar(
                         name = loc.userName,
                         photoBase64 = loc.photoBase64,
-                        size = if (isFollowed) 54.dp else 44.dp,
-                        ringColor = if (isFollowed) Color(0xFF34D399) else Color(0x3371717A),
+                        size = 72.dp,
+                        ringColor = if (isCenter) Color(0xFF34D399) else Color(0x3371717A),
                         containerColor = Color(0xFF27272A),
                         contentColor = Color.White
                     )
+
+                    // Pallino di stato (Online/Offline)
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .size(13.dp)
+                            .size(16.dp)
                             .clip(CircleShape)
                             .background(Color.Black)
-                            .padding(2.dp)
+                            .padding(2.5.dp)
                             .clip(CircleShape)
                             .background(if (isOnline) Color(0xFF34D399) else Color(0xFFF43F5E))
                     )
                 }
+            }
+        }
 
-                Spacer(modifier = Modifier.height(4.dp))
+        Spacer(Modifier.height(6.dp))
 
-                // Testo e informazioni fluttuanti direttamente sullo sfondo della mappa (senza riquadro solido)
+        // INFORMAZIONI MEMBRO ATTIVO (Fluttuanti direttamente sullo sfondo della mappa, senza riquadro o frecce)
+        val activeName = if (!activeMemberLoc.nickname.isNullOrBlank()) activeMemberLoc.nickname!!
+        else if (activeMemberLoc.userId == currentUserId) stringResource(R.string.label_you)
+        else activeMemberLoc.userName
+        val isActiveOnline = System.currentTimeMillis() - activeMemberLoc.timestamp < PRESENCE_ONLINE_MS
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = Spacing.md)
+        ) {
+            // Nome membro attivo (bianco con ombra marcata)
+            Text(
+                text = activeName,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    shadow = Shadow(
+                        color = Color.Black,
+                        offset = Offset(0f, 2f),
+                        blurRadius = 10f
+                    )
+                ),
+                color = Color(0xFFF2F2F7),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(Modifier.height(2.dp))
+
+            // Stato Online e Batteria
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 Text(
-                    text = if (isSelf) stringResource(R.string.label_you) else name,
+                    text = if (isActiveOnline) "Online" else "Offline",
                     style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = if (isFollowed) FontWeight.Bold else FontWeight.Medium,
+                        fontWeight = FontWeight.SemiBold,
                         shadow = Shadow(
                             color = Color.Black,
                             offset = Offset(0f, 2f),
-                            blurRadius = 8f
+                            blurRadius = 10f
                         )
                     ),
-                    color = Color(0xFFF2F2F7),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    color = if (isActiveOnline) Color(0xFF34D399) else Color(0xFFF43F5E)
                 )
 
-                if (isFollowed) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.padding(top = 2.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(if (isOnline) Color(0xFF34D399) else Color(0xFFF43F5E))
+                Text(
+                    text = "🔋 Batteria: ${activeMemberLoc.batteryLevel}%",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.Normal,
+                        shadow = Shadow(
+                            color = Color.Black,
+                            offset = Offset(0f, 2f),
+                            blurRadius = 10f
                         )
-                        Text(
-                            text = if (isOnline) "Online" else "Offline",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                shadow = Shadow(
-                                    color = Color.Black,
-                                    offset = Offset(0f, 2f),
-                                    blurRadius = 8f
-                                )
-                            ),
-                            color = if (isOnline) Color(0xFF34D399) else Color(0xFFF43F5E)
-                        )
-                        Text(
-                            text = "· Batteria: ${loc.batteryLevel}%",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 11.sp,
-                                shadow = Shadow(
-                                    color = Color.Black,
-                                    offset = Offset(0f, 2f),
-                                    blurRadius = 8f
-                                )
-                            ),
-                            color = Color(0xFFF2F2F7)
-                        )
-                    }
-                }
+                    ),
+                    color = Color(0xFFF2F2F7)
+                )
             }
         }
     }

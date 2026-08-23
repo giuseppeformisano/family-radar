@@ -695,43 +695,39 @@ fun MainRadarScreen(
 
     // SCHERMATE E PANNELLI FULL-SCREEN SEPARATI (quando activeFullPanel != null)
     activeFullPanel?.let { currentPanel ->
-        Dialog(
-            onDismissRequest = { activeFullPanel = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color.Black
         ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Color.Black
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
             ) {
-                Column(
+                // Intestazione con pulsante di chiusura/indietro
+                Row(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .navigationBarsPadding()
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Intestazione con pulsante di chiusura/indietro
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = Spacing.md, vertical = Spacing.sm),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = { activeFullPanel = null }) {
-                            Icon(
-                                Icons.Default.ArrowBack,
-                                contentDescription = stringResource(R.string.action_close),
-                                tint = Color(0xFFF2F2F7)
-                            )
-                        }
-                        Text(
-                            text = stringResource(currentPanel.labelRes),
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
-                            ),
-                            color = Color(0xFFF2F2F7),
-                            modifier = Modifier.weight(1f)
+                    IconButton(onClick = { activeFullPanel = null }) {
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = stringResource(R.string.action_close),
+                            tint = Color(0xFFF2F2F7)
                         )
                     }
+                    Text(
+                        text = stringResource(currentPanel.labelRes),
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                        ),
+                        color = Color(0xFFF2F2F7),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
 
                     Box(
                         modifier = Modifier

@@ -13,6 +13,7 @@ import android.graphics.drawable.Drawable
 import android.location.Location
 import android.util.Log
 import android.util.LruCache
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -849,7 +850,7 @@ fun OsmMapView(
                             mapViewInstance?.controller?.setZoom(16.0)
                         } else {
                             var minLat = validLocs[0].latitude
-                            maxLat = validLocs[0].latitude
+                            var maxLat = validLocs[0].latitude
                             var minLon = validLocs[0].longitude
                             var maxLon = validLocs[0].longitude
                             validLocs.forEach {

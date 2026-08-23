@@ -50,8 +50,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
@@ -2197,59 +2198,77 @@ private fun ChatPanel(
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
         }
 
+        // Barra di input stile Floating Capsule
         Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            shape = RoundedCornerShape(28.dp),
             color = Color(0xEE121216),
-            tonalElevation = Elevation.raised,
-            modifier = Modifier.fillMaxWidth()
+            border = BorderStroke(1.dp, Color(0x1F71717A)),
+            shadowElevation = 8.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 IconButton(
                     onClick = { launchChatCameraSafe() },
-                    modifier = Modifier.testTag("chat_camera_button")
+                    modifier = Modifier
+                        .size(40.dp)
+                        .testTag("chat_camera_button")
                 ) {
                     Icon(
                         Icons.Default.PhotoCamera,
                         contentDescription = stringResource(R.string.chat_take_photo_desc),
-                        tint = Color(0xFF6366F1)
+                        tint = Color(0xFF6366F1),
+                        modifier = Modifier.size(22.dp)
                     )
                 }
                 IconButton(
                     onClick = { photoPickerLauncher.launch("image/*") },
-                    modifier = Modifier.testTag("attach_photo_button")
+                    modifier = Modifier
+                        .size(40.dp)
+                        .testTag("attach_photo_button")
                 ) {
                     Icon(
                         Icons.Default.AddPhotoAlternate,
                         contentDescription = stringResource(R.string.chat_attach_image_desc),
-                        tint = Color(0xFF6366F1)
+                        tint = Color(0xFF6366F1),
+                        modifier = Modifier.size(22.dp)
                     )
                 }
 
-                OutlinedTextField(
+                BasicTextField(
                     value = inputText,
                     onValueChange = { inputText = it },
-                    placeholder = { Text(stringResource(R.string.chat_input_placeholder), color = Color(0xFFA1A1AA)) },
                     modifier = Modifier
                         .weight(1f)
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
                         .testTag("chat_input_field"),
-                    shape = RoundedCornerShape(Radius.pill),
-                    maxLines = 3,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color(0xFF6366F1),
-                        unfocusedBorderColor = Color(0x1F71717A),
-                        focusedTextColor = Color(0xFFF2F2F7),
-                        unfocusedTextColor = Color(0xFFF2F2F7)
-                    ),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFFF2F2F7)),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF6366F1)),
+                    maxLines = 4,
                     keyboardOptions = KeyboardOptions(
                         capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
                         imeAction = androidx.compose.ui.text.input.ImeAction.Send
                     ),
-                    keyboardActions = KeyboardActions(onSend = { sendText() })
+                    keyboardActions = KeyboardActions(onSend = { sendText() }),
+                    decorationBox = { innerTextField ->
+                        Box(contentAlignment = Alignment.CenterStart) {
+                            if (inputText.isEmpty()) {
+                                Text(
+                                    text = stringResource(R.string.chat_input_placeholder),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color(0xFFA1A1AA)
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
                 )
 
                 val canSend = inputText.isNotBlank()
@@ -2259,7 +2278,7 @@ private fun ChatPanel(
                     shape = CircleShape,
                     color = if (canSend) Color(0xFF6366F1) else Color(0x3371717A),
                     modifier = Modifier
-                        .size(Sizes.fab)
+                        .size(40.dp)
                         .testTag("send_message_button")
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -2267,7 +2286,7 @@ private fun ChatPanel(
                             Icons.Default.Send,
                             contentDescription = stringResource(R.string.chat_send_desc),
                             tint = Color.White,
-                            modifier = Modifier.size(Sizes.iconMd)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }

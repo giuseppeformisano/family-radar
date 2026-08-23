@@ -41,6 +41,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -1495,6 +1496,7 @@ private fun PerspectiveMemberCoverFlow(
     val initialCenter = (totalCount / 2) - ((totalCount / 2) % listCount)
 
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialCenter)
+    val snapFlingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
     val coroutineScope = rememberCoroutineScope()
 
     // Calcola l'indice dell'elemento più vicino al centro visibile
@@ -1515,16 +1517,28 @@ private fun PerspectiveMemberCoverFlow(
 
     val activeMemberLoc = locations[centerIndex % listCount]
 
+    // Quando lo scatto/scorrimento si ferma, sincronizza la mappa sull'utente centrato
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (!listState.isScrollInProgress) {
+            onMemberClick(activeMemberLoc)
+        }
+    }
+
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val itemSize = 52.dp
+    val horizontalPadding = ((screenWidth - itemSize) / 2).coerceAtLeast(16.dp)
+
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Riga orizzontale prospettica (Cover Flow)
+        // Riga orizzontale prospettica con scorrimento a scatto (Snap to Center)
         LazyRow(
             state = listState,
+            flingBehavior = snapFlingBehavior,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 140.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = horizontalPadding),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             items(count = totalCount) { index ->
@@ -1537,8 +1551,8 @@ private fun PerspectiveMemberCoverFlow(
                 val distance = kotlin.math.abs(index - centerIndex)
                 val scale = when (distance) {
                     0 -> 1.0f
-                    1 -> 0.72f
-                    2 -> 0.55f
+                    1 -> 0.74f
+                    2 -> 0.56f
                     else -> 0.42f
                 }
                 val alpha = when (distance) {
@@ -1551,6 +1565,7 @@ private fun PerspectiveMemberCoverFlow(
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
+                        .size(itemSize)
                         .graphicsLayer {
                             scaleX = scale
                             scaleY = scale
@@ -1570,20 +1585,20 @@ private fun PerspectiveMemberCoverFlow(
                     RadarAvatar(
                         name = loc.userName,
                         photoBase64 = loc.photoBase64,
-                        size = 72.dp,
+                        size = 52.dp,
                         ringColor = if (isCenter) Color(0xFF34D399) else Color(0x3371717A),
                         containerColor = Color(0xFF27272A),
                         contentColor = Color.White
                     )
 
-                    // Pallino di stato (Online/Offline)
+                    // Pallino di stato (Online/Offline) minimale
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .size(16.dp)
+                            .size(12.dp)
                             .clip(CircleShape)
                             .background(Color.Black)
-                            .padding(2.5.dp)
+                            .padding(2.dp)
                             .clip(CircleShape)
                             .background(if (isOnline) Color(0xFF34D399) else Color(0xFFF43F5E))
                     )
@@ -1591,9 +1606,9 @@ private fun PerspectiveMemberCoverFlow(
             }
         }
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(3.dp))
 
-        // INFORMAZIONI MEMBRO ATTIVO (Fluttuanti direttamente sullo sfondo della mappa, senza riquadro o frecce)
+        // INFORMAZIONI MEMBRO ATTIVO (Compatte, pulite e fluttuanti direttamente sullo sfondo della mappa)
         val activeName = if (!activeMemberLoc.nickname.isNullOrBlank()) activeMemberLoc.nickname!!
         else if (activeMemberLoc.userId == currentUserId) stringResource(R.string.label_you)
         else activeMemberLoc.userName
@@ -1603,15 +1618,16 @@ private fun PerspectiveMemberCoverFlow(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(horizontal = Spacing.md)
         ) {
-            // Nome membro attivo (bianco con ombra marcata)
+            // Nome membro attivo (bianco, compatto con ombra soffusa)
             Text(
                 text = activeName,
-                style = MaterialTheme.typography.titleMedium.copy(
+                style = MaterialTheme.typography.labelLarge.copy(
                     fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
                     shadow = Shadow(
                         color = Color.Black,
-                        offset = Offset(0f, 2f),
-                        blurRadius = 10f
+                        offset = Offset(0f, 1.5f),
+                        blurRadius = 6f
                     )
                 ),
                 color = Color(0xFFF2F2F7),
@@ -1619,34 +1635,41 @@ private fun PerspectiveMemberCoverFlow(
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(Modifier.height(2.dp))
+            Spacer(Modifier.height(1.dp))
 
-            // Stato Online e Batteria
+            // Stato Online e Batteria (minimale in linea)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(if (isActiveOnline) Color(0xFF34D399) else Color(0xFFF43F5E))
+                )
                 Text(
                     text = if (isActiveOnline) "Online" else "Offline",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
                         shadow = Shadow(
                             color = Color.Black,
-                            offset = Offset(0f, 2f),
-                            blurRadius = 10f
+                            offset = Offset(0f, 1.5f),
+                            blurRadius = 6f
                         )
                     ),
                     color = if (isActiveOnline) Color(0xFF34D399) else Color(0xFFF43F5E)
                 )
 
                 Text(
-                    text = "🔋 Batteria: ${activeMemberLoc.batteryLevel}%",
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.Normal,
+                    text = "· 🔋 ${activeMemberLoc.batteryLevel}%",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
                         shadow = Shadow(
                             color = Color.Black,
-                            offset = Offset(0f, 2f),
-                            blurRadius = 10f
+                            offset = Offset(0f, 1.5f),
+                            blurRadius = 6f
                         )
                     ),
                     color = Color(0xFFF2F2F7)

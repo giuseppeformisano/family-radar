@@ -62,6 +62,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -1483,7 +1486,8 @@ private fun MemberCarousel(
     LazyRow(
         modifier = modifier,
         contentPadding = PaddingValues(horizontal = Spacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.Bottom
     ) {
         items(locations, key = { it.userId }) { loc ->
             val isSelf = loc.userId == currentUserId
@@ -1502,7 +1506,7 @@ private fun MemberCarousel(
                     RadarAvatar(
                         name = loc.userName,
                         photoBase64 = loc.photoBase64,
-                        size = 46.dp,
+                        size = if (isFollowed) 54.dp else 44.dp,
                         ringColor = if (isFollowed) Color(0xFF34D399) else Color(0x3371717A),
                         containerColor = Color(0xFF27272A),
                         contentColor = Color.White
@@ -1518,14 +1522,64 @@ private fun MemberCarousel(
                             .background(if (isOnline) Color(0xFF34D399) else Color(0xFFF43F5E))
                     )
                 }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Testo e informazioni fluttuanti direttamente sullo sfondo della mappa (senza riquadro solido)
                 Text(
                     text = if (isSelf) stringResource(R.string.label_you) else name,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = if (isFollowed) FontWeight.Bold else FontWeight.Medium,
+                        shadow = Shadow(
+                            color = Color.Black,
+                            offset = Offset(0f, 2f),
+                            blurRadius = 8f
+                        )
+                    ),
                     color = Color(0xFFF2F2F7),
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 2.dp)
+                    overflow = TextOverflow.Ellipsis
                 )
+
+                if (isFollowed) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(top = 2.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(if (isOnline) Color(0xFF34D399) else Color(0xFFF43F5E))
+                        )
+                        Text(
+                            text = if (isOnline) stringResource(R.string.presence_online) else stringResource(R.string.presence_offline),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                shadow = Shadow(
+                                    color = Color.Black,
+                                    offset = Offset(0f, 2f),
+                                    blurRadius = 8f
+                                )
+                            ),
+                            color = if (isOnline) Color(0xFF34D399) else Color(0xFFF43F5E)
+                        )
+                        Text(
+                            text = "· Batteria: ${loc.batteryLevel}%",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 11.sp,
+                                shadow = Shadow(
+                                    color = Color.Black,
+                                    offset = Offset(0f, 2f),
+                                    blurRadius = 8f
+                                )
+                            ),
+                            color = Color(0xFFF2F2F7)
+                        )
+                    }
+                }
             }
         }
     }

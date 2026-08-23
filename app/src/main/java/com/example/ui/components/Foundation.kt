@@ -198,7 +198,7 @@ fun RadarAvatar(
  * Con 12 minuti si resta verdi anche saltando un heartbeat.
  */
 const val PRESENCE_ONLINE_MS = 12 * 60_000L
-private const val PRESENCE_IDLE_MS = 60 * 60_000L
+const val PRESENCE_IDLE_MS = 60 * 60_000L
 
 /** Pallino di presenza. Verde = visto di recente, giallo = qualche decina di minuti, grigio = da un'ora. */
 @Composable

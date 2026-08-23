@@ -1479,6 +1479,20 @@ private fun RailButton(
     }
 }
 
+private data class MemberPresence(
+    val label: String,
+    val color: Color
+)
+
+private fun getMemberPresence(timestamp: Long): MemberPresence {
+    val elapsed = System.currentTimeMillis() - timestamp
+    return when {
+        elapsed < PRESENCE_ONLINE_MS -> MemberPresence("Online", Color(0xFF22C55E))
+        elapsed < PRESENCE_IDLE_MS -> MemberPresence("Inattivo", Color(0xFFEAB308))
+        else -> MemberPresence("Offline", Color(0xFF94A3B8))
+    }
+}
+
 @Composable
 private fun PerspectiveMemberCoverFlow(
     locations: List<UserLocation>,
@@ -1545,7 +1559,7 @@ private fun PerspectiveMemberCoverFlow(
                 val actualIndex = index % listCount
                 val loc = locations[actualIndex]
                 val isCenter = index == centerIndex
-                val isOnline = System.currentTimeMillis() - loc.timestamp < PRESENCE_ONLINE_MS
+                val presence = getMemberPresence(loc.timestamp)
 
                 // Distanza dal centro (0 = al centro, 1, 2, ...)
                 val distance = kotlin.math.abs(index - centerIndex)
@@ -1581,17 +1595,17 @@ private fun PerspectiveMemberCoverFlow(
                             onLongClick = { onMemberLongClick(loc) }
                         )
                 ) {
-                    // Avatar con cerchio luminoso verde salvia quando al centro (#34D399)
+                    // Avatar con cerchio luminoso dello stato presenza quando al centro
                     RadarAvatar(
                         name = loc.userName,
                         photoBase64 = loc.photoBase64,
                         size = 52.dp,
-                        ringColor = if (isCenter) Color(0xFF34D399) else Color(0x3371717A),
+                        ringColor = if (isCenter) presence.color else Color(0x3371717A),
                         containerColor = Color(0xFF27272A),
                         contentColor = Color.White
                     )
 
-                    // Pallino di stato (Online/Offline) minimale
+                    // Pallino di stato (Verde = Online, Giallo = Inattivo, Grigio = Offline)
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
@@ -1600,7 +1614,7 @@ private fun PerspectiveMemberCoverFlow(
                             .background(Color.Black)
                             .padding(2.dp)
                             .clip(CircleShape)
-                            .background(if (isOnline) Color(0xFF34D399) else Color(0xFFF43F5E))
+                            .background(presence.color)
                     )
                 }
             }
@@ -1612,7 +1626,7 @@ private fun PerspectiveMemberCoverFlow(
         val activeName = if (!activeMemberLoc.nickname.isNullOrBlank()) activeMemberLoc.nickname!!
         else if (activeMemberLoc.userId == currentUserId) stringResource(R.string.label_you)
         else activeMemberLoc.userName
-        val isActiveOnline = System.currentTimeMillis() - activeMemberLoc.timestamp < PRESENCE_ONLINE_MS
+        val activePresence = getMemberPresence(activeMemberLoc.timestamp)
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -1637,7 +1651,7 @@ private fun PerspectiveMemberCoverFlow(
 
             Spacer(Modifier.height(1.dp))
 
-            // Stato Online e Batteria (minimale in linea)
+            // Stato Presenza (Verde Online / Giallo Inattivo / Grigio Offline) e Batteria
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -1646,10 +1660,10 @@ private fun PerspectiveMemberCoverFlow(
                     modifier = Modifier
                         .size(5.dp)
                         .clip(CircleShape)
-                        .background(if (isActiveOnline) Color(0xFF34D399) else Color(0xFFF43F5E))
+                        .background(activePresence.color)
                 )
                 Text(
-                    text = if (isActiveOnline) "Online" else "Offline",
+                    text = activePresence.label,
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
@@ -1659,7 +1673,7 @@ private fun PerspectiveMemberCoverFlow(
                             blurRadius = 6f
                         )
                     ),
-                    color = if (isActiveOnline) Color(0xFF34D399) else Color(0xFFF43F5E)
+                    color = activePresence.color
                 )
 
                 Text(

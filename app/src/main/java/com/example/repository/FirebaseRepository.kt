@@ -34,7 +34,6 @@ import com.example.util.MotionTrigger
 import com.google.android.gms.location.*
 import com.google.firebase.FirebaseException
 import com.google.firebase.auth.*
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.ListenerRegistration
@@ -3538,18 +3537,15 @@ class FirebaseRepository private constructor(private val context: Context) {
         val lon = location.longitude
         val now = System.currentTimeMillis()
         var flushDue = false
-        var appendedPoint: TripPoint? = null
 
         _activeTrip.update { current ->
             // Il lambda puo' essere rieseguito se un altro thread scrive nel
             // frattempo: la decisione va ricalcolata a ogni tentativo.
             flushDue = false
-            appendedPoint = null
             if (current == null) return@update null
 
             if (current.lastLat == 0.0 && current.lastLon == 0.0) {
                 val tp = TripPoint(lat, lon, now)
-                if (current.liveTripId != null) appendedPoint = tp
                 return@update current.copy(
                     points = current.points + tp,
                     lastLat = lat,
@@ -3588,11 +3584,9 @@ class FirebaseRepository private constructor(private val context: Context) {
                 movingMs = current.movingMs + movingDelta,
                 lastFixAt = now
             )
-            if (next.liveTripId != null) appendedPoint = tp
-
             // Aggiornamento della diretta: non a ogni punto, sarebbero centinaia
-            // di scritture all'ora. Ogni 30 secondi la traccia degli altri resta
-            // fluida a un costo sostenibile.
+            // di scritture all'ora. Ogni 15 secondi si riversa la traccia RDP
+            // semplificata: gli altri la vedono avanzare a un costo sostenibile.
             if (next.liveTripId != null && now - next.lastLiveWriteAt >= TRIP_LIVE_FLUSH_MS) {
                 flushDue = true
                 next.copy(lastLiveWriteAt = now)
@@ -3603,32 +3597,6 @@ class FirebaseRepository private constructor(private val context: Context) {
 
         if (flushDue) {
             CoroutineScope(Dispatchers.IO).launch { flushLiveTrip() }
-        }
-
-        // Appende il nuovo punto in diretta su Firestore via arrayUnion,
-        // così gli altri membri vedono la traccia crescere in tempo reale
-        // senza aspettare il prossimo flush (ogni 30 s).
-        val ptToAppend = appendedPoint
-        val ltId = _activeTrip.value?.liveTripId
-        val lgId = _currentUserState.value?.currentGroupId
-        if (ptToAppend != null && ltId != null && lgId != null) {
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    firestore?.collection("groups")?.document(lgId)
-                        ?.collection("trips")?.document(ltId)
-                        ?.update(
-                            "liveTrack", FieldValue.arrayUnion(
-                                hashMapOf(
-                                    "latitude" to ptToAppend.latitude,
-                                    "longitude" to ptToAppend.longitude,
-                                    "timestamp" to ptToAppend.timestamp
-                                )
-                            )
-                        )
-                } catch (e: Exception) {
-                    Log.w(TAG, "liveTrack arrayUnion fallita: ${e.message}")
-                }
-            }
         }
     }
 
@@ -4343,8 +4311,8 @@ class FirebaseRepository private constructor(private val context: Context) {
          */
         const val TRIP_RDP_EPSILON_METERS = 10.0
 
-        /** Ogni quanto la diretta viene riversata su Firestore. */
-        const val TRIP_LIVE_FLUSH_MS = 30_000L
+        /** Ogni quanto la diretta (traccia RDP) viene riversata su Firestore. */
+        const val TRIP_LIVE_FLUSH_MS = 15_000L
 
         /**
          * Oltre questo intervallo fra due punti non si conta tempo in movimento:

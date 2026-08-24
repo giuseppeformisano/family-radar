@@ -1673,6 +1673,49 @@ private fun PerspectiveMemberCoverFlow(
                             )
                         }
                     }
+
+                    // Badge iconcina in basso a destra per stato di movimento (auto, bici, corsa, camminata)
+                    val movementIcon = remember(loc.activityType, loc.speed, loc.timestamp) {
+                        val isRecent = (System.currentTimeMillis() - loc.timestamp) < PRESENCE_ONLINE_MS
+                        if (!isRecent) null
+                        else {
+                            val speedKmH = loc.speed * 3.6f
+                            when (loc.activityType) {
+                                ActivityKind.VEHICLE -> Icons.Default.DirectionsCar
+                                ActivityKind.BICYCLE -> Icons.Default.DirectionsBike
+                                ActivityKind.RUNNING -> Icons.Default.DirectionsRun
+                                ActivityKind.WALKING -> Icons.Default.DirectionsWalk
+                                ActivityKind.STILL -> if (speedKmH >= 15f) Icons.Default.DirectionsCar else null
+                                else -> {
+                                    when {
+                                        speedKmH >= 25f -> Icons.Default.DirectionsCar
+                                        speedKmH >= 8f -> Icons.Default.DirectionsBike
+                                        speedKmH >= 2.5f -> Icons.Default.DirectionsWalk
+                                        else -> null
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (movementIcon != null) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .size(18.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF18181B))
+                                .border(1.5.dp, Color(0xFF27272A), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = movementIcon,
+                                contentDescription = null,
+                                tint = Color(0xFF34D399),
+                                modifier = Modifier.size(11.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1685,8 +1728,15 @@ private fun PerspectiveMemberCoverFlow(
             else activeMemberLoc.userName
         val activePresence = getMemberPresence(activeMemberLoc.timestamp)
         val movingKmH = (activeMemberLoc.speed * 3.6f).toInt()
-        val statusLabel = if (movingKmH > 2) "In Movimento" else activePresence.label
-        val statusColor = if (movingKmH > 2) Color(0xFF34D399) else activePresence.color
+        val activityDescription = when (activeMemberLoc.activityType) {
+            ActivityKind.VEHICLE -> if (movingKmH > 0) "In auto ($movingKmH km/h)" else "In auto"
+            ActivityKind.BICYCLE -> if (movingKmH > 0) "In bici ($movingKmH km/h)" else "In bici"
+            ActivityKind.RUNNING -> if (movingKmH > 0) "Corsa ($movingKmH km/h)" else "Corsa"
+            ActivityKind.WALKING -> if (movingKmH > 0) "A piedi ($movingKmH km/h)" else "A piedi"
+            else -> if (movingKmH > 2) "In movimento ($movingKmH km/h)" else null
+        }
+        val statusLabel = activityDescription ?: activePresence.label
+        val statusColor = if (activityDescription != null) Color(0xFF34D399) else activePresence.color
         val textShadow = Shadow(color = Color.Black, offset = Offset(0f, 1.5f), blurRadius = 6f)
 
         // Riga 1 — Nome (SemiBold, #F2F2F7, 15sp).

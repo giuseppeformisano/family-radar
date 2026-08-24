@@ -23,13 +23,9 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -73,12 +69,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -1556,217 +1550,157 @@ private fun PerspectiveMemberCoverFlow(
     }
 
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-    // Slot logico compatto di un avatar nel mucchio; l'Hero centrale si ingrandisce
-    // visivamente (graphicsLayer) sovrapponendosi ai vicini senza allargare il layout.
-    val itemSlot = 40.dp
-    val horizontalPadding = ((screenWidth - itemSlot) / 2).coerceAtLeast(16.dp)
+    val itemSize = 52.dp
+    val horizontalPadding = ((screenWidth - itemSize) / 2).coerceAtLeast(16.dp)
 
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Overlap Strip (Magnetic Piling): avatar laterali sovrapposti a filo,
-        // scorrimento a scatto (snap-to-center), Hero magnetico al centro.
+        // Riga orizzontale prospettica con scorrimento a scatto (Snap to Center)
         LazyRow(
             state = listState,
             flingBehavior = snapFlingBehavior,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = horizontalPadding),
-            // Spaziatura NEGATIVA: i laterali si accavallano a filo. Il centro
-            // si "stacca" aggiungendo un proprio padding orizzontale (targetGap).
-            horizontalArrangement = Arrangement.spacedBy((-12).dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             items(count = totalCount) { index ->
                 val actualIndex = index % listCount
                 val loc = locations[actualIndex]
                 val isCenter = index == centerIndex
-                val distance = kotlin.math.abs(index - centerIndex)
+                val presence = getMemberPresence(loc.timestamp)
 
-                // Target discreti, animati con molla elastica: transizione fluida
-                // tra stato compresso laterale ed Hero centrale.
-                val targetScale = when (distance) {
-                    0 -> 1.5f
-                    1 -> 0.78f
-                    2 -> 0.64f
-                    else -> 0.52f
-                }
-                val targetAlpha = when (distance) {
+                // Distanza dal centro (0 = al centro, 1, 2, ...)
+                val distance = kotlin.math.abs(index - centerIndex)
+                val scale = when (distance) {
                     0 -> 1.0f
-                    1 -> 0.68f
-                    2 -> 0.55f
+                    1 -> 0.74f
+                    2 -> 0.56f
                     else -> 0.42f
                 }
-                // Il centro esce dal mucchio; i vicini gli lasciano spazio,
-                // annullando localmente la sovrapposizione.
-                val targetGap = when (distance) {
-                    0 -> 22.dp
-                    1 -> 10.dp
-                    else -> 0.dp
+                val alpha = when (distance) {
+                    0 -> 1.0f
+                    1 -> 0.85f
+                    2 -> 0.60f
+                    else -> 0.35f
                 }
-
-                val scale by animateFloatAsState(
-                    targetValue = targetScale,
-                    animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessLow),
-                    label = "pileScale"
-                )
-                val alphaAnim by animateFloatAsState(
-                    targetValue = targetAlpha,
-                    animationSpec = spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessLow),
-                    label = "pileAlpha"
-                )
-                val gap by animateDpAsState(
-                    targetValue = targetGap,
-                    animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessLow),
-                    label = "pileGap"
-                )
 
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        // Z-index massimo al centro: l'Hero sta sopra la fila.
-                        .zIndex(1000f - distance)
-                        .padding(horizontal = gap)
-                        .size(itemSlot)
+                        .size(itemSize)
                         .graphicsLayer {
                             scaleX = scale
                             scaleY = scale
-                            this.alpha = alphaAnim
+                            this.alpha = alpha
                         }
                         .combinedClickable(
                             onClick = {
-                                coroutineScope.launch { listState.animateScrollToItem(index) }
+                                coroutineScope.launch {
+                                    listState.animateScrollToItem(index)
+                                }
                                 onMemberClick(loc)
                             },
                             onLongClick = { onMemberLongClick(loc) }
                         )
                 ) {
-                    // Bagliore giada soffuso dietro l'Hero centrale.
-                    if (isCenter) {
-                        Box(
-                            modifier = Modifier
-                                .size(itemSlot * 1.7f)
-                                .background(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(Color(0x8034D399), Color(0x0034D399))
-                                    ),
-                                    shape = CircleShape
-                                )
-                        )
-                    }
+                    // Avatar con cerchio luminoso dello stato presenza quando al centro
+                    RadarAvatar(
+                        name = loc.userName,
+                        photoBase64 = loc.photoBase64,
+                        size = 52.dp,
+                        ringColor = if (isCenter) presence.color else Color(0x3371717A),
+                        containerColor = Color(0xFF27272A),
+                        contentColor = Color.White
+                    )
 
-                    PileAvatar(
-                        loc = loc,
-                        size = itemSlot,
-                        ringColor = if (isCenter) Color(0xFF34D399) else Color.Transparent
+                    // Pallino di stato (Verde = Online, Giallo = Inattivo, Grigio = Offline)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(12.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black)
+                            .padding(2.dp)
+                            .clip(CircleShape)
+                            .background(presence.color)
                     )
                 }
             }
         }
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(3.dp))
 
-        // --- Telemetria borderless: testo fuso direttamente sulla mappa ---
+        // INFORMAZIONI MEMBRO ATTIVO (Compatte, pulite e fluttuanti direttamente sullo sfondo della mappa)
         val activeName = if (!activeMemberLoc.nickname.isNullOrBlank()) activeMemberLoc.nickname!!
-            else if (activeMemberLoc.userId == currentUserId) stringResource(R.string.label_you)
-            else activeMemberLoc.userName
+        else if (activeMemberLoc.userId == currentUserId) stringResource(R.string.label_you)
+        else activeMemberLoc.userName
         val activePresence = getMemberPresence(activeMemberLoc.timestamp)
-        val movingKmH = (activeMemberLoc.speed * 3.6f).toInt()
-        val statusLabel = if (movingKmH > 2) "In Movimento" else activePresence.label
-        val statusColor = if (movingKmH > 2) Color(0xFF34D399) else activePresence.color
-        val textShadow = Shadow(color = Color.Black, offset = Offset(0f, 1.5f), blurRadius = 6f)
 
-        // Nome membro: SemiBold, bianco morbido.
-        Text(
-            text = activeName,
-            style = MaterialTheme.typography.labelLarge.copy(
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp,
-                shadow = textShadow
-            ),
-            color = Color(0xFFF2F2F7),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        Spacer(Modifier.height(2.dp))
-
-        // Riga unica compatta: Stato • tempo • batteria.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = Spacing.md)
         ) {
+            // Nome membro attivo (bianco, compatto con ombra soffusa)
             Text(
-                text = statusLabel,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 12.sp, fontWeight = FontWeight.Medium, shadow = textShadow
+                text = activeName,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    shadow = Shadow(
+                        color = Color.Black,
+                        offset = Offset(0f, 1.5f),
+                        blurRadius = 6f
+                    )
                 ),
-                color = statusColor
+                color = Color(0xFFF2F2F7),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Text("•", style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow), color = Color(0xFFA1A1AA))
-            Text(
-                text = formatRelativeShort(activeMemberLoc.timestamp),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow),
-                color = Color(0xFFA1A1AA)
-            )
-            Text("•", style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow), color = Color(0xFFA1A1AA))
-            Text(
-                text = "${activeMemberLoc.batteryLevel}%",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 12.sp, fontWeight = FontWeight.Medium, shadow = textShadow
-                ),
-                color = Color(0xFFF2F2F7)
-            )
-        }
-    }
-}
 
-/**
- * Avatar compatto per l'Overlap Strip. Mostra la foto profilo o, in assenza,
- * un'icona persona: mai una lettera placeholder. Il contorno luminoso compare
- * solo sull'elemento attivo (Hero centrale).
- */
-@Composable
-private fun PileAvatar(
-    loc: UserLocation,
-    size: Dp,
-    ringColor: Color
-) {
-    val bitmap = remember(loc.photoBase64) { ImageUtils.base64ToBitmap(loc.photoBase64) }
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(Color(0xFF27272A))
-            .then(if (ringColor != Color.Transparent) Modifier.border(2.dp, ringColor, CircleShape) else Modifier),
-        contentAlignment = Alignment.Center
-    ) {
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = loc.userName,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = loc.userName,
-                tint = Color(0xFFD4D4D8),
-                modifier = Modifier.size(size * 0.55f)
-            )
-        }
-    }
-}
+            Spacer(Modifier.height(1.dp))
 
-/** Tempo trascorso in forma ultra compatta: "ora", "2min", "3h", "5g". */
-private fun formatRelativeShort(timestamp: Long): String {
-    val diff = System.currentTimeMillis() - timestamp
-    return when {
-        diff < 60_000L -> "ora"
-        diff < 3_600_000L -> "${diff / 60_000L}min"
-        diff < 86_400_000L -> "${diff / 3_600_000L}h"
-        else -> "${diff / 86_400_000L}g"
+            // Stato Presenza (Verde Online / Giallo Inattivo / Grigio Offline) e Batteria
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(5.dp)
+                        .clip(CircleShape)
+                        .background(activePresence.color)
+                )
+                Text(
+                    text = activePresence.label,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        shadow = Shadow(
+                            color = Color.Black,
+                            offset = Offset(0f, 1.5f),
+                            blurRadius = 6f
+                        )
+                    ),
+                    color = activePresence.color
+                )
+
+                Text(
+                    text = "· 🔋 ${activeMemberLoc.batteryLevel}%",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        shadow = Shadow(
+                            color = Color.Black,
+                            offset = Offset(0f, 1.5f),
+                            blurRadius = 6f
+                        )
+                    ),
+                    color = Color(0xFFF2F2F7)
+                )
+            }
+        }
     }
 }
 

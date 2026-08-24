@@ -1600,7 +1600,7 @@ private fun PerspectiveMemberCoverFlow(
             state = listState,
             flingBehavior = snapFlingBehavior,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = horizontalPadding),
+            contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(overlap),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1686,7 +1686,7 @@ private fun PerspectiveMemberCoverFlow(
             }
         }
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(16.dp))
 
         // --- Telemetria borderless: solo per il membro centrato (nessun box) ---
         val activeName = if (!activeMemberLoc.nickname.isNullOrBlank()) activeMemberLoc.nickname!!

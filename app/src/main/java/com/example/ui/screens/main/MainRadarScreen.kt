@@ -514,7 +514,7 @@ fun MainRadarScreen(
                 visible = activeFullPanel == null && locations.isNotEmpty(),
                 enter = fadeIn(),
                 exit = fadeOut(),
-                modifier = Modifier.padding(top = Spacing.xl)
+                modifier = Modifier.padding(top = 20.dp)
             ) {
                 PerspectiveMemberCoverFlow(
                     locations = locations,
@@ -1559,7 +1559,7 @@ private fun PerspectiveMemberCoverFlow(
     // Slot logico compatto. La scala la applica graphicsLayer al draw, quindi la
     // dimensione misurata resta fissa: nessun relayout durante lo scorrimento.
     val itemSlot = 56.dp
-    val overlap = (-16).dp                       // sovrapposizione a filo
+    val overlap = (-4).dp                       // sovrapposizione a filo
     val horizontalPadding = ((screenWidth - itemSlot) / 2).coerceAtLeast(16.dp)
     // Passo centro-a-centro (slot + overlap) in px: normalizza la distanza dal
     // centro viewport in una frazione 0..1 per interpolare scala/opacita'.
@@ -1621,7 +1621,7 @@ private fun PerspectiveMemberCoverFlow(
                         // frazione di pixel, zero jitter di ricomposizione.
                         .graphicsLayer {
                             val t = centerFractionOf(index)
-                            val s = 1.28f + (0.75f - 1.28f) * t   // centro 1.28x → laterale 0.75x
+                            val s = 1.0f + (0.62f - 1.0f) * t  
                             scaleX = s
                             scaleY = s
                             alpha = 1f + (0.5f - 1f) * t          // centro 1.0 → laterale 0.5
@@ -1686,7 +1686,7 @@ private fun PerspectiveMemberCoverFlow(
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(10.dp))
 
         // --- Telemetria borderless: solo per il membro centrato (nessun box) ---
         val activeName = if (!activeMemberLoc.nickname.isNullOrBlank()) activeMemberLoc.nickname!!
@@ -1703,7 +1703,7 @@ private fun PerspectiveMemberCoverFlow(
             text = activeName,
             style = MaterialTheme.typography.labelLarge.copy(
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 shadow = textShadow
             ),
             color = Color(0xFFF2F2F7),

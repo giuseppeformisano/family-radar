@@ -514,7 +514,7 @@ fun MainRadarScreen(
                 visible = activeFullPanel == null && locations.isNotEmpty(),
                 enter = fadeIn(),
                 exit = fadeOut(),
-                modifier = Modifier.padding(top = 20.dp)
+                modifier = Modifier.padding(top = 4.dp)
             ) {
                 PerspectiveMemberCoverFlow(
                     locations = locations,
@@ -1626,27 +1626,18 @@ private fun PerspectiveMemberCoverFlow(
                             scaleY = s
                             alpha = 1f + (0.5f - 1f) * t          // centro 1.0 → laterale 0.5
                         }
-                        // Bagliore + anello verde salvia: intensita' continua = (1 - t),
-                        // così sfumano entrando/uscendo dal centro senza scatti.
+                        // Anello verde salvia sull'elemento attivo, intensita'
+                        // continua = (1 - t). RIENTRATO dentro il bordo: non disegna
+                        // nulla oltre lo slot, così la LazyRow non lo ritaglia a quadrato.
                         .drawBehind {
                             val a = (1f - centerFractionOf(index)).coerceIn(0f, 1f)
                             if (a > 0.01f) {
-                                val c = Offset(size.width / 2f, size.height / 2f)
-                                drawCircle(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(sage.copy(alpha = 0.40f), sage.copy(alpha = 0f)),
-                                        center = c,
-                                        radius = size.minDimension * 0.62f
-                                    ),
-                                    radius = size.minDimension * 0.62f,
-                                    center = c,
-                                    alpha = a
-                                )
+                                val stroke = 2.dp.toPx()
                                 drawCircle(
                                     color = sage,
-                                    radius = size.minDimension / 2f,
-                                    center = c,
-                                    style = Stroke(width = 1.5.dp.toPx()),
+                                    radius = size.minDimension / 2f - stroke / 2f,
+                                    center = Offset(size.width / 2f, size.height / 2f),
+                                    style = Stroke(width = stroke),
                                     alpha = a
                                 )
                             }
@@ -1686,7 +1677,7 @@ private fun PerspectiveMemberCoverFlow(
             }
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(2.dp))
 
         // --- Telemetria borderless: solo per il membro centrato (nessun box) ---
         val activeName = if (!activeMemberLoc.nickname.isNullOrBlank()) activeMemberLoc.nickname!!

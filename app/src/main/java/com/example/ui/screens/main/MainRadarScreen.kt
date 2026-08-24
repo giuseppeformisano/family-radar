@@ -513,7 +513,7 @@ fun MainRadarScreen(
                 visible = activeFullPanel == null && locations.isNotEmpty(),
                 enter = fadeIn(),
                 exit = fadeOut(),
-                modifier = Modifier.padding(top = Spacing.sm)
+                modifier = Modifier.padding(top = Spacing.xl)
             ) {
                 PerspectiveMemberCoverFlow(
                     locations = locations,

@@ -70,6 +70,8 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -90,7 +92,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.example.R
 import com.example.model.*
 import com.example.repository.FirebaseRepository
@@ -1552,7 +1553,6 @@ private fun PerspectiveMemberCoverFlow(
         }
     }
 
-    val context = LocalContext.current
     val density = LocalDensity.current
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
 
@@ -1564,16 +1564,38 @@ private fun PerspectiveMemberCoverFlow(
     // Passo centro-a-centro (slot + overlap) in px: normalizza la distanza dal
     // centro viewport in una frazione 0..1 per interpolare scala/opacita'.
     val slotPx = with(density) { (itemSlot + overlap).toPx() }
-    // Richiesta Coil downsamplata alla massima resa (centro a 1.3x): mai bitmap a
-    // piena risoluzione, evita OOM e stuttering.
-    val avatarPx = with(density) { (itemSlot * 1.3f).roundToPx() }
+
+    // Avatar DECODIFICATI UNA VOLTA SOLA per membro (chiave = foto, non l'intero
+    // location che cambia a ogni battito/timestamp). Durante lo scroll si disegna
+    // un ImageBitmap gia' pronto: niente decodifiche async che fanno saltare frame.
+    val photoSignature = remember(locations) {
+        locations.joinToString(",") { "${it.userId}:${it.photoBase64?.length ?: 0}" }
+    }
+    val avatarBitmaps: Map<String, ImageBitmap?> = remember(photoSignature) {
+        locations.associate { it.userId to ImageUtils.base64ToBitmap(it.photoBase64)?.asImageBitmap() }
+    }
+
+    // Frazione 0..1 di distanza dell'item dal centro viewport, letta al DRAW dallo
+    // scroll. Usata identica da scala/alpha e da glow/anello: tutto in draw-phase,
+    // così durante lo scorrimento non si ricompone nulla (movimento a refresh pieno).
+    val centerFractionOf: (Int) -> Float = { idx ->
+        val info = listState.layoutInfo
+        val ii = info.visibleItemsInfo.firstOrNull { it.index == idx }
+        if (ii != null && slotPx > 0f) {
+            val vc = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+            val ic = ii.offset + ii.size / 2f
+            (kotlin.math.abs(ic - vc) / slotPx).coerceIn(0f, 1f)
+        } else 1f
+    }
+
+    val sage = Color(0xFF34D399)
 
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Overlap Strip (Magnetic Piling): avatar sovrapposti, snap-to-center,
-        // Hero centrale che emerge. Scala/alpha continui, letti dallo scroll.
+        // Hero centrale che emerge. Scala/alpha/glow tutti continui, letti dallo scroll.
         LazyRow(
             state = listState,
             flingBehavior = snapFlingBehavior,
@@ -1582,32 +1604,52 @@ private fun PerspectiveMemberCoverFlow(
             horizontalArrangement = Arrangement.spacedBy(overlap),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            items(count = totalCount) { index ->
+            items(count = totalCount, key = { it }) { index ->
                 val actualIndex = index % listCount
                 val loc = locations[actualIndex]
-                val isCenter = index == centerIndex
-                // Solo per z-order (discreto, cambia di rado): il centro sopra tutti.
+                // Solo per lo z-order (discreto, cambia di rado): il centro sopra tutti.
                 val distance = kotlin.math.abs(index - centerIndex)
+                val bmp = avatarBitmaps[loc.userId]
+                val initial = loc.userName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
 
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .zIndex(-distance.toFloat())
                         .size(itemSlot)
-                        // Trasformazione CONTINUA calcolata al draw dallo scroll:
-                        // niente state mutato per frazione di pixel, zero jitter.
+                        // Trasformazione CONTINUA al draw: niente state mutato per
+                        // frazione di pixel, zero jitter di ricomposizione.
                         .graphicsLayer {
-                            val info = listState.layoutInfo
-                            val itemInfo = info.visibleItemsInfo.firstOrNull { it.index == index }
-                            val t = if (itemInfo != null && slotPx > 0f) {
-                                val viewportCenter = (info.viewportStartOffset + info.viewportEndOffset) / 2f
-                                val itemCenter = itemInfo.offset + itemInfo.size / 2f
-                                (kotlin.math.abs(itemCenter - viewportCenter) / slotPx).coerceIn(0f, 1f)
-                            } else 1f
+                            val t = centerFractionOf(index)
                             val s = 1.28f + (0.75f - 1.28f) * t   // centro 1.28x → laterale 0.75x
                             scaleX = s
                             scaleY = s
                             alpha = 1f + (0.5f - 1f) * t          // centro 1.0 → laterale 0.5
+                        }
+                        // Bagliore + anello verde salvia: intensita' continua = (1 - t),
+                        // così sfumano entrando/uscendo dal centro senza scatti.
+                        .drawBehind {
+                            val a = (1f - centerFractionOf(index)).coerceIn(0f, 1f)
+                            if (a > 0.01f) {
+                                val c = Offset(size.width / 2f, size.height / 2f)
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(sage.copy(alpha = 0.40f), sage.copy(alpha = 0f)),
+                                        center = c,
+                                        radius = size.minDimension * 0.62f
+                                    ),
+                                    radius = size.minDimension * 0.62f,
+                                    center = c,
+                                    alpha = a
+                                )
+                                drawCircle(
+                                    color = sage,
+                                    radius = size.minDimension / 2f,
+                                    center = c,
+                                    style = Stroke(width = 1.5.dp.toPx()),
+                                    alpha = a
+                                )
+                            }
                         }
                         .combinedClickable(
                             onClick = {
@@ -1617,47 +1659,24 @@ private fun PerspectiveMemberCoverFlow(
                             onLongClick = { onMemberLongClick(loc) }
                         )
                 ) {
-                    // Bagliore verde salvia soffuso dietro l'Hero centrale.
-                    if (isCenter) {
-                        Box(
-                            modifier = Modifier
-                                .size(itemSlot * 1.55f)
-                                .background(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(Color(0x6634D399), Color(0x0034D399))
-                                    ),
-                                    shape = CircleShape
-                                )
-                        )
-                    }
-
-                    // Avatar: foto via Coil (downsample + circle crop) o iniziale
-                    // vettoriale come fallback a basso costo. Anello sottile solo al centro.
+                    // Avatar: bitmap pre-decodificato o iniziale come fallback a basso costo.
                     Box(
                         modifier = Modifier
                             .size(itemSlot)
                             .clip(CircleShape)
-                            .background(Color(0xFF27272A))
-                            .then(
-                                if (isCenter) Modifier.border(1.5.dp, Color(0xFF34D399), CircleShape)
-                                else Modifier
-                            ),
+                            .background(Color(0xFF27272A)),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (!loc.photoBase64.isNullOrBlank()) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data("data:image/jpeg;base64,${loc.photoBase64}")
-                                    .size(avatarPx)
-                                    .crossfade(false)
-                                    .build(),
+                        if (bmp != null) {
+                            Image(
+                                bitmap = bmp,
                                 contentDescription = loc.userName,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
                             Text(
-                                text = loc.userName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                text = initial,
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                                 color = Color(0xFFD4D4D8)
                             )

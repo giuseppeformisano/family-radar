@@ -3500,7 +3500,12 @@ class FirebaseRepository private constructor(private val context: Context) {
                     "type" to "trip_start",
                     "userId" to user.uid,
                     "userName" to user.displayName,
-                    "timestamp" to FieldValue.serverTimestamp()
+                    // Long come TUTTI gli altri eventi: il listener filtra con
+                    // whereGreaterThan("timestamp", joinTime) dove joinTime e' un
+                    // Long, e Firestore esclude dai filtri di disuguaglianza i campi
+                    // di tipo diverso. Con serverTimestamp() (tipo Timestamp) gli
+                    // eventi viaggio venivano scartati dalla query e non notificati.
+                    "timestamp" to System.currentTimeMillis()
                 )
                 db.collection("groups").document(groupId)
                     .collection("events").document(eventId).set(eventMap)
@@ -3749,7 +3754,12 @@ class FirebaseRepository private constructor(private val context: Context) {
                         "type" to "trip_end",
                         "userId" to user.uid,
                         "userName" to user.displayName,
-                        "timestamp" to FieldValue.serverTimestamp()
+                        // Long come TUTTI gli altri eventi: il listener filtra con
+                    // whereGreaterThan("timestamp", joinTime) dove joinTime e' un
+                    // Long, e Firestore esclude dai filtri di disuguaglianza i campi
+                    // di tipo diverso. Con serverTimestamp() (tipo Timestamp) gli
+                    // eventi viaggio venivano scartati dalla query e non notificati.
+                    "timestamp" to System.currentTimeMillis()
                     )
                     db.collection("groups").document(groupId)
                         .collection("events").document(eventId).set(eventMap)

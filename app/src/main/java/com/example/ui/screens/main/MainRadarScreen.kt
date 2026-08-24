@@ -73,6 +73,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -88,6 +90,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.R
 import com.example.model.*
 import com.example.repository.FirebaseRepository
@@ -1549,158 +1552,186 @@ private fun PerspectiveMemberCoverFlow(
         }
     }
 
+    val context = LocalContext.current
+    val density = LocalDensity.current
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-    val itemSize = 52.dp
-    val horizontalPadding = ((screenWidth - itemSize) / 2).coerceAtLeast(16.dp)
+
+    // Slot logico compatto. La scala la applica graphicsLayer al draw, quindi la
+    // dimensione misurata resta fissa: nessun relayout durante lo scorrimento.
+    val itemSlot = 56.dp
+    val overlap = (-16).dp                       // sovrapposizione a filo
+    val horizontalPadding = ((screenWidth - itemSlot) / 2).coerceAtLeast(16.dp)
+    // Passo centro-a-centro (slot + overlap) in px: normalizza la distanza dal
+    // centro viewport in una frazione 0..1 per interpolare scala/opacita'.
+    val slotPx = with(density) { (itemSlot + overlap).toPx() }
+    // Richiesta Coil downsamplata alla massima resa (centro a 1.3x): mai bitmap a
+    // piena risoluzione, evita OOM e stuttering.
+    val avatarPx = with(density) { (itemSlot * 1.3f).roundToPx() }
 
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Riga orizzontale prospettica con scorrimento a scatto (Snap to Center)
+        // Overlap Strip (Magnetic Piling): avatar sovrapposti, snap-to-center,
+        // Hero centrale che emerge. Scala/alpha continui, letti dallo scroll.
         LazyRow(
             state = listState,
             flingBehavior = snapFlingBehavior,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = horizontalPadding),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(overlap),
             verticalAlignment = Alignment.CenterVertically
         ) {
             items(count = totalCount) { index ->
                 val actualIndex = index % listCount
                 val loc = locations[actualIndex]
                 val isCenter = index == centerIndex
-                val presence = getMemberPresence(loc.timestamp)
-
-                // Distanza dal centro (0 = al centro, 1, 2, ...)
+                // Solo per z-order (discreto, cambia di rado): il centro sopra tutti.
                 val distance = kotlin.math.abs(index - centerIndex)
-                val scale = when (distance) {
-                    0 -> 1.0f
-                    1 -> 0.74f
-                    2 -> 0.56f
-                    else -> 0.42f
-                }
-                val alpha = when (distance) {
-                    0 -> 1.0f
-                    1 -> 0.85f
-                    2 -> 0.60f
-                    else -> 0.35f
-                }
 
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(itemSize)
+                        .zIndex(-distance.toFloat())
+                        .size(itemSlot)
+                        // Trasformazione CONTINUA calcolata al draw dallo scroll:
+                        // niente state mutato per frazione di pixel, zero jitter.
                         .graphicsLayer {
-                            scaleX = scale
-                            scaleY = scale
-                            this.alpha = alpha
+                            val info = listState.layoutInfo
+                            val itemInfo = info.visibleItemsInfo.firstOrNull { it.index == index }
+                            val t = if (itemInfo != null && slotPx > 0f) {
+                                val viewportCenter = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+                                val itemCenter = itemInfo.offset + itemInfo.size / 2f
+                                (kotlin.math.abs(itemCenter - viewportCenter) / slotPx).coerceIn(0f, 1f)
+                            } else 1f
+                            val s = 1.28f + (0.75f - 1.28f) * t   // centro 1.28x → laterale 0.75x
+                            scaleX = s
+                            scaleY = s
+                            alpha = 1f + (0.5f - 1f) * t          // centro 1.0 → laterale 0.5
                         }
                         .combinedClickable(
                             onClick = {
-                                coroutineScope.launch {
-                                    listState.animateScrollToItem(index)
-                                }
+                                coroutineScope.launch { listState.animateScrollToItem(index) }
                                 onMemberClick(loc)
                             },
                             onLongClick = { onMemberLongClick(loc) }
                         )
                 ) {
-                    // Avatar con cerchio luminoso dello stato presenza quando al centro
-                    RadarAvatar(
-                        name = loc.userName,
-                        photoBase64 = loc.photoBase64,
-                        size = 52.dp,
-                        ringColor = if (isCenter) presence.color else Color(0x3371717A),
-                        containerColor = Color(0xFF27272A),
-                        contentColor = Color.White
-                    )
+                    // Bagliore verde salvia soffuso dietro l'Hero centrale.
+                    if (isCenter) {
+                        Box(
+                            modifier = Modifier
+                                .size(itemSlot * 1.55f)
+                                .background(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(Color(0x6634D399), Color(0x0034D399))
+                                    ),
+                                    shape = CircleShape
+                                )
+                        )
+                    }
 
-                    // Pallino di stato (Verde = Online, Giallo = Inattivo, Grigio = Offline)
+                    // Avatar: foto via Coil (downsample + circle crop) o iniziale
+                    // vettoriale come fallback a basso costo. Anello sottile solo al centro.
                     Box(
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .size(12.dp)
+                            .size(itemSlot)
                             .clip(CircleShape)
-                            .background(Color.Black)
-                            .padding(2.dp)
-                            .clip(CircleShape)
-                            .background(presence.color)
-                    )
+                            .background(Color(0xFF27272A))
+                            .then(
+                                if (isCenter) Modifier.border(1.5.dp, Color(0xFF34D399), CircleShape)
+                                else Modifier
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (!loc.photoBase64.isNullOrBlank()) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data("data:image/jpeg;base64,${loc.photoBase64}")
+                                    .size(avatarPx)
+                                    .crossfade(false)
+                                    .build(),
+                                contentDescription = loc.userName,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text(
+                                text = loc.userName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = Color(0xFFD4D4D8)
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        Spacer(Modifier.height(3.dp))
+        Spacer(Modifier.height(6.dp))
 
-        // INFORMAZIONI MEMBRO ATTIVO (Compatte, pulite e fluttuanti direttamente sullo sfondo della mappa)
+        // --- Telemetria borderless: solo per il membro centrato (nessun box) ---
         val activeName = if (!activeMemberLoc.nickname.isNullOrBlank()) activeMemberLoc.nickname!!
-        else if (activeMemberLoc.userId == currentUserId) stringResource(R.string.label_you)
-        else activeMemberLoc.userName
+            else if (activeMemberLoc.userId == currentUserId) stringResource(R.string.label_you)
+            else activeMemberLoc.userName
         val activePresence = getMemberPresence(activeMemberLoc.timestamp)
+        val movingKmH = (activeMemberLoc.speed * 3.6f).toInt()
+        val statusLabel = if (movingKmH > 2) "In Movimento" else activePresence.label
+        val statusColor = if (movingKmH > 2) Color(0xFF34D399) else activePresence.color
+        val textShadow = Shadow(color = Color.Black, offset = Offset(0f, 1.5f), blurRadius = 6f)
 
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = Spacing.md)
+        // Riga 1 — Nome (SemiBold, #F2F2F7, 15sp).
+        Text(
+            text = activeName,
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+                shadow = textShadow
+            ),
+            color = Color(0xFFF2F2F7),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Spacer(Modifier.height(2.dp))
+
+        // Riga 2 — micro-linea "Stato • tempo • batteria".
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Nome membro attivo (bianco, compatto con ombra soffusa)
             Text(
-                text = activeName,
-                style = MaterialTheme.typography.labelLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    shadow = Shadow(
-                        color = Color.Black,
-                        offset = Offset(0f, 1.5f),
-                        blurRadius = 6f
-                    )
+                text = statusLabel,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 12.sp, fontWeight = FontWeight.Medium, shadow = textShadow
                 ),
-                color = Color(0xFFF2F2F7),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                color = statusColor
             )
-
-            Spacer(Modifier.height(1.dp))
-
-            // Stato Presenza (Verde Online / Giallo Inattivo / Grigio Offline) e Batteria
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(5.dp)
-                        .clip(CircleShape)
-                        .background(activePresence.color)
-                )
-                Text(
-                    text = activePresence.label,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        shadow = Shadow(
-                            color = Color.Black,
-                            offset = Offset(0f, 1.5f),
-                            blurRadius = 6f
-                        )
-                    ),
-                    color = activePresence.color
-                )
-
-                Text(
-                    text = "· 🔋 ${activeMemberLoc.batteryLevel}%",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 11.sp,
-                        shadow = Shadow(
-                            color = Color.Black,
-                            offset = Offset(0f, 1.5f),
-                            blurRadius = 6f
-                        )
-                    ),
-                    color = Color(0xFFF2F2F7)
-                )
-            }
+            Text("•", style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow), color = Color(0xFFA1A1AA))
+            Text(
+                text = formatRelativeShort(activeMemberLoc.timestamp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow),
+                color = Color(0xFFA1A1AA)
+            )
+            Text("•", style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow), color = Color(0xFFA1A1AA))
+            Text(
+                text = "${activeMemberLoc.batteryLevel}%",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 12.sp, fontWeight = FontWeight.Medium, shadow = textShadow
+                ),
+                color = Color(0xFFA1A1AA)
+            )
         }
+    }
+}
+
+/** Tempo trascorso in forma ultra compatta: "ora", "2min", "3h", "5g". */
+private fun formatRelativeShort(timestamp: Long): String {
+    val diff = System.currentTimeMillis() - timestamp
+    return when {
+        diff < 60_000L -> "ora"
+        diff < 3_600_000L -> "${diff / 60_000L}min"
+        diff < 86_400_000L -> "${diff / 3_600_000L}h"
+        else -> "${diff / 86_400_000L}g"
     }
 }
 

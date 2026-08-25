@@ -1497,9 +1497,9 @@ private data class MemberPresence(
 private fun getMemberPresence(timestamp: Long): MemberPresence {
     val elapsed = System.currentTimeMillis() - timestamp
     return when {
-        elapsed < PRESENCE_ONLINE_MS -> MemberPresence("Online", Color(0xFF22C55E))
-        elapsed < PRESENCE_IDLE_MS -> MemberPresence("Inattivo", Color(0xFFEAB308))
-        else -> MemberPresence("Offline", Color(0xFF94A3B8))
+        elapsed < PRESENCE_ONLINE_MS -> MemberPresence("Online", Color(0xFF34D399))
+        elapsed < PRESENCE_IDLE_MS -> MemberPresence("Inattivo", Color(0xFFFBBF24))
+        else -> MemberPresence("Offline", Color(0xFF71717A))
     }
 }
 
@@ -1728,7 +1728,7 @@ private fun PerspectiveMemberCoverFlow(
             else activeMemberLoc.userName
         val isSelf = activeMemberLoc.userId == currentUserId
         val activePresence = if (isSelf) {
-            MemberPresence(stringResource(R.string.presence_online), Color(0xFF34D399))
+            MemberPresence("Online", Color(0xFF34D399))
         } else {
             getMemberPresence(activeMemberLoc.timestamp)
         }

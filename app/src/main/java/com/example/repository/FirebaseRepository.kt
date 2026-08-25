@@ -2429,14 +2429,14 @@ class FirebaseRepository private constructor(private val context: Context) {
                     val currentGroup = user?.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id
                     if (user != null && !currentGroup.isNullOrBlank()) {
                         val silentFor = System.currentTimeMillis() - lastSentAtMillis
-                        if (silentFor >= 90_000L) {
+                        if (silentFor >= 60_000L) {
                             pushLastKnownLocationNow()
                         }
                     }
                 } catch (t: Throwable) {
                     Log.w(TAG, "In-app presence loop tick failed: ${t.message}")
                 }
-                delay(60_000L)
+                delay(30_000L)
             }
         }
     }
@@ -2455,36 +2455,48 @@ class FirebaseRepository private constructor(private val context: Context) {
         try {
             val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-            if (!hasFine && !hasCoarse) return
+            val (battery, isCharging) = getBatteryStatus()
+            val user = _currentUserState.value ?: return
 
-            if (fusedLocationClient == null) {
+            if (fusedLocationClient == null && (hasFine || hasCoarse)) {
                 fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
             }
 
-            fusedLocationClient?.lastLocation?.addOnSuccessListener { loc ->
-                if (loc != null && loc.latitude != 0.0 && loc.longitude != 0.0) {
-                    val (battery, isCharging) = getBatteryStatus()
-                    val uLoc = UserLocation(
-                        latitude = loc.latitude,
-                        longitude = loc.longitude,
-                        accuracy = loc.accuracy,
-                        speed = if (loc.hasSpeed()) loc.speed else 0.0f,
-                        bearing = if (loc.hasBearing()) loc.bearing else 0.0f,
-                        altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
-                        batteryLevel = battery,
-                        isCharging = isCharging,
-                        timestamp = System.currentTimeMillis(),
-                        isOnline = true
-                    )
-                    CoroutineScope(Dispatchers.IO).launch {
-                        updateLocation(uLoc)
+            if (hasFine || hasCoarse) {
+                fusedLocationClient?.lastLocation?.addOnSuccessListener { loc ->
+                    if (loc != null && loc.latitude != 0.0 && loc.longitude != 0.0) {
+                        val uLoc = UserLocation(
+                            latitude = loc.latitude,
+                            longitude = loc.longitude,
+                            accuracy = loc.accuracy,
+                            speed = if (loc.hasSpeed()) loc.speed else 0.0f,
+                            bearing = if (loc.hasBearing()) loc.bearing else 0.0f,
+                            altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
+                            batteryLevel = battery,
+                            isCharging = isCharging,
+                            timestamp = System.currentTimeMillis(),
+                            isOnline = true
+                        )
+                        CoroutineScope(Dispatchers.IO).launch {
+                            updateLocation(uLoc)
+                        }
+                    } else {
+                        val prevLoc = _currentGroupLocations.value.find { it.userId == user.uid }
+                        if (prevLoc != null && prevLoc.latitude != 0.0 && prevLoc.longitude != 0.0) {
+                            val uLoc = prevLoc.copy(
+                                batteryLevel = battery,
+                                isCharging = isCharging,
+                                timestamp = System.currentTimeMillis(),
+                                isOnline = true
+                            )
+                            CoroutineScope(Dispatchers.IO).launch {
+                                updateLocation(uLoc)
+                            }
+                        }
                     }
-                } else {
-                    // Fallback: se fusedLocation non ha ancora un fix fresco, usa l'ultima posizione nota locale
-                    val user = _currentUserState.value ?: return@addOnSuccessListener
+                }?.addOnFailureListener {
                     val prevLoc = _currentGroupLocations.value.find { it.userId == user.uid }
                     if (prevLoc != null && prevLoc.latitude != 0.0 && prevLoc.longitude != 0.0) {
-                        val (battery, isCharging) = getBatteryStatus()
                         val uLoc = prevLoc.copy(
                             batteryLevel = battery,
                             isCharging = isCharging,
@@ -2494,6 +2506,19 @@ class FirebaseRepository private constructor(private val context: Context) {
                         CoroutineScope(Dispatchers.IO).launch {
                             updateLocation(uLoc)
                         }
+                    }
+                }
+            } else {
+                val prevLoc = _currentGroupLocations.value.find { it.userId == user.uid }
+                if (prevLoc != null && prevLoc.latitude != 0.0 && prevLoc.longitude != 0.0) {
+                    val uLoc = prevLoc.copy(
+                        batteryLevel = battery,
+                        isCharging = isCharging,
+                        timestamp = System.currentTimeMillis(),
+                        isOnline = true
+                    )
+                    CoroutineScope(Dispatchers.IO).launch {
+                        updateLocation(uLoc)
                     }
                 }
             }
@@ -2577,10 +2602,11 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
 
         val elapsed = System.currentTimeMillis() - lastSentAtMillis
-        if (elapsed >= HEARTBEAT_INTERVAL_MS) {
+        val heartbeatThreshold = if (isAppInForeground) 60_000L else HEARTBEAT_INTERVAL_MS
+        if (elapsed >= heartbeatThreshold) {
             // Heartbeat: anche da fermi bisogna rinfrescare stato online, orario
             // e livello batteria, altrimenti agli altri risultiamo scomparsi.
-            return LocationGate(true, "heartbeat", isHeartbeat = true)
+            return LocationGate(true, if (isAppInForeground) "in-app heartbeat" else "heartbeat", isHeartbeat = true)
         }
 
         if (location.speed > MOVING_SPEED_THRESHOLD_MS) {

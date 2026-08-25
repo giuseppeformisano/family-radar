@@ -1726,7 +1726,12 @@ private fun PerspectiveMemberCoverFlow(
         val activeName = if (!activeMemberLoc.nickname.isNullOrBlank()) activeMemberLoc.nickname!!
             else if (activeMemberLoc.userId == currentUserId) stringResource(R.string.label_you)
             else activeMemberLoc.userName
-        val activePresence = getMemberPresence(activeMemberLoc.timestamp)
+        val isSelf = activeMemberLoc.userId == currentUserId
+        val activePresence = if (isSelf) {
+            MemberPresence(stringResource(R.string.presence_online), Color(0xFF34D399))
+        } else {
+            getMemberPresence(activeMemberLoc.timestamp)
+        }
         val movingKmH = (activeMemberLoc.speed * 3.6f).toInt()
         val activityDescription = when (activeMemberLoc.activityType) {
             ActivityKind.VEHICLE -> if (movingKmH > 0) "In auto ($movingKmH km/h)" else "In auto"
@@ -1737,6 +1742,7 @@ private fun PerspectiveMemberCoverFlow(
         }
         val statusLabel = activityDescription ?: activePresence.label
         val statusColor = if (activityDescription != null) Color(0xFF34D399) else activePresence.color
+        val relativeTimeStr = if (isSelf) "ora" else formatRelativeShort(activeMemberLoc.timestamp)
         val textShadow = Shadow(color = Color.Black, offset = Offset(0f, 1.5f), blurRadius = 6f)
 
         // Riga 1 — Nome (SemiBold, #F2F2F7, 15sp).
@@ -1768,7 +1774,7 @@ private fun PerspectiveMemberCoverFlow(
             )
             Text("•", style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow), color = Color(0xFFA1A1AA))
             Text(
-                text = formatRelativeShort(activeMemberLoc.timestamp),
+                text = relativeTimeStr,
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow),
                 color = Color(0xFFA1A1AA)
             )

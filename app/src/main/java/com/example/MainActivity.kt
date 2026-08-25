@@ -101,6 +101,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        repository.setAppForeground(true)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        repository.setAppForeground(false)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)

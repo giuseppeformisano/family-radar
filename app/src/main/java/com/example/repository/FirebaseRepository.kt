@@ -2406,12 +2406,51 @@ class FirebaseRepository private constructor(private val context: Context) {
         lastSentGroupId = null
     }
 
+    private var inAppPresenceJob: kotlinx.coroutines.Job? = null
+    private var isAppInForeground: Boolean = false
+
+    fun setAppForeground(isInForeground: Boolean) {
+        isAppInForeground = isInForeground
+        if (isInForeground) {
+            startInAppPresenceLoop()
+            pushLastKnownLocationNow()
+        } else {
+            stopInAppPresenceLoop()
+        }
+    }
+
+    private fun startInAppPresenceLoop() {
+        inAppPresenceJob?.cancel()
+        inAppPresenceJob = CoroutineScope(Dispatchers.IO).launch {
+            while (isActive && isAppInForeground) {
+                try {
+                    val user = _currentUserState.value
+                    val currentGroup = user?.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id
+                    if (user != null && !currentGroup.isNullOrBlank()) {
+                        val silentFor = System.currentTimeMillis() - lastSentAtMillis
+                        if (silentFor >= 90_000L) {
+                            pushLastKnownLocationNow()
+                        }
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "In-app presence loop tick failed: ${t.message}")
+                }
+                delay(60_000L)
+            }
+        }
+    }
+
+    private fun stopInAppPresenceLoop() {
+        inAppPresenceJob?.cancel()
+        inAppPresenceJob = null
+    }
+
     /**
      * Ripubblica subito l'ultima posizione nota, senza aspettare il prossimo
      * tick del tracking (che con intervalli lunghi puo' essere parecchi secondi).
      * Va usata dopo [resetLocationGate], altrimenti il gate scarta comunque il fix.
      */
-    private fun pushLastKnownLocationNow() {
+    fun pushLastKnownLocationNow() {
         try {
             val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val hasCoarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -2438,6 +2477,22 @@ class FirebaseRepository private constructor(private val context: Context) {
                     )
                     CoroutineScope(Dispatchers.IO).launch {
                         updateLocation(uLoc)
+                    }
+                } else {
+                    // Fallback: se fusedLocation non ha ancora un fix fresco, usa l'ultima posizione nota locale
+                    val user = _currentUserState.value ?: return@addOnSuccessListener
+                    val prevLoc = _currentGroupLocations.value.find { it.userId == user.uid }
+                    if (prevLoc != null && prevLoc.latitude != 0.0 && prevLoc.longitude != 0.0) {
+                        val (battery, isCharging) = getBatteryStatus()
+                        val uLoc = prevLoc.copy(
+                            batteryLevel = battery,
+                            isCharging = isCharging,
+                            timestamp = System.currentTimeMillis(),
+                            isOnline = true
+                        )
+                        CoroutineScope(Dispatchers.IO).launch {
+                            updateLocation(uLoc)
+                        }
                     }
                 }
             }

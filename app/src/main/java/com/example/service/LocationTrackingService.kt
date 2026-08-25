@@ -268,8 +268,18 @@ class LocationTrackingService : Service() {
      * online e il livello di batteria non restano indietro.
      */
     private fun forcePushLastKnownLocation() {
-        val location = lastKnownLocation ?: return
-        handleNewLocation(location)
+        val location = lastKnownLocation
+        if (location != null) {
+            handleNewLocation(location)
+        } else {
+            try {
+                fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                    if (loc != null) handleNewLocation(loc)
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "forcePushLastKnownLocation fallback failed: ${t.message}")
+            }
+        }
     }
 
     /**
@@ -283,7 +293,7 @@ class LocationTrackingService : Service() {
                 delay(NOTIFICATION_REFRESH_MS)
                 try {
                     val silentFor = System.currentTimeMillis() - lastFixAtMillis
-                    if (lastKnownLocation != null && silentFor >= HEARTBEAT_SAFETY_MS) {
+                    if (silentFor >= HEARTBEAT_SAFETY_MS) {
                         forcePushLastKnownLocation()
                     }
                     val manager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager

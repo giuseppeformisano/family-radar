@@ -103,6 +103,9 @@ import com.example.util.AppUpdater
 import com.example.util.CheckResult
 import com.example.util.ImageUtils
 import com.example.util.VoiceUtils
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import android.media.MediaPlayer
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
@@ -381,6 +384,24 @@ fun MainRadarScreen(
         } else {
             pendingMapCameraAction = true
             mapCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    // Segnala al repository quando il radar e' in primo piano: serve a sopprimere
+    // la notifica del vocale mentre e' in autoplay sulla mappa (evita il taglio audio).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> repository.setRadarForeground(true)
+                Lifecycle.Event.ON_PAUSE -> repository.setRadarForeground(false)
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            repository.setRadarForeground(false)
         }
     }
 

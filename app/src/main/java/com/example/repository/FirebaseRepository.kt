@@ -129,6 +129,12 @@ class FirebaseRepository private constructor(private val context: Context) {
     private val _latestVoicePing = MutableStateFlow<VoicePing?>(null)
     val latestVoicePing = _latestVoicePing.asStateFlow()
 
+    // Vero mentre la schermata radar e' in primo piano (ON_RESUME). Con autoplay
+    // attivo, un vocale in arrivo viene riprodotto qui: la notifica col suo suono
+    // ruberebbe il focus audio troncando la riproduzione, quindi la si sopprime.
+    @Volatile private var radarForeground = false
+    fun setRadarForeground(value: Boolean) { radarForeground = value }
+
     private val _currentGroupMembers = MutableStateFlow<List<GroupMember>>(emptyList())
     val currentGroupMembers = _currentGroupMembers.asStateFlow()
 
@@ -1968,21 +1974,27 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     }
                                     // TYPE 2: Normal Group Chat Message
                                     MessageType.TEXT, MessageType.IMAGE, MessageType.LOCATION_SHARE, MessageType.VOICE -> {
-                                        val bodyText = when (type) {
-                                            MessageType.IMAGE -> "Ha inviato un'immagine"
-                                            MessageType.LOCATION_SHARE -> "Ha condiviso la posizione"
-                                            MessageType.VOICE -> "Ha inviato un vocale"
-                                            else -> text
+                                        // Vocale + radar in primo piano + autoplay: si sta gia'
+                                        // riproducendo sulla mappa, la notifica troncherebbe l'audio.
+                                        val suppress = type == MessageType.VOICE &&
+                                            radarForeground && _isVoiceAutoplayEnabled.value
+                                        if (!suppress) {
+                                            val bodyText = when (type) {
+                                                MessageType.IMAGE -> "Ha inviato un'immagine"
+                                                MessageType.LOCATION_SHARE -> "Ha condiviso la posizione"
+                                                MessageType.VOICE -> "Ha inviato un vocale"
+                                                else -> text
+                                            }
+                                            showLocalNotification(
+                                                title = senderName,
+                                                body = bodyText,
+                                                isHighPriority = false,
+                                                notificationId = (timestamp % 100000).toInt(),
+                                                destination = "CHAT",
+                                                groupId = groupId,
+                                                senderId = senderId
+                                            )
                                         }
-                                        showLocalNotification(
-                                            title = senderName,
-                                            body = bodyText,
-                                            isHighPriority = false,
-                                            notificationId = (timestamp % 100000).toInt(),
-                                            destination = "CHAT",
-                                            groupId = groupId,
-                                            senderId = senderId
-                                        )
                                     }
                                     else -> {
                                         // GEOFENCE_ALERT handled by events listener

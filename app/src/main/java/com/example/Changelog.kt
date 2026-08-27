@@ -10,12 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.2-beta"
+    const val VERSION = "0.13.3-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🎙️ Note vocali: tieni premuto il microfono in basso a destra sulla mappa per registrare (max 5s).",
-        "Chi guarda la mappa vede l'anello pulsare sul tuo pallino e può toccarlo per ascoltare; il vocale resta anche in chat.",
-        "🆕 Questa schermata: da ora ti mostra in breve le novità dopo ogni aggiornamento."
+        "🔊 Risolto il vocale che si tagliava in riproduzione automatica sulla mappa: ora parte intero.",
+        "Con l'ascolto automatico attivo, mentre sei sulla mappa non ricevi più anche la notifica del vocale."
     )
 }

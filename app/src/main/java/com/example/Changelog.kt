@@ -10,10 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.4-beta"
+    const val VERSION = "0.13.5-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🆕 Questa schermata \"Novità\" ora compare correttamente dopo ogni aggiornamento (prima veniva saltata)."
+        "🔧 Vocali ottimizzati: l'audio non appesantisce più la chat in tempo reale, si scarica solo quando premi play. Molto meno consumo di dati/quota.",
+        "Nota: i vocali inviati prima di questo aggiornamento potrebbero non riprodursi."
     )
 }

@@ -448,10 +448,12 @@ fun MainRadarScreen(
         }
     }
 
-    // Riproduce una nota vocale (Base64) una volta, fire-and-forget.
-    fun playVoiceNote(base64: String) {
+    // Riproduce una nota vocale una volta: scarica l'audio dal doc separato
+    // (una sola volta, poi cache) e lo suona. Fire-and-forget.
+    fun playVoiceNoteById(groupId: String?, messageId: String) {
+        val gid = groupId ?: return
         coroutineScope.launch {
-            val path = withContext(Dispatchers.IO) { VoiceUtils.base64ToTempFile(context, base64) } ?: return@launch
+            val path = repository.getVoiceNotePath(gid, messageId) ?: return@launch
             runCatching {
                 MediaPlayer().apply {
                     setDataSource(path)
@@ -474,7 +476,7 @@ fun MainRadarScreen(
         if (ping.userId == currentUserId) return@LaunchedEffect
         if (System.currentTimeMillis() - ping.timestamp > 15_000) return@LaunchedEffect
         speakingUserId = ping.userId
-        if (voiceAutoplay) playVoiceNote(ping.audioBase64)
+        if (voiceAutoplay) playVoiceNoteById(currentGroup?.id, ping.messageId)
         delay(maxOf(4_000L, ping.durationMs + 1_200L))
         speakingUserId = null
     }
@@ -572,7 +574,7 @@ fun MainRadarScreen(
                 if (ping != null && ping.userId == loc.userId &&
                     System.currentTimeMillis() - ping.timestamp < 30_000
                 ) {
-                    playVoiceNote(ping.audioBase64)
+                    playVoiceNoteById(currentGroup?.id, ping.messageId)
                 } else {
                     selectedMemberForSheet = loc
                 }
@@ -2483,7 +2485,9 @@ private fun ChatPanel(
                     ChatBubble(
                         message = msg,
                         isMe = msg.senderId == currentUserId,
-                        onImageClick = onImageClick
+                        onImageClick = onImageClick,
+                        groupId = groupId,
+                        repository = repository
                     )
                 }
             }
@@ -2594,7 +2598,9 @@ private fun ChatPanel(
 private fun ChatBubble(
     message: ChatMessage,
     isMe: Boolean,
-    onImageClick: (Any) -> Unit
+    onImageClick: (Any) -> Unit,
+    groupId: String,
+    repository: FirebaseRepository
 ) {
     when (message.type) {
         MessageType.GEOFENCE_ALERT -> {
@@ -2692,8 +2698,8 @@ private fun ChatBubble(
             modifier = Modifier.widthIn(max = 300.dp)
         ) {
             Column(modifier = Modifier.padding(Spacing.sm)) {
-                if (message.type == MessageType.VOICE && !message.audioBase64.isNullOrBlank()) {
-                    VoiceMessagePlayer(message = message, isMe = isMe)
+                if (message.type == MessageType.VOICE) {
+                    VoiceMessagePlayer(message = message, isMe = isMe, groupId = groupId, repository = repository)
                 }
                 val bitmap = remember(message.imageBase64) {
                     ImageUtils.base64ToBitmap(message.imageBase64)
@@ -2754,9 +2760,15 @@ private fun ChatBubble(
 
 /** Player di una nota vocale in chat: play/pausa, durata e luogo di registrazione. */
 @Composable
-private fun VoiceMessagePlayer(message: ChatMessage, isMe: Boolean) {
-    val context = LocalContext.current
+private fun VoiceMessagePlayer(
+    message: ChatMessage,
+    isMe: Boolean,
+    groupId: String,
+    repository: FirebaseRepository
+) {
+    val scope = rememberCoroutineScope()
     var isPlaying by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
     val player = remember { mutableStateOf<MediaPlayer?>(null) }
     DisposableEffect(message.id) {
         onDispose {
@@ -2776,14 +2788,23 @@ private fun VoiceMessagePlayer(message: ChatMessage, isMe: Boolean) {
         }
 
     fun toggle() {
-        val b64 = message.audioBase64 ?: return
         if (isPlaying) {
             runCatching { player.value?.pause() }
             isPlaying = false
             return
         }
-        if (player.value == null) {
-            val path = VoiceUtils.base64ToTempFile(context, b64) ?: return
+        if (player.value != null) {
+            runCatching { player.value?.start() }
+            isPlaying = true
+            return
+        }
+        if (isLoading) return
+        // Prima riproduzione: scarica l'audio dal doc separato (una volta) e suona.
+        isLoading = true
+        scope.launch {
+            val path = repository.getVoiceNotePath(groupId, message.id)
+            isLoading = false
+            if (path == null) return@launch
             player.value = runCatching {
                 MediaPlayer().apply {
                     setDataSource(path)
@@ -2791,9 +2812,9 @@ private fun VoiceMessagePlayer(message: ChatMessage, isMe: Boolean) {
                     setOnCompletionListener { isPlaying = false; runCatching { seekTo(0) } }
                 }
             }.getOrNull()
+            runCatching { player.value?.start() }
+            isPlaying = player.value != null
         }
-        runCatching { player.value?.start() }
-        isPlaying = player.value != null
     }
 
     Column {
@@ -2809,12 +2830,20 @@ private fun VoiceMessagePlayer(message: ChatMessage, isMe: Boolean) {
                     .clickable { toggle() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "Pausa" else "Riproduci",
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pausa" else "Riproduci",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
             Icon(
                 imageVector = Icons.Default.GraphicEq,

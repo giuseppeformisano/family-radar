@@ -125,7 +125,7 @@ class FirebaseRepository private constructor(private val context: Context) {
 
     // Ultima nota vocale ARRIVATA da un altro membro (fresca): la mappa la usa per
     // l'anello pulsante sul marker di chi parla e per l'autoplay di chi sta guardando.
-    data class VoicePing(val userId: String, val messageId: String, val audioBase64: String, val durationMs: Long, val timestamp: Long)
+    data class VoicePing(val userId: String, val messageId: String, val durationMs: Long, val timestamp: Long)
     private val _latestVoicePing = MutableStateFlow<VoicePing?>(null)
     val latestVoicePing = _latestVoicePing.asStateFlow()
 
@@ -1953,9 +1953,11 @@ class FirebaseRepository private constructor(private val context: Context) {
 
                             // Check if this is a new message from another member
                             if (timestamp > lastObservedMessageTimestamp && senderId.isNotBlank() && senderId != currentUid) {
-                                // Nota vocale fresca da un altro: segnala per anello/autoplay sulla mappa.
-                                if (type == MessageType.VOICE && !audioBase64.isNullOrBlank()) {
-                                    _latestVoicePing.value = VoicePing(senderId, msg.id, audioBase64, msg.audioDurationMs, timestamp)
+                                // Nota vocale fresca da un altro: segnala per anello/autoplay
+                                // sulla mappa. L'audio NON e' nel messaggio: si scarichera'
+                                // dal doc separato voiceNotes/{id} solo al momento del play.
+                                if (type == MessageType.VOICE) {
+                                    _latestVoicePing.value = VoicePing(senderId, msg.id, msg.audioDurationMs, timestamp)
                                 }
                                 when (type) {
                                     // TYPE 3: SOS Alert Message
@@ -3243,17 +3245,47 @@ class FirebaseRepository private constructor(private val context: Context) {
         longitude: Double?,
         placeName: String?
     ) {
+        val id = "msg_${UUID.randomUUID().toString().take(8)}"
+        // L'audio va in un documento SEPARATO, fuori dal listener della chat: cosi'
+        // il listener resta leggero e i ri-agganci non riscaricano megabyte di audio.
+        try {
+            firestore?.collection("groups")?.document(groupId)
+                ?.collection("voiceNotes")?.document(id)
+                ?.set(hashMapOf("audioBase64" to audioBase64))
+        } catch (e: Exception) {
+            Log.w(TAG, "scrittura voiceNote fallita: ${e.message}")
+        }
+        // Cache locale per il mittente: cosi' riascolta il proprio vocale senza rileggerlo.
+        runCatching { VoiceUtils.writeCacheFromBase64(context, id, audioBase64) }
+        // Il messaggio in chat porta solo i metadati (niente audioBase64).
         sendMessage(
             groupId,
             ChatMessage(
+                id = id,
                 type = MessageType.VOICE,
-                audioBase64 = audioBase64,
                 audioDurationMs = durationMs,
                 latitude = latitude,
                 longitude = longitude,
                 placeName = placeName
             )
         )
+    }
+
+    /**
+     * Path locale dell'audio di una nota vocale, scaricandolo UNA sola volta dal doc
+     * separato `voiceNotes/{messageId}` e mettendolo in cache. Ritorna null se assente.
+     */
+    suspend fun getVoiceNotePath(groupId: String, messageId: String): String? {
+        VoiceUtils.cachedPath(context, messageId)?.let { return it }
+        return try {
+            val doc = firestore?.collection("groups")?.document(groupId)
+                ?.collection("voiceNotes")?.document(messageId)?.get()?.await()
+            val b64 = doc?.getString("audioBase64")
+            if (b64.isNullOrBlank()) null else VoiceUtils.writeCacheFromBase64(context, messageId, b64)
+        } catch (e: Exception) {
+            Log.w(TAG, "getVoiceNotePath fallita: ${e.message}")
+            null
+        }
     }
 
     /**

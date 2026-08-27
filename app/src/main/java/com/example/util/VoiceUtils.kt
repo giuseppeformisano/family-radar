@@ -100,19 +100,25 @@ object VoiceUtils {
     }
 
     /**
-     * Base64 -> file temporaneo in cache, riutilizzabile: il nome deriva dall'hash
-     * del contenuto, cosi' riprodurre due volte lo stesso vocale non ridecodifica.
-     * Ritorna il path assoluto o null.
+     * Path del file audio in cache per un dato messageId, se gia' presente (e non
+     * vuoto). Serve a NON rileggere l'audio da Firestore due volte: l'audio vive in
+     * un documento separato `voiceNotes/{id}` e va scaricato una sola volta al play.
      */
-    fun base64ToTempFile(context: Context, base64: String): String? {
+    fun cachedPath(context: Context, messageId: String): String? {
+        val f = File(context.cacheDir, "voice_$messageId.m4a")
+        return if (f.exists() && f.length() > 0) f.absolutePath else null
+    }
+
+    /** Scrive in cache l'audio Base64 per messageId e ritorna il path (o null). */
+    fun writeCacheFromBase64(context: Context, messageId: String, base64: String): String? {
         return try {
-            val file = File(context.cacheDir, "voice_play_${base64.hashCode()}.m4a")
-            if (!file.exists()) {
-                file.writeBytes(Base64.decode(base64, Base64.NO_WRAP))
+            val f = File(context.cacheDir, "voice_$messageId.m4a")
+            if (!f.exists() || f.length() == 0L) {
+                f.writeBytes(Base64.decode(base64, Base64.NO_WRAP))
             }
-            file.absolutePath
+            f.absolutePath
         } catch (e: Exception) {
-            Log.e(TAG, "base64ToTempFile fallita: ${e.message}")
+            Log.e(TAG, "writeCacheFromBase64 fallita: ${e.message}")
             null
         }
     }

@@ -427,8 +427,24 @@ fun MainRadarScreen(
         }
     }
 
+    // Riproduce una nota vocale (Base64) una volta, fire-and-forget.
+    fun playVoiceNote(base64: String) {
+        coroutineScope.launch {
+            val path = withContext(Dispatchers.IO) { VoiceUtils.base64ToTempFile(context, base64) } ?: return@launch
+            runCatching {
+                MediaPlayer().apply {
+                    setDataSource(path)
+                    prepare()
+                    setOnCompletionListener { runCatching { it.release() } }
+                    start()
+                }
+            }
+        }
+    }
+
     // Anello pulsante sul marker di chi ha appena inviato un vocale + autoplay
-    // (se attivo in Impostazioni) per chi sta guardando la mappa.
+    // (se attivo in Impostazioni) per chi sta guardando la mappa. L'anello resta
+    // acceso per la durata del vocale (min 4s), cosi' si vede finche' si ascolta.
     val latestVoicePing by repository.latestVoicePing.collectAsState()
     val voiceAutoplay by repository.isVoiceAutoplayEnabled.collectAsState()
     var speakingUserId by remember { mutableStateOf<String?>(null) }
@@ -437,20 +453,8 @@ fun MainRadarScreen(
         if (ping.userId == currentUserId) return@LaunchedEffect
         if (System.currentTimeMillis() - ping.timestamp > 15_000) return@LaunchedEffect
         speakingUserId = ping.userId
-        if (voiceAutoplay) {
-            val path = withContext(Dispatchers.IO) { VoiceUtils.base64ToTempFile(context, ping.audioBase64) }
-            if (path != null) {
-                runCatching {
-                    MediaPlayer().apply {
-                        setDataSource(path)
-                        prepare()
-                        setOnCompletionListener { runCatching { it.release() } }
-                        start()
-                    }
-                }
-            }
-        }
-        delay(4_000)
+        if (voiceAutoplay) playVoiceNote(ping.audioBase64)
+        delay(maxOf(4_000L, ping.durationMs + 1_200L))
         speakingUserId = null
     }
 
@@ -540,7 +544,18 @@ fun MainRadarScreen(
             onUserPan = {
                 if (followedUserId != null) followedUserId = null
             },
-            onMemberSelected = { selectedMemberForSheet = it },
+            onMemberSelected = { loc ->
+                // Se quel membro ha appena mandato un vocale (anello attivo), un tap
+                // sul suo marker lo riproduce/riascolta; altrimenti apre il dettaglio.
+                val ping = repository.latestVoicePing.value
+                if (ping != null && ping.userId == loc.userId &&
+                    System.currentTimeMillis() - ping.timestamp < 30_000
+                ) {
+                    playVoiceNote(ping.audioBase64)
+                } else {
+                    selectedMemberForSheet = loc
+                }
+            },
             onPlaceSelected = { selectedPlaceForSheet = it },
             onSnapshotClusterSelected = { selectedSnapshotClusterForGallery = it },
             onMapCenterChanged = { center -> currentMapCenter = center },

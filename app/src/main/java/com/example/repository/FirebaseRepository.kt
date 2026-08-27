@@ -125,7 +125,7 @@ class FirebaseRepository private constructor(private val context: Context) {
 
     // Ultima nota vocale ARRIVATA da un altro membro (fresca): la mappa la usa per
     // l'anello pulsante sul marker di chi parla e per l'autoplay di chi sta guardando.
-    data class VoicePing(val userId: String, val messageId: String, val audioBase64: String, val timestamp: Long)
+    data class VoicePing(val userId: String, val messageId: String, val audioBase64: String, val durationMs: Long, val timestamp: Long)
     private val _latestVoicePing = MutableStateFlow<VoicePing?>(null)
     val latestVoicePing = _latestVoicePing.asStateFlow()
 
@@ -1949,7 +1949,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                             if (timestamp > lastObservedMessageTimestamp && senderId.isNotBlank() && senderId != currentUid) {
                                 // Nota vocale fresca da un altro: segnala per anello/autoplay sulla mappa.
                                 if (type == MessageType.VOICE && !audioBase64.isNullOrBlank()) {
-                                    _latestVoicePing.value = VoicePing(senderId, msg.id, audioBase64, timestamp)
+                                    _latestVoicePing.value = VoicePing(senderId, msg.id, audioBase64, msg.audioDurationMs, timestamp)
                                 }
                                 when (type) {
                                     // TYPE 3: SOS Alert Message

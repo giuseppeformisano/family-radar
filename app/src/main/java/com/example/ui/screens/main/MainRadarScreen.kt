@@ -1657,11 +1657,14 @@ private fun PerspectiveMemberCoverFlow(
                         )
                 ) {
                     // Avatar: bitmap pre-decodificato o iniziale come fallback a basso costo.
+                    // Stesso colore/trasparenza dei pulsanti mappa (RailButton): fondo
+                    // 0xCC18181B + bordo 0x1F71717A, per un look uniforme sulla mappa.
                     Box(
                         modifier = Modifier
                             .size(itemSlot)
                             .clip(CircleShape)
-                            .background(Color(0xFF27272A)),
+                            .background(Color(0xCC18181B))
+                            .border(1.dp, Color(0x1F71717A), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         if (bmp != null) {
@@ -1862,22 +1865,28 @@ private fun FloatingDock(
             }
 
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                IconButton(onClick = { onSelectPanel(RadarPanel.CHAT) }) {
-                    Icon(
-                        Icons.Default.ChatBubbleOutline,
-                        contentDescription = "Chat",
-                        tint = if (selectedPanel == RadarPanel.CHAT) Color(0xFF6366F1) else Color(0xFFA1A1AA)
-                    )
-                }
-                if (chatCount > 0) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .offset(x = (-8).dp, y = 6.dp)
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFF43F5E))
-                    )
+                // Box stretto attorno all'IconButton: così il pallino si ancora
+                // all'angolo dell'ICONA, non della cella larga, e resta sovrapposto
+                // in alto a destra sull'icona. Compare/sparisce con i non letti.
+                Box(contentAlignment = Alignment.Center) {
+                    IconButton(onClick = { onSelectPanel(RadarPanel.CHAT) }) {
+                        Icon(
+                            Icons.Default.ChatBubbleOutline,
+                            contentDescription = "Chat",
+                            tint = if (selectedPanel == RadarPanel.CHAT) Color(0xFF6366F1) else Color(0xFFA1A1AA)
+                        )
+                    }
+                    if (chatCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = (-9).dp, y = 9.dp)
+                                .size(9.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFF43F5E))
+                                .border(1.5.dp, Color(0xEE121216), CircleShape)
+                        )
+                    }
                 }
             }
 
@@ -2252,10 +2261,40 @@ private fun ChatPanel(
         }
     }
 
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            runCatching { listState.animateScrollToItem(messages.size - 1) }
+    val hasMoreChat by repository.hasMoreChat.collectAsState()
+
+    // Scroll intelligente:
+    // - primo caricamento -> salta in fondo (istantaneo)
+    // - nuovo messaggio in coda (ultimo id cambiato) -> scorri in fondo
+    // - storia precedente caricata in cima (size cresce, ultimo id invariato) ->
+    //   mantieni la posizione compensando i messaggi aggiunti sopra.
+    var prevSize by remember { mutableStateOf(0) }
+    var prevLastId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(messages) {
+        if (messages.isEmpty()) { prevSize = 0; prevLastId = null; return@LaunchedEffect }
+        val lastId = messages.last().id
+        val added = messages.size - prevSize
+        when {
+            prevSize == 0 -> runCatching { listState.scrollToItem(messages.size - 1) }
+            lastId != prevLastId -> runCatching { listState.animateScrollToItem(messages.size - 1) }
+            added > 0 -> runCatching {
+                listState.scrollToItem(
+                    listState.firstVisibleItemIndex + added,
+                    listState.firstVisibleItemScrollOffset
+                )
+            }
         }
+        prevSize = messages.size
+        prevLastId = lastId
+    }
+
+    // Caricamento a blocchi: quando si arriva quasi in cima si chiede il blocco
+    // precedente. Il repository e' protetto contro chiamate ripetute.
+    val shouldLoadMore by remember {
+        derivedStateOf { hasMoreChat && listState.firstVisibleItemIndex <= 2 }
+    }
+    LaunchedEffect(shouldLoadMore) {
+        if (shouldLoadMore) repository.loadMoreChat()
     }
 
     Column(

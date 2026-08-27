@@ -115,6 +115,14 @@ class FirebaseRepository private constructor(private val context: Context) {
     private val _currentGroupMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val currentGroupMessages = _currentGroupMessages.asStateFlow()
 
+    // Paginazione chat a blocchi: si parte dagli ultimi CHAT_HISTORY_LIMIT e,
+    // scorrendo in alto, si rialza il limite ri-agganciando il listener. hasMoreChat
+    // dice se l'ultimo blocco era pieno (quindi c'e' probabilmente altra storia).
+    private var chatLimit = CHAT_HISTORY_LIMIT
+    @Volatile private var isLoadingMoreChat = false
+    private val _hasMoreChat = MutableStateFlow(false)
+    val hasMoreChat = _hasMoreChat.asStateFlow()
+
     private val _currentGroupMembers = MutableStateFlow<List<GroupMember>>(emptyList())
     val currentGroupMembers = _currentGroupMembers.asStateFlow()
 
@@ -1865,6 +1873,131 @@ class FirebaseRepository private constructor(private val context: Context) {
         // Anche il badge dei non letti e' per gruppo: senza reset mostrerebbe
         // il conteggio del gruppo precedente fino alla prima emissione.
         _unreadChatCount.value = 0
+        // Paginazione chat: si riparte dal primo blocco al prossimo gruppo.
+        chatLimit = CHAT_HISTORY_LIMIT
+        isLoadingMoreChat = false
+        _hasMoreChat.value = false
+    }
+
+    /**
+     * (Ri)aggancia il listener dei messaggi con un dato [limit]. La query prende gli
+     * ultimi [limit] messaggi (DESC) e li riporta in ordine cronologico. Per caricare
+     * altra storia si richiama con un limite piu' alto ([loadMoreChat]): il listener
+     * vecchio viene staccato e sostituito, mantenendo il realtime su tutta la finestra.
+     */
+    private fun listenToMessages(groupId: String, limit: Long) {
+        val db = firestore ?: return
+        messagesListener?.remove()
+        messagesListener = db.collection("groups").document(groupId)
+            .collection("messages")
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(limit)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    isLoadingMoreChat = false
+                    if (isRecoverableListenerError(e)) scheduleGroupListenersReattach(groupId, "messages: ${e.message}")
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val currentUid = _currentUserState.value?.uid
+                    val list = snapshot.documents.mapNotNull { doc ->
+                        try {
+                            val typeStr = doc.getString("type") ?: "TEXT"
+                            val type = try { MessageType.valueOf(typeStr) } catch (ex: Exception) { MessageType.TEXT }
+                            val imageBase64 = doc.getString("imageBase64")
+                            val imageUrl = doc.getString("imageUrl")
+                            val senderId = doc.getString("senderId") ?: ""
+                            val senderName = doc.getString("senderName") ?: "Membro"
+                            val text = doc.getString("text") ?: ""
+                            val timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
+
+                            val msg = ChatMessage(
+                                id = doc.getString("id") ?: doc.id,
+                                senderId = senderId,
+                                senderName = senderName,
+                                senderPhoto = doc.getString("senderPhoto"),
+                                text = text,
+                                imageBase64 = if (!imageBase64.isNullOrBlank()) imageBase64 else null,
+                                imageUrl = if (!imageUrl.isNullOrBlank()) imageUrl else null,
+                                timestamp = timestamp,
+                                type = type,
+                                latitude = doc.getDouble("latitude"),
+                                longitude = doc.getDouble("longitude")
+                            )
+
+                            // Check if this is a new message from another member
+                            if (timestamp > lastObservedMessageTimestamp && senderId.isNotBlank() && senderId != currentUid) {
+                                when (type) {
+                                    // TYPE 3: SOS Alert Message
+                                    MessageType.SOS_ALERT -> {
+                                        showLocalNotification(
+                                            title = str(R.string.notif_sos_title),
+                                            body = str(R.string.notif_sos_immediate_body, senderName),
+                                            isHighPriority = true,
+                                            notificationId = 999,
+                                            destination = "ALERT",
+                                            groupId = groupId,
+                                            latitude = doc.getDouble("latitude"),
+                                            longitude = doc.getDouble("longitude"),
+                                            senderId = senderId
+                                        )
+                                    }
+                                    // TYPE 2: Normal Group Chat Message
+                                    MessageType.TEXT, MessageType.IMAGE, MessageType.LOCATION_SHARE -> {
+                                        val bodyText = when (type) {
+                                            MessageType.IMAGE -> "Ha inviato un'immagine"
+                                            MessageType.LOCATION_SHARE -> "Ha condiviso la posizione"
+                                            else -> text
+                                        }
+                                        showLocalNotification(
+                                            title = senderName,
+                                            body = bodyText,
+                                            isHighPriority = false,
+                                            notificationId = (timestamp % 100000).toInt(),
+                                            destination = "CHAT",
+                                            groupId = groupId,
+                                            senderId = senderId
+                                        )
+                                    }
+                                    else -> {
+                                        // GEOFENCE_ALERT handled by events listener
+                                    }
+                                }
+                            }
+                            msg
+                        } catch (ex: Exception) {
+                            null
+                        }
+                    }
+                    if (list.isNotEmpty()) {
+                        val maxTime = list.maxOf { it.timestamp }
+                        if (maxTime > lastObservedMessageTimestamp) {
+                            lastObservedMessageTimestamp = maxTime
+                        }
+                    }
+                    // Blocco pieno = con ogni probabilita' c'e' altra storia da caricare.
+                    _hasMoreChat.value = list.size.toLong() >= limit
+                    isLoadingMoreChat = false
+                    // La query e' DESCENDING: la UI vuole i messaggi dal piu'
+                    // vecchio al piu' recente, altrimenti la chat appare capovolta.
+                    val chronological = list.sortedBy { it.timestamp }
+                    _currentGroupMessages.value = chronological
+                    recomputeUnreadChat(groupId, chronological)
+                }
+            }
+    }
+
+    /**
+     * Carica il blocco di messaggi precedente rialzando il limite e riagganciando
+     * il listener. Protetto da [isLoadingMoreChat] per non accodare richieste e da
+     * [hasMoreChat] per non chiedere oltre la fine della cronologia.
+     */
+    fun loadMoreChat() {
+        if (isLoadingMoreChat || !_hasMoreChat.value) return
+        val groupId = _currentUserState.value?.currentGroupId ?: return
+        isLoadingMoreChat = true
+        chatLimit += CHAT_PAGE_SIZE
+        listenToMessages(groupId, chatLimit)
     }
 
     private fun listenToGroupData(groupId: String) {
@@ -1959,106 +2092,10 @@ class FirebaseRepository private constructor(private val context: Context) {
                     }
                 }
 
-            // 3. Real-time chat messages listener (Notifies for Type 2: Chat & Type 3: SOS)
-            //
-            // Limitato agli ultimi CHAT_HISTORY_LIMIT messaggi. Le immagini sono
-            // Base64 dentro i documenti, fino a 1 MB l'una: senza limite, aprire un
-            // gruppo con cronologia lunga significava scaricarla tutta a ogni
-            // riconnessione del listener. Si ordina DESCENDING per prendere i piu'
-            // recenti e si riporta la lista in ordine cronologico piu' sotto.
-            messagesListener = firestore.collection("groups").document(groupId)
-                .collection("messages")
-                .orderBy("timestamp", Query.Direction.DESCENDING)
-                .limit(CHAT_HISTORY_LIMIT)
-                .addSnapshotListener { snapshot, e ->
-                    if (e != null) {
-                        if (isRecoverableListenerError(e)) scheduleGroupListenersReattach(groupId, "messages: ${e.message}")
-                        return@addSnapshotListener
-                    }
-                    if (snapshot != null) {
-                        val currentUid = _currentUserState.value?.uid
-                        val list = snapshot.documents.mapNotNull { doc ->
-                            try {
-                                val typeStr = doc.getString("type") ?: "TEXT"
-                                val type = try { MessageType.valueOf(typeStr) } catch (ex: Exception) { MessageType.TEXT }
-                                val imageBase64 = doc.getString("imageBase64")
-                                val imageUrl = doc.getString("imageUrl")
-                                val senderId = doc.getString("senderId") ?: ""
-                                val senderName = doc.getString("senderName") ?: "Membro"
-                                val text = doc.getString("text") ?: ""
-                                val timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
-
-                                val msg = ChatMessage(
-                                    id = doc.getString("id") ?: doc.id,
-                                    senderId = senderId,
-                                    senderName = senderName,
-                                    senderPhoto = doc.getString("senderPhoto"),
-                                    text = text,
-                                    imageBase64 = if (!imageBase64.isNullOrBlank()) imageBase64 else null,
-                                    imageUrl = if (!imageUrl.isNullOrBlank()) imageUrl else null,
-                                    timestamp = timestamp,
-                                    type = type,
-                                    latitude = doc.getDouble("latitude"),
-                                    longitude = doc.getDouble("longitude")
-                                )
-
-                                // Check if this is a new message from another member
-                                if (timestamp > lastObservedMessageTimestamp && senderId.isNotBlank() && senderId != currentUid) {
-                                    when (type) {
-                                        // TYPE 3: SOS Alert Message
-                                        MessageType.SOS_ALERT -> {
-                                            showLocalNotification(
-                                                title = str(R.string.notif_sos_title),
-                                                body = str(R.string.notif_sos_immediate_body, senderName),
-                                                isHighPriority = true,
-                                                notificationId = 999,
-                                                destination = "ALERT",
-                                                groupId = groupId,
-                                                latitude = doc.getDouble("latitude"),
-                                                longitude = doc.getDouble("longitude"),
-                                                senderId = senderId
-                                            )
-                                        }
-                                        // TYPE 2: Normal Group Chat Message
-                                        MessageType.TEXT, MessageType.IMAGE, MessageType.LOCATION_SHARE -> {
-                                            val bodyText = when (type) {
-                                                MessageType.IMAGE -> "Ha inviato un'immagine"
-                                                MessageType.LOCATION_SHARE -> "Ha condiviso la posizione"
-                                                else -> text
-                                            }
-                                            showLocalNotification(
-                                                title = senderName,
-                                                body = bodyText,
-                                                isHighPriority = false,
-                                                notificationId = (timestamp % 100000).toInt(),
-                                                destination = "CHAT",
-                                                groupId = groupId,
-                                                senderId = senderId
-                                            )
-                                        }
-                                        else -> {
-                                            // GEOFENCE_ALERT handled by events listener
-                                        }
-                                    }
-                                }
-                                msg
-                            } catch (ex: Exception) {
-                                null
-                            }
-                        }
-                        if (list.isNotEmpty()) {
-                            val maxTime = list.maxOf { it.timestamp }
-                            if (maxTime > lastObservedMessageTimestamp) {
-                                lastObservedMessageTimestamp = maxTime
-                            }
-                        }
-                        // La query e' DESCENDING: la UI vuole i messaggi dal piu'
-                        // vecchio al piu' recente, altrimenti la chat appare capovolta.
-                        val chronological = list.sortedBy { it.timestamp }
-                        _currentGroupMessages.value = chronological
-                        recomputeUnreadChat(groupId, chronological)
-                    }
-                }
+            // 3. Chat messages listener — paginato a blocchi (vedi listenToMessages).
+            chatLimit = CHAT_HISTORY_LIMIT
+            _hasMoreChat.value = false
+            listenToMessages(groupId, chatLimit)
 
             // 4. Real-time geofence & group events listener (TYPE 1: Places Entry/Exit & TYPE 3: SOS & Admin Join Requests)
             eventsListener = firestore.collection("groups").document(groupId)
@@ -4462,8 +4499,11 @@ class FirebaseRepository private constructor(private val context: Context) {
         /** Variazione minima di batteria che giustifica una scrittura su members/{uid}. */
         const val BATTERY_WRITE_DELTA = 5
 
-        /** Messaggi caricati dalla chat. Oltre, la cronologia costa piu' di quanto valga. */
+        /** Primo blocco di messaggi caricati aprendo la chat. */
         const val CHAT_HISTORY_LIMIT = 50L
+
+        /** Quanti messaggi in piu' si caricano a ogni scroll verso l'alto. */
+        const val CHAT_PAGE_SIZE = 50L
 
         private const val TAG = "FirebaseRepository"
         const val GOOGLE_SERVER_CLIENT_ID = "782024869586-as3i6548kt6l7t8nst4a5pr2ntfkca9v.apps.googleusercontent.com"

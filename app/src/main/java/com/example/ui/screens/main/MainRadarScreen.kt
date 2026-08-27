@@ -1517,7 +1517,10 @@ private fun PerspectiveMemberCoverFlow(
     val listCount = locations.size
     val loopMultiplier = 1000
     val totalCount = listCount * loopMultiplier
-    val initialCenter = (totalCount / 2) - ((totalCount / 2) % listCount)
+    // Di default l'utente selezionato sono IO: la carousel parte centrata sul mio
+    // avatar, non sul primo della lista.
+    val myIndex = locations.indexOfFirst { it.userId == currentUserId }.coerceAtLeast(0)
+    val initialCenter = (totalCount / 2) - ((totalCount / 2) % listCount) + myIndex
 
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialCenter)
     val snapFlingBehavior = rememberSnapFlingBehavior(lazyListState = listState)

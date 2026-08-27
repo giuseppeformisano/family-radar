@@ -35,6 +35,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.model.PlaceSnapshot
 import com.example.repository.FirebaseRepository
+import com.example.ui.theme.RadarDark
 import com.example.util.ImageUtils
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -84,7 +85,8 @@ fun AddPlaceSnapshotDialog(
                 .padding(vertical = 24.dp)
                 .wrapContentHeight(),
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg),
+            border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder)
         ) {
             Column(
                 modifier = Modifier
@@ -98,13 +100,13 @@ fun AddPlaceSnapshotDialog(
                     modifier = Modifier
                         .size(64.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        .background(RadarDark.AccentLight.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.CameraAlt,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = RadarDark.AccentLight,
                         modifier = Modifier.size(32.dp)
                     )
                 }
@@ -137,8 +139,9 @@ fun AddPlaceSnapshotDialog(
 
                 // GPS Location Chip
                 Surface(
-                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                    color = RadarDark.Surface,
                     shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -149,19 +152,20 @@ fun AddPlaceSnapshotDialog(
                         Icon(
                             imageVector = Icons.Default.LocationOn,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.secondary,
+                            tint = RadarDark.AccentLight,
                             modifier = Modifier.size(18.dp)
                         )
                         Column {
                             Text(
                                 text = strGeolocationLabel,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.secondary
+                                color = RadarDark.AccentLight
                             )
                             Text(
                                 text = String.format(Locale.US, "Lat: %.5f, Lon: %.5f", latitude, longitude),
                                 style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
+                                color = RadarDark.TextPrimary
                             )
                         }
                     }
@@ -219,13 +223,14 @@ fun AddPlaceSnapshotDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)
                 ) {
                     if (isPublishing) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(22.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f),
+                            color = Color.White,
+                            trackColor = Color.White.copy(alpha = 0.2f),
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(10.dp))

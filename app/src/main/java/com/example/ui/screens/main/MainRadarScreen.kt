@@ -1255,7 +1255,8 @@ fun MainRadarScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(Radius.xl),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder),
+                colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
@@ -1270,12 +1271,12 @@ fun MainRadarScreen(
                             tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(Sizes.iconLg))
                     }
                     Spacer(Modifier.height(Spacing.md))
-                    Text(stringResource(R.string.dialog_gps_title), style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.dialog_gps_title), style = MaterialTheme.typography.titleLarge, color = RadarDark.TextPrimary, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(Spacing.xs))
                     Text(
                         stringResource(R.string.dialog_gps_body),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = RadarDark.TextMuted,
                         textAlign = TextAlign.Center
                     )
                     Spacer(Modifier.height(Spacing.xl))
@@ -1285,12 +1286,14 @@ fun MainRadarScreen(
                             context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(Radius.sm)
+                        shape = RoundedCornerShape(Radius.sm),
+                        colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)
                     ) { Text(stringResource(R.string.action_enable_gps)) }
                     Spacer(Modifier.height(Spacing.sm))
                     TextButton(
                         onClick = { showGpsDialog = false },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.textButtonColors(contentColor = RadarDark.TextMuted)
                     ) { Text(stringResource(R.string.action_not_now)) }
                 }
             }
@@ -3975,7 +3978,8 @@ private fun ConfirmDialog(
                 .fillMaxWidth()
                 .padding(Spacing.md),
             shape = RoundedCornerShape(Radius.xl),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder),
+            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
         ) {
             Column(
                 modifier = Modifier
@@ -3996,7 +4000,7 @@ private fun ConfirmDialog(
                 Text(
                     text = message,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = RadarDark.TextMuted,
                     textAlign = TextAlign.Center
                 )
                 Row(
@@ -4006,7 +4010,9 @@ private fun ConfirmDialog(
                     OutlinedButton(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(Radius.sm)
+                        shape = RoundedCornerShape(Radius.sm),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
                     ) { Text(stringResource(R.string.action_cancel)) }
                     Button(
                         onClick = onConfirm,
@@ -4022,8 +4028,8 @@ private fun ConfirmDialog(
 
 @Composable
 private fun GroupLoadingOverlay() {
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val backgroundColor = MaterialTheme.colorScheme.background
+    val primaryColor = RadarDark.AccentLight
+    val backgroundColor = RadarDark.Bg
     val infiniteTransition = rememberInfiniteTransition(label = "radar_loading")
     val sweepAngle by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -4104,7 +4110,7 @@ private fun GroupLoadingOverlay() {
                 Text(
                     text = stringResource(R.string.loading_text),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = RadarDark.TextMuted
                 )
             }
         }
@@ -4120,7 +4126,7 @@ private fun SnapshotSourceDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(Radius.xl),
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = RadarDark.Bg,
         icon = {
             Box(
                 modifier = Modifier
@@ -4141,7 +4147,7 @@ private fun SnapshotSourceDialog(
             Text(
                 text = stringResource(R.string.snapshot_source_title),
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = RadarDark.TextPrimary
             )
         },
         text = {
@@ -4149,13 +4155,14 @@ private fun SnapshotSourceDialog(
                 Text(
                     text = stringResource(R.string.snapshot_source_body),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = RadarDark.TextMuted
                 )
                 Spacer(Modifier.height(Spacing.xs))
                 FilledTonalButton(
                     onClick = onCamera,
                     shape = RoundedCornerShape(Radius.sm),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = RadarDark.Surface, contentColor = RadarDark.TextPrimary)
                 ) {
                     Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
                     Spacer(Modifier.width(Spacing.sm))
@@ -4164,7 +4171,9 @@ private fun SnapshotSourceDialog(
                 OutlinedButton(
                     onClick = onGallery,
                     shape = RoundedCornerShape(Radius.sm),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
                 ) {
                     Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
                     Spacer(Modifier.width(Spacing.sm))
@@ -4174,7 +4183,7 @@ private fun SnapshotSourceDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = RadarDark.TextMuted)) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }
@@ -4451,7 +4460,8 @@ private fun TripDetailDialog(
                 .fillMaxWidth()
                 .padding(Spacing.lg),
             shape = RoundedCornerShape(Radius.xl),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder),
+            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
         ) {
             Column(
                 modifier = Modifier
@@ -4465,14 +4475,14 @@ private fun TripDetailDialog(
                     modifier = Modifier
                         .size(Sizes.avatarLg)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                        .background(RadarDark.AccentLight.copy(alpha = 0.15f))
                         .align(Alignment.CenterHorizontally),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         if (trip.source == TripSource.AUTO) Icons.Default.AutoMode else Icons.Default.Route,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = RadarDark.AccentLight,
                         modifier = Modifier.size(Sizes.iconLg)
                     )
                 }
@@ -4483,13 +4493,14 @@ private fun TripDetailDialog(
                         .takeIf { it.size == 2 }?.joinToString(" → ")
                         ?: stringResource(R.string.trip_title_of, trip.userName),
                     style = MaterialTheme.typography.titleMedium,
+                    color = RadarDark.TextPrimary,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
                     text = dateFormat.format(Date(trip.startTime)),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = RadarDark.TextMuted,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -4542,16 +4553,16 @@ private fun TripDetailDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) }
+                    TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = RadarDark.TextMuted)) { Text(stringResource(R.string.action_close)) }
                     Spacer(Modifier.width(Spacing.xs))
                     if (isOnMap) {
-                        OutlinedButton(onClick = onHideFromMap) {
+                        OutlinedButton(onClick = onHideFromMap, border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder), colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)) {
                             Icon(Icons.Default.LayersClear, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                             Spacer(Modifier.width(Spacing.xs))
                             Text(stringResource(R.string.action_remove_from_map))
                         }
                     } else {
-                        Button(onClick = onShowOnMap) {
+                        Button(onClick = onShowOnMap, colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)) {
                             Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                             Spacer(Modifier.width(Spacing.xs))
                             Text(stringResource(R.string.action_show_on_map))
@@ -4572,7 +4583,8 @@ private fun TripStatTile(
 ) {
     Surface(
         shape = RoundedCornerShape(Radius.md),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        color = RadarDark.Surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
         modifier = modifier
     ) {
         Column(
@@ -4582,15 +4594,15 @@ private fun TripStatTile(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = RadarDark.TextMuted
             )
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(text = value, style = MetricTextStyle, color = MaterialTheme.colorScheme.onSurface)
+                Text(text = value, style = MetricTextStyle, color = RadarDark.TextPrimary)
                 Spacer(Modifier.width(2.dp))
                 Text(
                     text = unit,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = RadarDark.TextMuted,
                     modifier = Modifier.padding(bottom = 2.dp)
                 )
             }
@@ -4607,12 +4619,12 @@ private fun TripDetailRow(label: String, value: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = RadarDark.TextMuted
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface
+            color = RadarDark.TextPrimary
         )
     }
 }

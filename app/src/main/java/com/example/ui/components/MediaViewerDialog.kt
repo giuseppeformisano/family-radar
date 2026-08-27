@@ -37,6 +37,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.model.PlaceSnapshot
+import com.example.ui.theme.RadarDark
 import com.example.util.ImageUtils
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -377,19 +378,26 @@ fun SnapshotClusterGalleryDialog(
             if (showDeleteConfirm) {
                 AlertDialog(
                     onDismissRequest = { showDeleteConfirm = false },
-                    title = { Text(strDeleteSnapshotTitle) },
-                    text = { Text(strDeleteSnapshotBody) },
+                    containerColor = RadarDark.Bg,
+                    title = { Text(strDeleteSnapshotTitle, color = RadarDark.TextPrimary) },
+                    text = { Text(strDeleteSnapshotBody, color = RadarDark.TextMuted) },
                     confirmButton = {
-                        TextButton(onClick = {
-                            showDeleteConfirm = false
-                            onDelete?.invoke(currentSnapshot)
-                            if (snapshots.size == 1) onDismiss()
-                        }) {
+                        TextButton(
+                            onClick = {
+                                showDeleteConfirm = false
+                                onDelete?.invoke(currentSnapshot)
+                                if (snapshots.size == 1) onDismiss()
+                            },
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
                             Text(stringResource(R.string.action_delete))
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showDeleteConfirm = false }) {
+                        TextButton(
+                            onClick = { showDeleteConfirm = false },
+                            colors = ButtonDefaults.textButtonColors(contentColor = RadarDark.TextMuted)
+                        ) {
                             Text(stringResource(R.string.action_cancel))
                         }
                     }

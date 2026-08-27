@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -46,6 +47,8 @@ import com.example.ui.screens.main.MainRadarScreen
 import com.example.ui.theme.LanguagePreferences
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.ThemePreferences
+import com.example.ui.theme.RadarDark
+import androidx.compose.ui.graphics.Color
 import com.example.util.AppUpdater
 import com.example.util.CheckResult
 import com.example.util.UpdateInfo
@@ -300,7 +303,8 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
             androidx.compose.material3.Card(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-                colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = RadarDark.Bg),
+                border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder)
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(24.dp),
@@ -311,20 +315,20 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
                         modifier = Modifier
                             .size(56.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                            .background(RadarDark.AccentLight.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Default.SystemUpdate,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = RadarDark.AccentLight,
                             modifier = Modifier.size(28.dp)
                         )
                     }
                     Text(
                         text = "È disponibile la versione ${info.versionName}.\nScaricala e installala ora.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = RadarDark.TextMuted,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -335,7 +339,9 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
                                 updateInfo = null
                             },
                             modifier = Modifier.weight(1f),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
                         ) { Text("Dopo") }
                         Button(
                             onClick = {
@@ -343,7 +349,8 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
                                 updateInfo = null
                             },
                             modifier = Modifier.weight(1f),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)
                         ) { Text("Aggiorna") }
                     }
                 }

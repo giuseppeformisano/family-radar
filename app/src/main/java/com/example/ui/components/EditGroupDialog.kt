@@ -45,6 +45,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -54,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.R
 import com.example.model.GroupData
+import com.example.ui.theme.RadarDark
 import com.example.ui.theme.Radius
 import com.example.ui.theme.Sizes
 import com.example.ui.theme.Spacing
@@ -114,7 +116,8 @@ fun EditGroupDialog(
                 .fillMaxWidth()
                 .padding(Spacing.lg),
             shape = RoundedCornerShape(Radius.xl),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg),
+            border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder)
         ) {
             Column(
                 modifier = Modifier
@@ -127,13 +130,13 @@ fun EditGroupDialog(
                     modifier = Modifier
                         .size(Sizes.avatarLg)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        .background(RadarDark.AccentLight.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.Group,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = RadarDark.AccentLight,
                         modifier = Modifier.size(Sizes.iconLg)
                     )
                 }
@@ -141,13 +144,13 @@ fun EditGroupDialog(
                 Text(
                     text = stringResource(R.string.dialog_edit_group_title),
                     style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = RadarDark.TextPrimary
                 )
                 Spacer(Modifier.height(Spacing.xs))
                 Text(
                     text = stringResource(R.string.dialog_edit_group_subtitle),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = RadarDark.TextMuted,
                     textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(Spacing.lg))
@@ -167,7 +170,8 @@ fun EditGroupDialog(
                 ) {
                     TextButton(
                         onClick = { photoPickerLauncher.launch("image/*") },
-                        enabled = !isProcessingImage && !isSaving
+                        enabled = !isProcessingImage && !isSaving,
+                        colors = ButtonDefaults.textButtonColors(contentColor = RadarDark.AccentLight)
                     ) {
                         Icon(
                             Icons.Default.PhotoLibrary,
@@ -232,12 +236,12 @@ fun EditGroupDialog(
                         Text(
                             text = stringResource(R.string.group_public_title),
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = RadarDark.TextPrimary
                         )
                         Text(
                             text = stringResource(R.string.group_public_desc),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = RadarDark.TextMuted
                         )
                     }
                     androidx.compose.material3.Switch(
@@ -257,7 +261,9 @@ fun EditGroupDialog(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(Radius.sm),
-                        enabled = !isSaving
+                        enabled = !isSaving,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
                     ) { Text(stringResource(R.string.action_cancel)) }
 
                     Button(
@@ -271,13 +277,14 @@ fun EditGroupDialog(
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(Radius.sm),
-                        enabled = !isSaving && name.isNotBlank()
+                        enabled = !isSaving && name.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)
                     ) {
                         if (isSaving) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(Sizes.iconMd),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f),
+                                color = Color.White,
+                                trackColor = Color.White.copy(alpha = 0.2f),
                                 strokeWidth = 2.dp
                             )
                         } else {
@@ -314,8 +321,8 @@ fun GroupPhotoPicker(
             modifier = Modifier
                 .fillMaxSize()
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer)
-                .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                .background(RadarDark.Surface)
+                .border(2.dp, RadarDark.AccentLight, CircleShape)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
@@ -335,7 +342,7 @@ fun GroupPhotoPicker(
                 else -> Text(
                     text = fallbackLetter,
                     style = MaterialTheme.typography.displaySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = RadarDark.TextPrimary
                 )
             }
         }
@@ -345,17 +352,17 @@ fun GroupPhotoPicker(
                 .align(Alignment.BottomEnd)
                 .size(Sizes.iconLg)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary)
+                .background(RadarDark.Accent)
                 // Anello del colore della superficie: stacca il badge dal bordo
                 // dell'avatar, che altrimenti gli passa dietro e lo confonde.
-                .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                .border(2.dp, RadarDark.Bg, CircleShape)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.CameraAlt,
                 contentDescription = stringResource(R.string.content_desc_change_image_badge),
-                tint = MaterialTheme.colorScheme.onPrimary,
+                tint = Color.White,
                 modifier = Modifier.size(Sizes.iconSm)
             )
         }

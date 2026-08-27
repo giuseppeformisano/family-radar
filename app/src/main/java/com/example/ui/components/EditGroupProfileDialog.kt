@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.model.GroupMember
+import com.example.ui.theme.RadarDark
 import com.example.ui.theme.Sizes
 import com.example.ui.theme.Spacing
 import com.example.util.ImageUtils
@@ -94,7 +96,8 @@ fun EditGroupProfileDialog(
                 .fillMaxWidth()
                 .padding(16.dp),
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg),
+            border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder)
         ) {
             Column(
                 modifier = Modifier
@@ -106,13 +109,13 @@ fun EditGroupProfileDialog(
                     modifier = Modifier
                         .size(Sizes.avatarLg)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        .background(RadarDark.AccentLight.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.Person,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = RadarDark.AccentLight,
                         modifier = Modifier.size(Sizes.iconLg)
                     )
                 }
@@ -121,13 +124,13 @@ fun EditGroupProfileDialog(
                     text = strProfileTitle,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = RadarDark.TextPrimary
                 )
 
                 Text(
                     text = strProfileSubtitle,
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = RadarDark.TextMuted,
                     modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
@@ -146,8 +149,8 @@ fun EditGroupProfileDialog(
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                            .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                            .background(RadarDark.Surface)
+                            .border(2.dp, RadarDark.AccentLight, CircleShape)
                             .clickable { photoPickerLauncher.launch("image/*") },
                         contentAlignment = Alignment.Center
                     ) {
@@ -168,7 +171,7 @@ fun EditGroupProfileDialog(
                                 text = displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "U",
                                 fontSize = 36.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = RadarDark.TextPrimary
                             )
                         }
                     }
@@ -179,15 +182,15 @@ fun EditGroupProfileDialog(
                             .align(Alignment.BottomEnd)
                             .size(28.dp)
                             .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary)
-                            .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                            .background(RadarDark.Accent)
+                            .border(2.dp, RadarDark.Bg, CircleShape)
                             .clickable { photoPickerLauncher.launch("image/*") },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.CameraAlt,
                             contentDescription = strChangePhoto,
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                            tint = Color.White,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -201,7 +204,8 @@ fun EditGroupProfileDialog(
                 ) {
                     TextButton(
                         onClick = { photoPickerLauncher.launch("image/*") },
-                        enabled = !isProcessingImage && !isSaving
+                        enabled = !isProcessingImage && !isSaving,
+                        colors = ButtonDefaults.textButtonColors(contentColor = RadarDark.AccentLight)
                     ) {
                         Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
@@ -266,7 +270,9 @@ fun EditGroupProfileDialog(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
-                        enabled = !isSaving
+                        enabled = !isSaving,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
                     ) {
                         Text(strCancel)
                     }
@@ -286,13 +292,14 @@ fun EditGroupProfileDialog(
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp),
-                        enabled = !isSaving && displayName.isNotBlank()
+                        enabled = !isSaving && displayName.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)
                     ) {
                         if (isSaving) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(18.dp),
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f),
+                                color = Color.White,
+                                trackColor = Color.White.copy(alpha = 0.2f),
                                 strokeWidth = 2.dp
                             )
                         } else {

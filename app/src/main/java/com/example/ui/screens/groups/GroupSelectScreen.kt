@@ -41,6 +41,7 @@ import com.example.R
 import com.example.model.GroupData
 import com.example.repository.FirebaseRepository
 import com.example.ui.components.*
+import com.example.ui.theme.RadarDark
 import com.example.ui.theme.RadarTheme
 import com.example.ui.theme.Radius
 import com.example.ui.theme.Sizes
@@ -657,15 +658,15 @@ private fun CreateGroupDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(Radius.xl),
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = RadarDark.Bg,
         icon = {
-            DialogIcon(Icons.Default.GroupAdd, MaterialTheme.colorScheme.primary)
+            DialogIcon(Icons.Default.GroupAdd, RadarDark.AccentLight)
         },
         title = {
             Text(
                 text = stringResource(R.string.dialog_create_group_title),
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = RadarDark.TextPrimary
             )
         },
         text = {
@@ -676,7 +677,7 @@ private fun CreateGroupDialog(
                 Text(
                     text = stringResource(R.string.dialog_create_group_subtitle),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = RadarDark.TextMuted
                 )
 
                 Column(
@@ -692,7 +693,8 @@ private fun CreateGroupDialog(
                     )
                     TextButton(
                         onClick = { photoPickerLauncher.launch("image/*") },
-                        enabled = !isProcessingImage && !isSubmitting
+                        enabled = !isProcessingImage && !isSubmitting,
+                        colors = ButtonDefaults.textButtonColors(contentColor = RadarDark.AccentLight)
                     ) {
                         Text(
                             if (photoBitmap != null) stringResource(R.string.action_change_image)
@@ -725,7 +727,7 @@ private fun CreateGroupDialog(
                 Text(
                     text = stringResource(R.string.label_who_can_join),
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = RadarDark.TextPrimary
                 )
 
                 AccessPolicyOption(
@@ -752,12 +754,12 @@ private fun CreateGroupDialog(
                         Text(
                             text = stringResource(R.string.group_public_title),
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = RadarDark.TextPrimary
                         )
                         Text(
                             text = stringResource(R.string.group_public_desc),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = RadarDark.TextMuted
                         )
                     }
                     Switch(
@@ -772,14 +774,15 @@ private fun CreateGroupDialog(
                 onClick = onConfirm,
                 enabled = name.isNotBlank() && !isSubmitting,
                 shape = RoundedCornerShape(Radius.sm),
+                colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White),
                 modifier = Modifier.testTag("confirm_create_group_button")
             ) {
                 if (isSubmitting) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.2f)
                     )
                 } else {
                     Text(stringResource(R.string.action_create))
@@ -790,7 +793,9 @@ private fun CreateGroupDialog(
             OutlinedButton(
                 onClick = onDismiss,
                 enabled = !isSubmitting,
-                shape = RoundedCornerShape(Radius.sm)
+                shape = RoundedCornerShape(Radius.sm),
+                border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
             ) { Text(stringResource(R.string.action_cancel)) }
         }
     )
@@ -805,8 +810,8 @@ private fun AccessPolicyOption(
 ) {
     Surface(
         shape = RoundedCornerShape(Radius.sm),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        color = RadarDark.Surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -821,12 +826,12 @@ private fun AccessPolicyOption(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = RadarDark.TextPrimary
                 )
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = RadarDark.TextMuted
                 )
             }
         }
@@ -846,13 +851,13 @@ private fun JoinGroupDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(Radius.xl),
-        containerColor = MaterialTheme.colorScheme.surface,
-        icon = { DialogIcon(Icons.Default.VpnKey, MaterialTheme.colorScheme.secondary) },
+        containerColor = RadarDark.Bg,
+        icon = { DialogIcon(Icons.Default.VpnKey, RadarDark.AccentLight) },
         title = {
             Text(
                 text = stringResource(R.string.dialog_join_title),
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = RadarDark.TextPrimary
             )
         },
         text = {
@@ -860,7 +865,7 @@ private fun JoinGroupDialog(
                 Text(
                     text = stringResource(R.string.dialog_join_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = RadarDark.TextMuted
                 )
                 OutlinedTextField(
                     value = code,
@@ -895,15 +900,15 @@ private fun JoinGroupDialog(
                     InfoBanner(
                         text = infoMessage.orEmpty(),
                         icon = Icons.Default.HourglassTop,
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                        accentColor = MaterialTheme.colorScheme.tertiary,
+                        containerColor = RadarDark.Surface,
+                        contentColor = RadarDark.TextPrimary,
+                        accentColor = RadarDark.AccentLight,
                         trailing = {
                             RadarProgressIndicator(
                                 size = 18.dp,
                                 strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.tertiary,
-                                trackColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)
+                                color = RadarDark.AccentLight,
+                                trackColor = RadarDark.AccentLight.copy(alpha = 0.2f)
                             )
                         }
                     )
@@ -915,14 +920,15 @@ private fun JoinGroupDialog(
                 onClick = onConfirm,
                 enabled = code.isNotBlank() && !isSubmitting,
                 shape = RoundedCornerShape(Radius.sm),
+                colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White),
                 modifier = Modifier.testTag("confirm_join_group_button")
             ) {
                 if (isSubmitting) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.2f)
                     )
                 } else {
                     Text(stringResource(R.string.action_send_request))
@@ -933,7 +939,9 @@ private fun JoinGroupDialog(
             OutlinedButton(
                 onClick = onDismiss,
                 enabled = !isSubmitting,
-                shape = RoundedCornerShape(Radius.sm)
+                shape = RoundedCornerShape(Radius.sm),
+                border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
             ) { Text(stringResource(R.string.action_close)) }
         }
     )
@@ -948,13 +956,13 @@ private fun PendingRequestDialog(
     AlertDialog(
         onDismissRequest = onAcknowledge,
         shape = RoundedCornerShape(Radius.xl),
-        containerColor = MaterialTheme.colorScheme.surface,
-        icon = { DialogIcon(Icons.Default.HourglassTop, MaterialTheme.colorScheme.tertiary) },
+        containerColor = RadarDark.Bg,
+        icon = { DialogIcon(Icons.Default.HourglassTop, RadarDark.AccentLight) },
         title = {
             Text(
                 text = stringResource(R.string.dialog_pending_title),
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = RadarDark.TextPrimary
             )
         },
         text = {
@@ -962,19 +970,23 @@ private fun PendingRequestDialog(
                 Text(
                     text = stringResource(R.string.dialog_pending_body, groupName),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = RadarDark.TextPrimary
                 )
                 InfoBanner(
                     text = stringResource(R.string.dialog_pending_note),
                     icon = Icons.Default.Schedule,
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                    accentColor = MaterialTheme.colorScheme.tertiary
+                    containerColor = RadarDark.Surface,
+                    contentColor = RadarDark.TextPrimary,
+                    accentColor = RadarDark.AccentLight
                 )
             }
         },
         confirmButton = {
-            Button(onClick = onAcknowledge, shape = RoundedCornerShape(Radius.sm)) {
+            Button(
+                onClick = onAcknowledge,
+                shape = RoundedCornerShape(Radius.sm),
+                colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)
+            ) {
                 Text(stringResource(R.string.action_got_it))
             }
         },
@@ -1075,13 +1087,13 @@ private fun GroupCodePreviewDialog(
     AlertDialog(
         onDismissRequest = { if (!isLoading) onDismiss() },
         shape = RoundedCornerShape(Radius.xl),
-        containerColor = MaterialTheme.colorScheme.surface,
-        icon = { DialogIcon(Icons.Default.Groups, MaterialTheme.colorScheme.primary) },
+        containerColor = RadarDark.Bg,
+        icon = { DialogIcon(Icons.Default.Groups, RadarDark.AccentLight) },
         title = {
             Text(
                 text = stringResource(R.string.join_code_preview_title),
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                color = RadarDark.TextPrimary
             )
         },
         text = {
@@ -1089,20 +1101,20 @@ private fun GroupCodePreviewDialog(
                 Text(
                     text = group.name,
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = RadarDark.TextPrimary
                 )
                 if (group.description.isNotBlank()) {
                     Text(
                         text = group.description,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = RadarDark.TextMuted
                     )
                 }
                 if (group.memberCount > 0) {
                     Text(
                         text = stringResource(R.string.group_members_count, group.memberCount),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = RadarDark.TextMuted
                     )
                 }
             }
@@ -1111,14 +1123,15 @@ private fun GroupCodePreviewDialog(
             Button(
                 onClick = onConfirm,
                 enabled = !isLoading,
-                shape = RoundedCornerShape(Radius.sm)
+                shape = RoundedCornerShape(Radius.sm),
+                colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.2f)
                     )
                 } else {
                     Text(stringResource(R.string.group_preview_confirm))
@@ -1129,7 +1142,9 @@ private fun GroupCodePreviewDialog(
             OutlinedButton(
                 onClick = onDismiss,
                 enabled = !isLoading,
-                shape = RoundedCornerShape(Radius.sm)
+                shape = RoundedCornerShape(Radius.sm),
+                border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
             ) { Text(stringResource(R.string.action_cancel)) }
         }
     )

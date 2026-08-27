@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -165,6 +166,7 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
 
     var currentScreen by remember { mutableStateOf(AppScreen.MAIN_RADAR) }
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var showChangelog by remember { mutableStateOf(false) }
 
     // Synchronize screen state with auth, group & deep link state
     LaunchedEffect(currentUser, userGroups, deepLinkTarget, isChoosingGroup) {
@@ -296,6 +298,88 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
                 }
             }
         } catch (_: Exception) {}
+    }
+
+    // Dialog "Novità": una volta dopo ogni aggiornamento (cambio versionCode).
+    // Al primissimo avvio non compare: si memorizza solo la versione corrente.
+    LaunchedEffect(Unit) {
+        val prefs = context.getSharedPreferences("family_radar_settings_prefs", android.content.Context.MODE_PRIVATE)
+        val seen = prefs.getInt("last_changelog_seen_code", 0)
+        val current = BuildConfig.VERSION_CODE
+        if (seen == 0) {
+            prefs.edit().putInt("last_changelog_seen_code", current).apply()
+        } else if (seen < current) {
+            showChangelog = true
+        }
+    }
+
+    if (showChangelog) {
+        fun dismissChangelog() {
+            context.getSharedPreferences("family_radar_settings_prefs", android.content.Context.MODE_PRIVATE)
+                .edit().putInt("last_changelog_seen_code", BuildConfig.VERSION_CODE).apply()
+            showChangelog = false
+        }
+        androidx.compose.ui.window.Dialog(onDismissRequest = { dismissChangelog() }) {
+            androidx.compose.material3.Card(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = RadarDark.Bg),
+                border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder)
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(RadarDark.AccentLight.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = RadarDark.AccentLight,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "Novità",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = RadarDark.TextPrimary
+                            )
+                            Text(
+                                text = Changelog.VERSION,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = RadarDark.TextMuted
+                            )
+                        }
+                    }
+                    Changelog.LINES.forEach { line ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("•", color = RadarDark.AccentLight)
+                            Text(
+                                text = line,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = RadarDark.TextPrimary
+                            )
+                        }
+                    }
+                    Button(
+                        onClick = { dismissChangelog() },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)
+                    ) { Text("Ho capito") }
+                }
+            }
+        }
     }
 
     updateInfo?.let { info ->

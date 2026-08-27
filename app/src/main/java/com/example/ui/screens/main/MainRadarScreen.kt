@@ -1831,7 +1831,7 @@ private fun FloatingDock(
             .fillMaxWidth()
             .padding(horizontal = Spacing.md),
         shape = RoundedCornerShape(24.dp),
-        color = Color(0xEE121216),
+        color = Color(0xCC18181B),
         border = BorderStroke(1.dp, Color(0x1F71717A)),
         shadowElevation = 8.dp
     ) {
@@ -1884,7 +1884,7 @@ private fun FloatingDock(
                                 .size(9.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFFF43F5E))
-                                .border(1.5.dp, Color(0xEE121216), CircleShape)
+                                .border(1.5.dp, Color(0xCC18181B), CircleShape)
                         )
                     }
                 }

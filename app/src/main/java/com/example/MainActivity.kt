@@ -300,15 +300,26 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
         } catch (_: Exception) {}
     }
 
-    // Dialog "Novità": una volta dopo ogni aggiornamento (cambio versionCode).
-    // Al primissimo avvio non compare: si memorizza solo la versione corrente.
+    // Dialog "Novità": una volta per versione, ma SOLO dopo un aggiornamento, mai
+    // su un'installazione nuova. Per distinguerli si usa il PackageManager
+    // (firstInstallTime vs lastUpdateTime) invece del fragile "seen==0", che
+    // mangiava la prima occorrenza quando si arrivava da una versione senza changelog.
     LaunchedEffect(Unit) {
         val prefs = context.getSharedPreferences("family_radar_settings_prefs", android.content.Context.MODE_PRIVATE)
-        val seen = prefs.getInt("last_changelog_seen_code", 0)
+        val seen = prefs.getInt("last_changelog_seen_code", -1)
         val current = BuildConfig.VERSION_CODE
-        if (seen == 0) {
+        if (seen == current) return@LaunchedEffect  // gia' vista questa versione
+
+        val isFreshInstall = try {
+            val pkg = context.packageManager.getPackageInfo(context.packageName, 0)
+            pkg.lastUpdateTime - pkg.firstInstallTime < 10_000L
+        } catch (_: Exception) { false }
+
+        if (seen == -1 && isFreshInstall) {
+            // Installazione nuova: niente popup, memorizza e basta.
             prefs.edit().putInt("last_changelog_seen_code", current).apply()
-        } else if (seen < current) {
+        } else {
+            // Aggiornamento (o prima esecuzione dopo una versione senza changelog).
             showChangelog = true
         }
     }

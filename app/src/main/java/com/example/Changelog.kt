@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.3-beta"
+    const val VERSION = "0.13.4-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🔊 Risolto il vocale che si tagliava in riproduzione automatica sulla mappa: ora parte intero.",
-        "Con l'ascolto automatico attivo, mentre sei sulla mappa non ricevi più anche la notifica del vocale."
+        "🆕 Questa schermata \"Novità\" ora compare correttamente dopo ogni aggiornamento (prima veniva saltata)."
     )
 }

@@ -100,6 +100,34 @@ private fun bearingDegrees(lat1: Double, lon1: Double, lat2: Double, lon2: Doubl
     return (Math.toDegrees(atan2(y, x)) + 360.0) % 360.0
 }
 
+/**
+ * Overlay che disegna un anello che pulsa attorno a un punto (marker di chi ha
+ * appena inviato un vocale). Due onde sfalsate che si espandono e sfumano.
+ * Quando [point] e' null non disegna nulla.
+ */
+private class VoicePulseOverlay : Overlay() {
+    @Volatile var point: GeoPoint? = null
+    @Volatile var phase: Float = 0f
+    private val ring = AndroidColor.rgb(52, 211, 153)
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+
+    override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
+        if (shadow) return
+        val p = point ?: return
+        val screen = android.graphics.Point()
+        mapView.projection.toPixels(p, screen)
+        val density = mapView.resources.displayMetrics.density
+        paint.color = ring
+        paint.strokeWidth = 3f * density
+        for (i in 0..1) {
+            val local = (phase + i * 0.5f) % 1f
+            val radius = (22f + local * 48f) * density
+            paint.alpha = ((1f - local) * 190f).toInt().coerceIn(0, 255)
+            canvas.drawCircle(screen.x.toFloat(), screen.y.toFloat(), radius, paint)
+        }
+    }
+}
+
 // In-memory cache for generated marker drawables to ensure 60 FPS layer switching
 private val markerDrawableCache = LruCache<String, Drawable>(120)
 
@@ -128,6 +156,8 @@ fun OsmMapView(
     onUserPan: () -> Unit = {},
     /** Chi si sta inseguendo: il suo marker riceve un anello di richiamo. */
     followedUserId: String? = null,
+    /** Membro che ha appena inviato un vocale: sul suo marker pulsa un anello. */
+    speakingUserId: String? = null,
     trips: List<Trip> = emptyList(),
     activeTripPoints: List<TripPoint> = emptyList(),
     selectedTripId: String? = null,
@@ -182,6 +212,10 @@ fun OsmMapView(
     // Mappa userId → marker osmdroid corrente, per aggiornarne la posizione
     // senza ricostruire l'intero overlay a ogni tick del dead reckoning.
     val memberMarkerMap = remember { mutableMapOf<String, Marker>() }
+
+    // Overlay dell'anello pulsante (voice ping). Persistente: viene riaggiunto in
+    // cima a ogni refresh; quando point e' null il draw esce subito (invisibile).
+    val voicePulseOverlay = remember { VoicePulseOverlay() }
 
     // Polilinee live dei viaggi attivi (proprio e degli altri membri), per aggiornarle
     // in modo fluido a ogni tick del dead reckoning senza ricostruire gli overlay.
@@ -301,9 +335,27 @@ fun OsmMapView(
             if (showMembers) {
                 mapView.overlays.addAll(memberOverlays)
             }
+            // Anello pulsante sempre in cima (disegna solo se ha un punto attivo).
+            mapView.overlays.add(voicePulseOverlay)
             mapView.invalidate()
         } catch (t: Throwable) {
             Log.w("OsmMapView", "Error refreshing overlays: ${t.message}")
+        }
+    }
+
+    // Ticker dell'anello pulsante: mentre speakingUserId e' attivo, aggiorna fase e
+    // posizione (segue il marker, anche interpolato) e ridisegna a ~25 fps.
+    LaunchedEffect(speakingUserId) {
+        if (speakingUserId == null) {
+            voicePulseOverlay.point = null
+            mapViewInstance?.invalidate()
+            return@LaunchedEffect
+        }
+        while (true) {
+            voicePulseOverlay.point = memberMarkerMap[speakingUserId]?.position
+            voicePulseOverlay.phase = (voicePulseOverlay.phase + 0.03f) % 1f
+            mapViewInstance?.invalidate()
+            delay(40L)
         }
     }
 

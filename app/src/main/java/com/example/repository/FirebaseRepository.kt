@@ -123,6 +123,12 @@ class FirebaseRepository private constructor(private val context: Context) {
     private val _hasMoreChat = MutableStateFlow(false)
     val hasMoreChat = _hasMoreChat.asStateFlow()
 
+    // Ultima nota vocale ARRIVATA da un altro membro (fresca): la mappa la usa per
+    // l'anello pulsante sul marker di chi parla e per l'autoplay di chi sta guardando.
+    data class VoicePing(val userId: String, val messageId: String, val audioBase64: String, val timestamp: Long)
+    private val _latestVoicePing = MutableStateFlow<VoicePing?>(null)
+    val latestVoicePing = _latestVoicePing.asStateFlow()
+
     private val _currentGroupMembers = MutableStateFlow<List<GroupMember>>(emptyList())
     val currentGroupMembers = _currentGroupMembers.asStateFlow()
 
@@ -174,6 +180,16 @@ class FirebaseRepository private constructor(private val context: Context) {
     // Global Ghost mode (default false) persisted
     private val _isGlobalGhostMode = MutableStateFlow(settingsPrefs.getBoolean("global_ghost_mode", false))
     val isGlobalGhostMode = _isGlobalGhostMode.asStateFlow()
+
+    // Autoplay note vocali per chi guarda la mappa (default spento) persistito.
+    private val _isVoiceAutoplayEnabled = MutableStateFlow(settingsPrefs.getBoolean("voice_autoplay", false))
+    val isVoiceAutoplayEnabled = _isVoiceAutoplayEnabled.asStateFlow()
+
+    fun setVoiceAutoplayEnabled(enabled: Boolean) {
+        if (_isVoiceAutoplayEnabled.value == enabled) return
+        _isVoiceAutoplayEnabled.value = enabled
+        runCatching { settingsPrefs.edit().putBoolean("voice_autoplay", enabled).apply() }
+    }
 
     // Risparmio energia (default false) persistito.
     //
@@ -1911,6 +1927,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                             val text = doc.getString("text") ?: ""
                             val timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
 
+                            val audioBase64 = doc.getString("audioBase64")
                             val msg = ChatMessage(
                                 id = doc.getString("id") ?: doc.id,
                                 senderId = senderId,
@@ -1922,11 +1939,18 @@ class FirebaseRepository private constructor(private val context: Context) {
                                 timestamp = timestamp,
                                 type = type,
                                 latitude = doc.getDouble("latitude"),
-                                longitude = doc.getDouble("longitude")
+                                longitude = doc.getDouble("longitude"),
+                                audioBase64 = if (!audioBase64.isNullOrBlank()) audioBase64 else null,
+                                audioDurationMs = doc.getLong("audioDurationMs") ?: 0L,
+                                placeName = doc.getString("placeName")?.ifBlank { null }
                             )
 
                             // Check if this is a new message from another member
                             if (timestamp > lastObservedMessageTimestamp && senderId.isNotBlank() && senderId != currentUid) {
+                                // Nota vocale fresca da un altro: segnala per anello/autoplay sulla mappa.
+                                if (type == MessageType.VOICE && !audioBase64.isNullOrBlank()) {
+                                    _latestVoicePing.value = VoicePing(senderId, msg.id, audioBase64, timestamp)
+                                }
                                 when (type) {
                                     // TYPE 3: SOS Alert Message
                                     MessageType.SOS_ALERT -> {
@@ -1943,10 +1967,11 @@ class FirebaseRepository private constructor(private val context: Context) {
                                         )
                                     }
                                     // TYPE 2: Normal Group Chat Message
-                                    MessageType.TEXT, MessageType.IMAGE, MessageType.LOCATION_SHARE -> {
+                                    MessageType.TEXT, MessageType.IMAGE, MessageType.LOCATION_SHARE, MessageType.VOICE -> {
                                         val bodyText = when (type) {
                                             MessageType.IMAGE -> "Ha inviato un'immagine"
                                             MessageType.LOCATION_SHARE -> "Ha condiviso la posizione"
+                                            MessageType.VOICE -> "Ha inviato un vocale"
                                             else -> text
                                         }
                                         showLocalNotification(
@@ -3181,7 +3206,10 @@ class FirebaseRepository private constructor(private val context: Context) {
                     "type" to msg.type.name,
                     "latitude" to (msg.latitude ?: 0.0),
                     "longitude" to (msg.longitude ?: 0.0),
-                    "snapshotId" to msg.snapshotId
+                    "snapshotId" to msg.snapshotId,
+                    "audioBase64" to (msg.audioBase64 ?: ""),
+                    "audioDurationMs" to msg.audioDurationMs,
+                    "placeName" to (msg.placeName ?: "")
                 )
                 firestore.collection("groups").document(groupId)
                     .collection("messages").document(msg.id).set(map)
@@ -3189,6 +3217,31 @@ class FirebaseRepository private constructor(private val context: Context) {
         } catch (e: Exception) {
             Log.w(TAG, "sendMessage firestore failed: ${e.message}")
         }
+    }
+
+    /**
+     * Invia una nota vocale come messaggio di chat (type VOICE). L'audio e' Base64,
+     * lat/lon sono il punto in cui e' stata registrata; placeName l'eventuale luogo.
+     */
+    fun sendVoiceMessage(
+        groupId: String,
+        audioBase64: String,
+        durationMs: Long,
+        latitude: Double?,
+        longitude: Double?,
+        placeName: String?
+    ) {
+        sendMessage(
+            groupId,
+            ChatMessage(
+                type = MessageType.VOICE,
+                audioBase64 = audioBase64,
+                audioDurationMs = durationMs,
+                latitude = latitude,
+                longitude = longitude,
+                placeName = placeName
+            )
+        )
     }
 
     /**

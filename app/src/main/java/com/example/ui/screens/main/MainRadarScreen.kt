@@ -102,6 +102,12 @@ import com.example.BuildConfig
 import com.example.util.AppUpdater
 import com.example.util.CheckResult
 import com.example.util.ImageUtils
+import com.example.util.VoiceUtils
+import android.media.MediaPlayer
+import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import com.example.util.UpdateInfo
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -378,6 +384,76 @@ fun MainRadarScreen(
         }
     }
 
+    // --- Nota vocale (push-to-talk, in basso a destra sulla mappa) ---
+    var isRecordingVoice by remember { mutableStateOf(false) }
+    val voiceRecording = remember { mutableStateOf<VoiceUtils.Recording?>(null) }
+    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) Toast.makeText(context, "Permesso microfono negato", Toast.LENGTH_SHORT).show()
+    }
+    fun startVoiceRecording(): Boolean {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            return false
+        }
+        if (currentGroup?.id.isNullOrBlank()) return false
+        val rec = VoiceUtils.startRecording(context) ?: run {
+            Toast.makeText(context, "Microfono non disponibile", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        voiceRecording.value = rec
+        isRecordingVoice = true
+        return true
+    }
+    fun stopAndSendVoice() {
+        val rec = voiceRecording.value ?: return
+        voiceRecording.value = null
+        isRecordingVoice = false
+        val durationMs = rec.stop()
+        val gid = currentGroup?.id
+        // Sotto ~mezzo secondo e' un tocco involontario: si scarta.
+        if (durationMs == null || durationMs < 500 || gid == null) {
+            runCatching { rec.file.delete() }
+            return
+        }
+        coroutineScope.launch {
+            val b64 = withContext(Dispatchers.IO) { VoiceUtils.fileToBase64(rec.file) }
+            runCatching { rec.file.delete() }
+            if (b64 != null) {
+                val myLoc = locations.find { it.userId == currentUserId }
+                repository.sendVoiceMessage(gid, b64, durationMs, myLoc?.latitude, myLoc?.longitude, myLoc?.currentPlaceName)
+            }
+        }
+    }
+
+    // Anello pulsante sul marker di chi ha appena inviato un vocale + autoplay
+    // (se attivo in Impostazioni) per chi sta guardando la mappa.
+    val latestVoicePing by repository.latestVoicePing.collectAsState()
+    val voiceAutoplay by repository.isVoiceAutoplayEnabled.collectAsState()
+    var speakingUserId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(latestVoicePing) {
+        val ping = latestVoicePing ?: return@LaunchedEffect
+        if (ping.userId == currentUserId) return@LaunchedEffect
+        if (System.currentTimeMillis() - ping.timestamp > 15_000) return@LaunchedEffect
+        speakingUserId = ping.userId
+        if (voiceAutoplay) {
+            val path = withContext(Dispatchers.IO) { VoiceUtils.base64ToTempFile(context, ping.audioBase64) }
+            if (path != null) {
+                runCatching {
+                    MediaPlayer().apply {
+                        setDataSource(path)
+                        prepare()
+                        setOnCompletionListener { runCatching { it.release() } }
+                        start()
+                    }
+                }
+            }
+        }
+        delay(4_000)
+        speakingUserId = null
+    }
+
     // --- Navigazione da notifica ---
     LaunchedEffect(deepLinkTarget) {
         val target = deepLinkTarget ?: return@LaunchedEffect
@@ -452,6 +528,7 @@ fun MainRadarScreen(
                 }
             },
             followedUserId = followedUserId,
+            speakingUserId = speakingUserId,
             activeTripPoints = activeTrip?.points ?: emptyList(),
             selectedTripId = selectedTripId,
             fitSelectedTripToken = fitTripToken,
@@ -585,7 +662,7 @@ fun MainRadarScreen(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
-                .padding(end = Spacing.lg, bottom = 80.dp)
+                .padding(end = Spacing.lg, bottom = 150.dp)
         ) {
             activeTrip?.let { trip ->
                 var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -623,6 +700,44 @@ fun MainRadarScreen(
                     }
                 }
             }
+        }
+
+        // Push-to-talk vocale: in basso a destra, raggiungibile col pollice destro.
+        // Stessa estetica dei RailButton della mappa. Tieni premuto per registrare
+        // (max VoiceUtils.MAX_DURATION_MS), rilascia per inviare.
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = Spacing.lg, bottom = 80.dp)
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(if (isRecordingVoice) Color(0xFFF43F5E) else Color(0xCC18181B))
+                .border(1.dp, Color(0x1F71717A), CircleShape)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = {
+                            val started = startVoiceRecording()
+                            if (started) {
+                                // Cap a MAX_DURATION_MS: si ferma al rilascio o allo scadere.
+                                withTimeoutOrNull(VoiceUtils.MAX_DURATION_MS) { tryAwaitRelease() }
+                                stopAndSendVoice()
+                            }
+                        }
+                    )
+                }
+                .testTag("voice_ptt_button"),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isRecordingVoice) {
+                RadarPulseAnimation(color = Color.White, modifier = Modifier.size(40.dp))
+            }
+            Icon(
+                imageVector = Icons.Default.Mic,
+                contentDescription = "Nota vocale",
+                tint = Color.White,
+                modifier = Modifier.size(26.dp)
+            )
         }
 
         // Dock Fluttuante in Basso al Centro (BottomCenter)
@@ -850,6 +965,8 @@ fun MainRadarScreen(
                                 isAutoTripEnabled = isAutoTripEnabled,
                                 isAutoTripShared = isAutoTripShared,
                                 isSimulationRunning = isSimulationRunning,
+                                isVoiceAutoplayEnabled = voiceAutoplay,
+                                onToggleVoiceAutoplay = { repository.setVoiceAutoplayEnabled(it) },
                                 onEditProfileClick = { showEditProfileDialog = true },
                                 onEditGroupClick = { showEditGroupDialog = true },
                                 onSwitchGroup = onSwitchGroup,
@@ -2539,6 +2656,9 @@ private fun ChatBubble(
             modifier = Modifier.widthIn(max = 300.dp)
         ) {
             Column(modifier = Modifier.padding(Spacing.sm)) {
+                if (message.type == MessageType.VOICE && !message.audioBase64.isNullOrBlank()) {
+                    VoiceMessagePlayer(message = message, isMe = isMe)
+                }
                 val bitmap = remember(message.imageBase64) {
                     ImageUtils.base64ToBitmap(message.imageBase64)
                 }
@@ -2590,6 +2710,106 @@ private fun ChatBubble(
                     modifier = Modifier
                         .align(Alignment.End)
                         .padding(top = Spacing.xxs)
+                )
+            }
+        }
+    }
+}
+
+/** Player di una nota vocale in chat: play/pausa, durata e luogo di registrazione. */
+@Composable
+private fun VoiceMessagePlayer(message: ChatMessage, isMe: Boolean) {
+    val context = LocalContext.current
+    var isPlaying by remember { mutableStateOf(false) }
+    val player = remember { mutableStateOf<MediaPlayer?>(null) }
+    DisposableEffect(message.id) {
+        onDispose {
+            runCatching { player.value?.release() }
+            player.value = null
+        }
+    }
+
+    val onSurface = if (isMe) Color.White else Color(0xFFF2F2F7)
+    val muted = if (isMe) Color(0xCCFFFFFF) else Color(0xFFA1A1AA)
+    val durationSec = (message.audioDurationMs / 1000.0).roundToInt().coerceAtLeast(1)
+    val place = message.placeName?.takeIf { it.isNotBlank() }
+        ?: message.latitude?.let { lat ->
+            message.longitude?.let { lon ->
+                if (lat != 0.0 || lon != 0.0) String.format(Locale.US, "%.4f, %.4f", lat, lon) else null
+            }
+        }
+
+    fun toggle() {
+        val b64 = message.audioBase64 ?: return
+        if (isPlaying) {
+            runCatching { player.value?.pause() }
+            isPlaying = false
+            return
+        }
+        if (player.value == null) {
+            val path = VoiceUtils.base64ToTempFile(context, b64) ?: return
+            player.value = runCatching {
+                MediaPlayer().apply {
+                    setDataSource(path)
+                    prepare()
+                    setOnCompletionListener { isPlaying = false; runCatching { seekTo(0) } }
+                }
+            }.getOrNull()
+        }
+        runCatching { player.value?.start() }
+        isPlaying = player.value != null
+    }
+
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(if (isMe) Color(0x33FFFFFF) else Color(0xFF6366F1))
+                    .clickable { toggle() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (isPlaying) "Pausa" else "Riproduci",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.GraphicEq,
+                contentDescription = null,
+                tint = onSurface.copy(alpha = 0.9f),
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = "0:%02d".format(durationSec),
+                style = MaterialTheme.typography.labelMedium,
+                color = onSurface
+            )
+        }
+        if (place != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier.padding(top = Spacing.xxs)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Place,
+                    contentDescription = null,
+                    tint = muted,
+                    modifier = Modifier.size(12.dp)
+                )
+                Text(
+                    text = place,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -2845,6 +3065,8 @@ private fun SettingsPanel(
     isAutoTripEnabled: Boolean,
     isAutoTripShared: Boolean,
     isSimulationRunning: Boolean,
+    isVoiceAutoplayEnabled: Boolean,
+    onToggleVoiceAutoplay: (Boolean) -> Unit,
     onEditProfileClick: () -> Unit,
     onEditGroupClick: () -> Unit,
     onSwitchGroup: () -> Unit,
@@ -2983,6 +3205,14 @@ private fun SettingsPanel(
                     checked = myMember?.isTrackingActive ?: true,
                     onCheckedChange = onToggleGroupTracking,
                     testTag = "group_tracking_switch"
+                )
+                SettingsToggleRow(
+                    title = "Riproduci vocali automaticamente",
+                    description = "Le note vocali dei membri partono da sole mentre guardi la mappa",
+                    icon = Icons.Default.RecordVoiceOver,
+                    checked = isVoiceAutoplayEnabled,
+                    onCheckedChange = onToggleVoiceAutoplay,
+                    testTag = "voice_autoplay_switch"
                 )
             }
         }

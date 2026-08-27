@@ -5,7 +5,8 @@ enum class MessageType {
     IMAGE,
     SOS_ALERT,
     GEOFENCE_ALERT,
-    LOCATION_SHARE
+    LOCATION_SHARE,
+    VOICE
 }
 
 data class ChatMessage(
@@ -20,7 +21,12 @@ data class ChatMessage(
     val type: MessageType = MessageType.TEXT,
     val latitude: Double? = null,
     val longitude: Double? = null,
-    val snapshotId: String = ""
+    val snapshotId: String = "",
+    // Nota vocale: audio AAC/m4a in Base64 + durata. La posizione (lat/lon sopra)
+    // e' quella in cui e' stata registrata, mostrata in chat.
+    val audioBase64: String? = null,
+    val audioDurationMs: Long = 0L,
+    val placeName: String? = null
 ) {
     /**
      * Returns the image model suitable for Coil AsyncImage.

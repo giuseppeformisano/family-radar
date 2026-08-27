@@ -53,6 +53,7 @@ import com.example.ui.theme.BadgeTextStyle
 import com.example.ui.theme.Elevation
 import com.example.ui.theme.MetricTextStyle
 import com.example.ui.theme.Radius
+import com.example.ui.theme.RadarDark
 import com.example.ui.theme.RadarSemantic
 import com.example.ui.theme.RadarTheme
 import com.example.ui.theme.Sizes
@@ -310,14 +311,12 @@ fun PillChip(
     badgeCount: Int = 0
 ) {
     val container by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.surfaceVariant,
+        targetValue = if (selected) RadarDark.Accent else RadarDark.Surface,
         animationSpec = tween(180),
         label = "pill_container"
     )
     val content by animateColorAsState(
-        targetValue = if (selected) MaterialTheme.colorScheme.onPrimary
-        else MaterialTheme.colorScheme.onSurfaceVariant,
+        targetValue = if (selected) Color.White else RadarDark.TextMuted,
         animationSpec = tween(180),
         label = "pill_content"
     )
@@ -357,7 +356,7 @@ fun PillChip(
                         .size(16.dp)
                         .clip(CircleShape)
                         .background(
-                            if (selected) MaterialTheme.colorScheme.onPrimary
+                            if (selected) Color.White
                             else MaterialTheme.colorScheme.error
                         ),
                     contentAlignment = Alignment.Center
@@ -365,7 +364,7 @@ fun PillChip(
                     Text(
                         text = if (badgeCount > 9) "9+" else badgeCount.toString(),
                         style = BadgeTextStyle,
-                        color = if (selected) MaterialTheme.colorScheme.primary
+                        color = if (selected) RadarDark.Accent
                         else MaterialTheme.colorScheme.onError,
                         maxLines = 1
                     )

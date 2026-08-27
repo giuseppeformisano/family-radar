@@ -3183,11 +3183,10 @@ private fun SettingsPanel(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
                 ) {
-                    OutlinedButton(
+                    Button(
                         onClick = onSwitchGroup,
                         shape = RoundedCornerShape(Radius.sm),
-                        border = BorderStroke(1.dp, RadarDark.SurfaceBorder),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary),
+                        colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White),
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm)
                     ) {
@@ -3196,11 +3195,10 @@ private fun SettingsPanel(
                         Text(stringResource(R.string.action_change_short))
                     }
                     if (isOwnerOrAdmin && currentGroup != null) {
-                        OutlinedButton(
+                        Button(
                             onClick = onEditGroupClick,
                             shape = RoundedCornerShape(Radius.sm),
-                            border = BorderStroke(1.dp, RadarDark.SurfaceBorder),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary),
+                            colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White),
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag("edit_group_button"),
@@ -3448,7 +3446,7 @@ private fun SettingsPanel(
                 var checkResult by remember { mutableStateOf<CheckResult?>(null) }
                 val checkScope = rememberCoroutineScope()
 
-                OutlinedButton(
+                Button(
                     onClick = {
                         if (!checking) {
                             checking = true
@@ -3460,14 +3458,15 @@ private fun SettingsPanel(
                         }
                     },
                     shape = RoundedCornerShape(Radius.sm),
-                    border = BorderStroke(1.dp, RadarDark.SurfaceBorder),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary),
+                    colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     if (checking) {
-                        RadarProgressIndicator(
-                            size = Sizes.iconMd,
-                            strokeWidth = 2.dp
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(Sizes.iconMd),
+                            strokeWidth = 2.dp,
+                            color = Color.White,
+                            trackColor = Color(0x33FFFFFF)
                         )
                         Spacer(Modifier.width(Spacing.sm))
                     }
@@ -3923,6 +3922,18 @@ private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     }
 }
 
+// Colori Switch a tema (indaco), per non ereditare l'azzurrino di default di
+// Material / dynamic color. Usato da tutti gli interruttori delle impostazioni.
+@Composable
+private fun radarSwitchColors() = SwitchDefaults.colors(
+    checkedThumbColor = Color.White,
+    checkedTrackColor = RadarDark.Accent,
+    checkedBorderColor = RadarDark.Accent,
+    uncheckedThumbColor = RadarDark.TextMuted,
+    uncheckedTrackColor = RadarDark.Surface,
+    uncheckedBorderColor = RadarDark.SurfaceBorder
+)
+
 @Composable
 private fun SettingsToggleRow(
     title: String,
@@ -3965,6 +3976,7 @@ private fun SettingsToggleRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
+            colors = radarSwitchColors(),
             modifier = if (testTag != null) Modifier.testTag(testTag) else Modifier
         )
     }

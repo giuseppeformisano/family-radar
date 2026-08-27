@@ -31,6 +31,7 @@ import com.example.model.TripSource
 import com.example.model.ActiveTripState
 import com.example.util.ImageUtils
 import com.example.util.MotionTrigger
+import com.example.util.VoiceUtils
 import com.google.android.gms.location.*
 import com.google.firebase.FirebaseException
 import com.google.firebase.auth.*

@@ -452,10 +452,11 @@ fun MainRadarScreen(
 
     // Riproduce una nota vocale una volta: scarica l'audio dal doc separato
     // (una sola volta, poi cache) e lo suona. Fire-and-forget.
-    fun playVoiceNoteById(groupId: String?, messageId: String) {
+    fun playVoiceNoteById(groupId: String?, messageId: String, audioUrl: String? = null) {
         val gid = groupId ?: return
+        val resolvedUrl = audioUrl ?: repository.currentGroupMessages.value.find { it.id == messageId }?.audioUrl
         coroutineScope.launch {
-            val path = repository.getVoiceNotePath(gid, messageId) ?: return@launch
+            val path = repository.getVoiceNotePath(gid, messageId, resolvedUrl) ?: return@launch
             runCatching {
                 MediaPlayer().apply {
                     setDataSource(path)
@@ -2385,14 +2386,22 @@ private fun ChatPanel(
         isUploading = true
         coroutineScope.launch {
             val res = repository.compressImageToBase64(uri, maxDimension = 1280, quality = 85)
-            isUploading = false
             val base64 = res.getOrNull()
             if (res.isSuccess && !base64.isNullOrBlank()) {
+                // Prova upload su Cloudinary; fallback a Base64 inline se fallisce.
+                val imageUrl = repository.uploadImageToCloudinary(base64)
+                isUploading = false
                 repository.sendMessage(
                     groupId,
-                    ChatMessage(text = caption, imageBase64 = base64, type = MessageType.IMAGE)
+                    ChatMessage(
+                        text = caption,
+                        imageBase64 = if (imageUrl != null) null else base64,
+                        imageUrl = imageUrl,
+                        type = MessageType.IMAGE
+                    )
                 )
             } else {
+                isUploading = false
                 Toast.makeText(context, "Errore elaborazione immagine", Toast.LENGTH_SHORT).show()
             }
         }
@@ -2842,7 +2851,7 @@ private fun VoiceMessagePlayer(
         // Prima riproduzione: scarica l'audio dal doc separato (una volta) e suona.
         isLoading = true
         scope.launch {
-            val path = repository.getVoiceNotePath(groupId, message.id)
+            val path = repository.getVoiceNotePath(groupId, message.id, message.audioUrl)
             isLoading = false
             if (path == null) return@launch
             player.value = runCatching {

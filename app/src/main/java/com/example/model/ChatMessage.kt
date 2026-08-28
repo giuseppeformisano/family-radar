@@ -25,6 +25,7 @@ data class ChatMessage(
     // Nota vocale: audio AAC/m4a in Base64 + durata. La posizione (lat/lon sopra)
     // e' quella in cui e' stata registrata, mostrata in chat.
     val audioBase64: String? = null,
+    val audioUrl: String? = null,
     val audioDurationMs: Long = 0L,
     val placeName: String? = null
 ) {

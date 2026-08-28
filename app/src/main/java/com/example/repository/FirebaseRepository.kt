@@ -49,6 +49,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
@@ -1935,6 +1942,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                             val timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis()
 
                             val audioBase64 = doc.getString("audioBase64")
+                            val audioUrl = doc.getString("audioUrl")
                             val msg = ChatMessage(
                                 id = doc.getString("id") ?: doc.id,
                                 senderId = senderId,
@@ -1948,6 +1956,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                                 latitude = doc.getDouble("latitude"),
                                 longitude = doc.getDouble("longitude"),
                                 audioBase64 = if (!audioBase64.isNullOrBlank()) audioBase64 else null,
+                                audioUrl = if (!audioUrl.isNullOrBlank()) audioUrl else null,
                                 audioDurationMs = doc.getLong("audioDurationMs") ?: 0L,
                                 placeName = doc.getString("placeName")?.ifBlank { null }
                             )
@@ -2302,7 +2311,10 @@ class FirebaseRepository private constructor(private val context: Context) {
                                 val lat = doc.getDouble("latitude") ?: 0.0
                                 val lon = doc.getDouble("longitude") ?: 0.0
                                 val photoBase64 = doc.getString("photoBase64") ?: ""
-                                if (photoBase64.isBlank() || (lat == 0.0 && lon == 0.0)) return@mapNotNull null
+                                val photoUrl = doc.getString("photoUrl")?.takeIf { it.isNotBlank() }
+                                // Accetta snapshot con URL o con Base64; scarta solo se entrambi mancano.
+                                if (photoUrl == null && photoBase64.isBlank()) return@mapNotNull null
+                                if (lat == 0.0 && lon == 0.0) return@mapNotNull null
                                 PlaceSnapshot(
                                     id = doc.getString("id") ?: doc.id,
                                     groupId = doc.getString("groupId") ?: groupId,
@@ -2310,6 +2322,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     userName = doc.getString("userName") ?: "Membro",
                                     userPhotoBase64 = doc.getString("userPhotoBase64"),
                                     photoBase64 = photoBase64,
+                                    photoUrl = photoUrl,
                                     latitude = lat,
                                     longitude = lon,
                                     timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
@@ -3189,6 +3202,75 @@ class FirebaseRepository private constructor(private val context: Context) {
         return Result.success(Unit)
     }
 
+    // ================== CLOUDINARY UPLOAD ==================
+
+    private val httpClient by lazy { OkHttpClient() }
+    private val renderBaseUrl = "https://cross-notify-hub.onrender.com"
+    private val renderApiKey = "cross-notify-secret-key-2026"
+
+    /**
+     * Carica un file su Cloudinary via il backend Render e ritorna l'URL pubblico,
+     * o null in caso di errore. Da chiamare sempre su Dispatchers.IO.
+     */
+    private suspend fun uploadFileToCloudinary(
+        base64: String,
+        mimeType: String,
+        filename: String,
+        appName: String = "family-radar"
+    ): String? = withContext(Dispatchers.IO) {
+        try {
+            val json = JSONObject().apply {
+                put("appName", appName)
+                put("fileBase64", base64)
+                put("mimeType", mimeType)
+                put("filename", filename)
+            }
+            val body = json.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url("$renderBaseUrl/upload-file")
+                .addHeader("x-api-key", renderApiKey)
+                .post(body)
+                .build()
+            val response = httpClient.newCall(request).execute()
+            val responseBody = response.body?.string()
+            if (response.isSuccessful && responseBody != null) {
+                JSONObject(responseBody).optString("url").takeIf { it.isNotBlank() }
+            } else {
+                Log.w(TAG, "uploadFileToCloudinary HTTP ${response.code}: $responseBody")
+                null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "uploadFileToCloudinary fallita: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * Scarica un file da URL e lo scrive in cache locale. Ritorna il path locale o null.
+     */
+    private suspend fun downloadToCache(messageId: String, url: String, extension: String = "m4a"): String? =
+        withContext(Dispatchers.IO) {
+            try {
+                val file = File(context.cacheDir, "voice_$messageId.$extension")
+                if (file.exists() && file.length() > 0) return@withContext file.absolutePath
+                val request = Request.Builder().url(url).build()
+                val response = httpClient.newCall(request).execute()
+                if (response.isSuccessful) {
+                    response.body?.bytes()?.let { bytes ->
+                        file.writeBytes(bytes)
+                        file.absolutePath
+                    }
+                } else null
+            } catch (e: Exception) {
+                Log.w(TAG, "downloadToCache fallita per $messageId: ${e.message}")
+                null
+            }
+        }
+
+    /** Carica un'immagine JPEG (Base64) su Cloudinary e ritorna l'URL pubblico o null. */
+    suspend fun uploadImageToCloudinary(base64: String, filename: String = "img_${System.currentTimeMillis()}.jpg"): String? =
+        uploadFileToCloudinary(base64, "image/jpeg", filename)
+
     // ================== MESSAGES & CHAT (BASE64 ON FIRESTORE) ==================
 
     fun sendMessage(groupId: String, message: ChatMessage) {
@@ -3223,6 +3305,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                     "longitude" to (msg.longitude ?: 0.0),
                     "snapshotId" to msg.snapshotId,
                     "audioBase64" to (msg.audioBase64 ?: ""),
+                    "audioUrl" to (msg.audioUrl ?: ""),
                     "audioDurationMs" to msg.audioDurationMs,
                     "placeName" to (msg.placeName ?: "")
                 )
@@ -3238,7 +3321,7 @@ class FirebaseRepository private constructor(private val context: Context) {
      * Invia una nota vocale come messaggio di chat (type VOICE). L'audio e' Base64,
      * lat/lon sono il punto in cui e' stata registrata; placeName l'eventuale luogo.
      */
-    fun sendVoiceMessage(
+    suspend fun sendVoiceMessage(
         groupId: String,
         audioBase64: String,
         durationMs: Long,
@@ -3247,23 +3330,29 @@ class FirebaseRepository private constructor(private val context: Context) {
         placeName: String?
     ) {
         val id = "msg_${UUID.randomUUID().toString().take(8)}"
-        // L'audio va in un documento SEPARATO, fuori dal listener della chat: cosi'
-        // il listener resta leggero e i ri-agganci non riscaricano megabyte di audio.
-        try {
-            firestore?.collection("groups")?.document(groupId)
-                ?.collection("voiceNotes")?.document(id)
-                ?.set(hashMapOf("audioBase64" to audioBase64))
-        } catch (e: Exception) {
-            Log.w(TAG, "scrittura voiceNote fallita: ${e.message}")
+        // Carica l'audio su Cloudinary; in caso di errore fallback sulla vecchia
+        // voiceNotes collection cosi' il messaggio viene comunque inviato.
+        val audioUrl = uploadFileToCloudinary(audioBase64, "audio/mp4", "$id.m4a")
+        if (audioUrl != null) {
+            // Cache locale per il mittente: evita di riscaricarlo al primo play.
+            runCatching { VoiceUtils.writeCacheFromBase64(context, id, audioBase64) }
+        } else {
+            // Fallback: salva in Firestore come prima (retrocompatibilita').
+            try {
+                firestore?.collection("groups")?.document(groupId)
+                    ?.collection("voiceNotes")?.document(id)
+                    ?.set(hashMapOf("audioBase64" to audioBase64))
+            } catch (e: Exception) {
+                Log.w(TAG, "scrittura voiceNote fallback fallita: ${e.message}")
+            }
+            runCatching { VoiceUtils.writeCacheFromBase64(context, id, audioBase64) }
         }
-        // Cache locale per il mittente: cosi' riascolta il proprio vocale senza rileggerlo.
-        runCatching { VoiceUtils.writeCacheFromBase64(context, id, audioBase64) }
-        // Il messaggio in chat porta solo i metadati (niente audioBase64).
         sendMessage(
             groupId,
             ChatMessage(
                 id = id,
                 type = MessageType.VOICE,
+                audioUrl = audioUrl,
                 audioDurationMs = durationMs,
                 latitude = latitude,
                 longitude = longitude,
@@ -3276,8 +3365,13 @@ class FirebaseRepository private constructor(private val context: Context) {
      * Path locale dell'audio di una nota vocale, scaricandolo UNA sola volta dal doc
      * separato `voiceNotes/{messageId}` e mettendolo in cache. Ritorna null se assente.
      */
-    suspend fun getVoiceNotePath(groupId: String, messageId: String): String? {
+    suspend fun getVoiceNotePath(groupId: String, messageId: String, audioUrl: String? = null): String? {
         VoiceUtils.cachedPath(context, messageId)?.let { return it }
+        // Nuovo percorso: scarica da Cloudinary URL.
+        if (!audioUrl.isNullOrBlank()) {
+            return downloadToCache(messageId, audioUrl)
+        }
+        // Fallback per vecchi messaggi: leggi da voiceNotes Firestore.
         return try {
             val doc = firestore?.collection("groups")?.document(groupId)
                 ?.collection("voiceNotes")?.document(messageId)?.get()?.await()
@@ -3331,12 +3425,16 @@ class FirebaseRepository private constructor(private val context: Context) {
         val currentGroup = user.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id
             ?: return Result.failure(Exception(str(R.string.err_no_group_selected)))
 
+        val snapshotId = if (snapshot.id.isBlank()) "snp_${UUID.randomUUID().toString().take(8)}" else snapshot.id
+        // Carica foto snapshot su Cloudinary; fallback a Base64 se fallisce.
+        val photoUrl = uploadFileToCloudinary(snapshot.photoBase64, "image/jpeg", "$snapshotId.jpg")
         val newSnapshot = snapshot.copy(
-            id = if (snapshot.id.isBlank()) "snp_${UUID.randomUUID().toString().take(8)}" else snapshot.id,
+            id = snapshotId,
             groupId = currentGroup,
             userId = user.uid,
             userName = user.displayName,
             userPhotoBase64 = user.photoBase64,
+            photoUrl = photoUrl,
             timestamp = System.currentTimeMillis()
         )
 
@@ -3348,7 +3446,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                     "userId" to newSnapshot.userId,
                     "userName" to newSnapshot.userName,
                     "userPhotoBase64" to (newSnapshot.userPhotoBase64 ?: ""),
-                    "photoBase64" to newSnapshot.photoBase64,
+                    "photoBase64" to if (photoUrl != null) "" else newSnapshot.photoBase64,
+                    "photoUrl" to (photoUrl ?: ""),
                     "latitude" to newSnapshot.latitude,
                     "longitude" to newSnapshot.longitude,
                     "timestamp" to newSnapshot.timestamp,
@@ -3365,7 +3464,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                     senderPhoto = user.photoBase64,
                     text = if (newSnapshot.caption.isNotBlank()) str(R.string.msg_new_snapshot_caption, newSnapshot.caption)
                         else str(R.string.msg_new_snapshot),
-                    imageBase64 = newSnapshot.photoBase64,
+                    imageBase64 = if (photoUrl != null) null else newSnapshot.photoBase64,
+                    imageUrl = photoUrl,
                     timestamp = newSnapshot.timestamp,
                     type = MessageType.IMAGE,
                     latitude = newSnapshot.latitude,

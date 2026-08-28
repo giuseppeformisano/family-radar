@@ -7,6 +7,7 @@ data class PlaceSnapshot(
     val userName: String = "",
     val userPhotoBase64: String? = null,
     val photoBase64: String = "",
+    val photoUrl: String? = null,
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
     val timestamp: Long = System.currentTimeMillis(),

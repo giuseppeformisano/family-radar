@@ -10,10 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.7-beta"
+    const val VERSION = "0.13.8-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🎙️ Il pulsante del vocale ora pulsa in modo evidente mentre tieni premuto per registrare."
+        "☁️ Vocali, foto chat e snapshot ora caricati su cloud: meno letture Firestore, meno quota consumata.",
+        "🎙️ Il pulsante del vocale pulsa in modo evidente mentre tieni premuto per registrare."
     )
 }

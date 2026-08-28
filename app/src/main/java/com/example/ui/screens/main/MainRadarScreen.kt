@@ -23,6 +23,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -742,40 +744,78 @@ fun MainRadarScreen(
 
         // Push-to-talk vocale: in basso a destra, raggiungibile col pollice destro.
         // Stessa estetica dei RailButton della mappa. Tieni premuto per registrare
-        // (max VoiceUtils.MAX_DURATION_MS), rilascia per inviare.
+        // (max VoiceUtils.MAX_DURATION_MS), rilascia per inviare. Mentre registri il
+        // pulsante "respira" lentamente ed emette un alone rosso, ben visibile.
         Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .navigationBarsPadding()
                 .padding(end = Spacing.lg, bottom = 80.dp)
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(if (isRecordingVoice) Color(0xFFF43F5E) else Color(0xCC18181B))
-                .border(1.dp, Color(0x1F71717A), CircleShape)
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onPress = {
-                            val started = startVoiceRecording()
-                            if (started) {
-                                // Cap a MAX_DURATION_MS: si ferma al rilascio o allo scadere.
-                                withTimeoutOrNull(VoiceUtils.MAX_DURATION_MS) { tryAwaitRelease() }
-                                stopAndSendVoice()
-                            }
-                        }
-                    )
-                }
-                .testTag("voice_ptt_button"),
+                .size(56.dp),
             contentAlignment = Alignment.Center
         ) {
-            if (isRecordingVoice) {
-                RadarPulseAnimation(color = Color.White, modifier = Modifier.size(40.dp))
-            }
-            Icon(
-                imageVector = Icons.Default.Mic,
-                contentDescription = "Nota vocale",
-                tint = Color.White,
-                modifier = Modifier.size(26.dp)
+            val recTransition = rememberInfiniteTransition(label = "recPulse")
+            val pulseScale by recTransition.animateFloat(
+                initialValue = 1f,
+                targetValue = 1.22f,
+                animationSpec = infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+                label = "recPulseScale"
             )
+            val haloAlpha by recTransition.animateFloat(
+                initialValue = 0.5f,
+                targetValue = 0f,
+                animationSpec = infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+                label = "recHaloAlpha"
+            )
+
+            if (isRecordingVoice) {
+                // Alone che si espande e sfuma: rende la registrazione evidente.
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .graphicsLayer {
+                            scaleX = pulseScale + 0.4f
+                            scaleY = pulseScale + 0.4f
+                            alpha = haloAlpha
+                        }
+                        .clip(CircleShape)
+                        .background(Color(0xFFF43F5E))
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .graphicsLayer {
+                        val s = if (isRecordingVoice) pulseScale else 1f
+                        scaleX = s
+                        scaleY = s
+                    }
+                    .clip(CircleShape)
+                    .background(if (isRecordingVoice) Color(0xFFF43F5E) else Color(0xCC18181B))
+                    .border(1.dp, Color(0x1F71717A), CircleShape)
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onPress = {
+                                val started = startVoiceRecording()
+                                if (started) {
+                                    // Cap a MAX_DURATION_MS: si ferma al rilascio o allo scadere.
+                                    withTimeoutOrNull(VoiceUtils.MAX_DURATION_MS) { tryAwaitRelease() }
+                                    stopAndSendVoice()
+                                }
+                            }
+                        )
+                    }
+                    .testTag("voice_ptt_button"),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "Nota vocale",
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
         }
 
         // Dock Fluttuante in Basso al Centro (BottomCenter)

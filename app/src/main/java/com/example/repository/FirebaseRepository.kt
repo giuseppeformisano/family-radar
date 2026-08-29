@@ -4716,7 +4716,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         const val CHAT_PAGE_SIZE = 50L
 
         private const val TAG = "FirebaseRepository"
-        const val GOOGLE_SERVER_CLIENT_ID = "782024869586-as3i6548kt6l7t8nst4a5pr2ntfkca9v.apps.googleusercontent.com"
+        const val GOOGLE_SERVER_CLIENT_ID = "357992636648-6k4uqv3pe5bbqke0ocjo1amlhlps5m8n.apps.googleusercontent.com"
 
         @Volatile
         private var instance: FirebaseRepository? = null

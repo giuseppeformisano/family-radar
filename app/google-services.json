@@ -1,41 +1,41 @@
 {
   "project_info": {
-    "project_number": "259712029330",
-    "project_id": "family-tracker-482b3",
-    "storage_bucket": "family-tracker-482b3.firebasestorage.app"
+    "project_number": "357992636648",
+    "project_id": "family-tracker-58524",
+    "storage_bucket": "family-tracker-58524.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:259712029330:android:3a1110e99f06251a638c4b",
+        "mobilesdk_app_id": "1:357992636648:android:65214bbaaf95257f20295d",
         "android_client_info": {
           "package_name": "com.formisano.familyradar"
         }
       },
       "oauth_client": [
         {
-          "client_id": "259712029330-tmtcoc88ubuc4gsjltbj7unkibfi98jr.apps.googleusercontent.com",
+          "client_id": "357992636648-77ovji0qdm7vpcppjd1mmkioiamknlun.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.formisano.familyradar",
-            "certificate_hash": "98c68ce2aa4534ba35a7fea3cc365457cdd3a3d9"
+            "certificate_hash": "7866380444b5df033c139c046071fc027defcf11"
           }
         },
         {
-          "client_id": "259712029330-1dfod3mfmam3gl06ho268254lfojqdin.apps.googleusercontent.com",
+          "client_id": "357992636648-6k4uqv3pe5bbqke0ocjo1amlhlps5m8n.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyAtJukAzCuX168LOnN0vZwP-W5RfVXh5EM"
+          "current_key": "AIzaSyC_QwKvuDV3FWMv9VfqrgO0T5025Lehd54"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "259712029330-1dfod3mfmam3gl06ho268254lfojqdin.apps.googleusercontent.com",
+              "client_id": "357992636648-6k4uqv3pe5bbqke0ocjo1amlhlps5m8n.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

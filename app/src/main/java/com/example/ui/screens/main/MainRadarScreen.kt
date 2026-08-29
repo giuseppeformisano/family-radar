@@ -1515,8 +1515,8 @@ private fun MapTopBar(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        color = Color(0x0A71717A),
-        border = BorderStroke(1.dp, Color(0x1F71717A))
+        color = Color(0xFF27272A),
+        border = BorderStroke(1.dp, Color(0x33FFFFFF))
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

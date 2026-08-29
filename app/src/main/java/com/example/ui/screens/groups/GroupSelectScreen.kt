@@ -711,6 +711,16 @@ private fun CreateGroupDialog(
                     placeholder = { Text(stringResource(R.string.placeholder_group_name)) },
                     singleLine = true,
                     shape = RoundedCornerShape(Radius.sm),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = RadarDark.AccentLight,
+                        unfocusedBorderColor = RadarDark.SurfaceBorder,
+                        focusedLabelColor = RadarDark.AccentLight,
+                        unfocusedLabelColor = RadarDark.TextMuted,
+                        cursorColor = RadarDark.AccentLight,
+                        focusedTextColor = RadarDark.TextPrimary,
+                        unfocusedTextColor = RadarDark.TextPrimary,
+                        unfocusedPlaceholderColor = RadarDark.TextMuted,
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("group_name_input")
@@ -721,6 +731,15 @@ private fun CreateGroupDialog(
                     label = { Text(stringResource(R.string.label_group_description)) },
                     singleLine = true,
                     shape = RoundedCornerShape(Radius.sm),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = RadarDark.AccentLight,
+                        unfocusedBorderColor = RadarDark.SurfaceBorder,
+                        focusedLabelColor = RadarDark.AccentLight,
+                        unfocusedLabelColor = RadarDark.TextMuted,
+                        cursorColor = RadarDark.AccentLight,
+                        focusedTextColor = RadarDark.TextPrimary,
+                        unfocusedTextColor = RadarDark.TextPrimary,
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
 

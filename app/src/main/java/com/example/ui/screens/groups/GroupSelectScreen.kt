@@ -783,7 +783,15 @@ private fun CreateGroupDialog(
                     }
                     Switch(
                         checked = isPublic,
-                        onCheckedChange = onIsPublicChange
+                        onCheckedChange = onIsPublicChange,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = RadarDark.Accent,
+                            checkedBorderColor = RadarDark.AccentLight,
+                            uncheckedThumbColor = RadarDark.TextMuted,
+                            uncheckedTrackColor = RadarDark.Surface,
+                            uncheckedBorderColor = RadarDark.SurfaceBorder,
+                        )
                     )
                 }
             }

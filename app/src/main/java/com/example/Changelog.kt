@@ -14,6 +14,8 @@ object Changelog {
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
+        "🎨 Pannello mappa: sfondo e bordo identici ai pulsanti Glass.",
+        "🎨 Dialog crea gruppo: tema nero/viola su Switch e campi testo.",
         "🔄 Migrazione a nuovo progetto Firebase: nuovo ID app com.formisano.familyradar.",
         "📉 Scritture Firestore ridotte del 98% durante i viaggi."
     )

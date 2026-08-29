@@ -10,13 +10,12 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.15-beta"
+    const val VERSION = "0.13.16-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🎨 Pannello mappa: sfondo e bordo identici ai pulsanti Glass.",
-        "🎨 Dialog crea gruppo: tema nero/viola su Switch e campi testo.",
-        "🔄 Migrazione a nuovo progetto Firebase: nuovo ID app com.formisano.familyradar.",
-        "📉 Scritture Firestore ridotte del 98% durante i viaggi."
+        "🎨 Pannello nome gruppo: fondo e bordo identici ai pulsanti mappa.",
+        "🎨 Dialog crea gruppo: radio button ora nero/viola come il resto.",
+        "🔄 Migrazione a nuovo progetto Firebase: nuovo ID app com.formisano.familyradar."
     )
 }

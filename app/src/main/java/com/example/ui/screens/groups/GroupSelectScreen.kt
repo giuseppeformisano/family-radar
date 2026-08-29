@@ -848,7 +848,16 @@ private fun AccessPolicyOption(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
         ) {
-            RadioButton(selected = selected, onClick = onClick)
+            RadioButton(
+                selected = selected,
+                onClick = onClick,
+                colors = RadioButtonDefaults.colors(
+                    selectedColor = RadarDark.AccentLight,
+                    unselectedColor = RadarDark.TextMuted,
+                    disabledSelectedColor = RadarDark.SurfaceBorder,
+                    disabledUnselectedColor = RadarDark.SurfaceBorder,
+                )
+            )
             Column {
                 Text(
                     text = title,

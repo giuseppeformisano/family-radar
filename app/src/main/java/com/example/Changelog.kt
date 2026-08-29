@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.8-beta"
+    const val VERSION = "0.13.9-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "☁️ Vocali, foto chat e snapshot ora caricati su cloud: meno letture Firestore, meno quota consumata.",
-        "🎙️ Il pulsante del vocale pulsa in modo evidente mentre tieni premuto per registrare."
+        "📉 Scritture Firestore drasticamente ridotte durante i viaggi: posizione aggiornata ogni 30s invece di ogni 500ms.",
+        "📍 La traccia del viaggio viene salvata ogni 60s invece di ogni 15s: meno quota consumata."
     )
 }

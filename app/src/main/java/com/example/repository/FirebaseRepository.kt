@@ -2699,6 +2699,15 @@ class FirebaseRepository private constructor(private val context: Context) {
             return LocationGate(true, if (isAppInForeground) "in-app heartbeat" else "heartbeat", isHeartbeat = true)
         }
 
+        // Durante un viaggio attivo, la velocità supera quasi sempre la soglia
+        // e causerebbe una scrittura su locations/{uid} ogni 500 ms. Limitiamo
+        // a una scrittura ogni TRIP_LOCATION_WRITE_INTERVAL_MS (30 s): gli altri
+        // membri vedono comunque la posizione aggiornata di frequente tramite
+        // la traccia live (flushLiveTrip), non dal documento locations.
+        if (_activeTrip.value != null && elapsed < TRIP_LOCATION_WRITE_INTERVAL_MS) {
+            return LocationGate(false, "trip throttle: ultimo invio ${elapsed / 1000}s fa")
+        }
+
         if (location.speed > MOVING_SPEED_THRESHOLD_MS) {
             return LocationGate(true, "in movimento (${"%.1f".format(location.speed)} m/s)")
         }
@@ -4629,7 +4638,10 @@ class FirebaseRepository private constructor(private val context: Context) {
         const val TRIP_RDP_EPSILON_METERS = 10.0
 
         /** Ogni quanto la diretta (traccia RDP) viene riversata su Firestore. */
-        const val TRIP_LIVE_FLUSH_MS = 15_000L
+        const val TRIP_LIVE_FLUSH_MS = 60_000L
+
+        /** Durante un viaggio, scrive locations/{uid} al massimo ogni 30 s. */
+        const val TRIP_LOCATION_WRITE_INTERVAL_MS = 30_000L
 
         /**
          * Oltre questo intervallo fra due punti non si conta tempo in movimento:

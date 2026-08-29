@@ -479,7 +479,7 @@ fun MainRadarScreen(
         if (ping.userId == currentUserId) return@LaunchedEffect
         if (System.currentTimeMillis() - ping.timestamp > 15_000) return@LaunchedEffect
         speakingUserId = ping.userId
-        if (voiceAutoplay) playVoiceNoteById(currentGroup?.id, ping.messageId)
+        if (voiceAutoplay) playVoiceNoteById(currentGroup?.id, ping.messageId, ping.audioUrl)
         delay(maxOf(4_000L, ping.durationMs + 1_200L))
         speakingUserId = null
     }

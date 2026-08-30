@@ -3934,8 +3934,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                 lastFixAt = now
             )
             // Aggiornamento della diretta: non a ogni punto, sarebbero centinaia
-            // di scritture all'ora. Ogni 15 secondi si riversa la traccia RDP
-            // semplificata: gli altri la vedono avanzare a un costo sostenibile.
+            // di scritture all'ora. Ogni [TRIP_LIVE_FLUSH_MS] si riversa la traccia
+            // RDP semplificata: gli altri la vedono avanzare a un costo sostenibile.
             if (next.liveTripId != null && now - next.lastLiveWriteAt >= TRIP_LIVE_FLUSH_MS) {
                 flushDue = true
                 next.copy(lastLiveWriteAt = now)
@@ -4184,6 +4184,8 @@ class FirebaseRepository private constructor(private val context: Context) {
     /** Quando e' partita l'ultima notifica di movimento: per il cooldown. */
     private var lastMovementNotifyAt: Long =
         settingsPrefs.getLong("movement_notify_at", 0L)
+    /** Vero se si e' gia' avvisato per lo spostamento in corso (fino alla prossima sosta). */
+    private var movementNotifiedThisSession: Boolean = false
 
     /** Vero mentre i fix sono infittiti dopo uno scatto del sensore di movimento. */
     private var isFixRateBoosted: Boolean = false
@@ -4576,8 +4578,11 @@ class FirebaseRepository private constructor(private val context: Context) {
      *   1. Android classifica il movimento come VIAGGIO (auto / bici / corsa);
      *   2. ci si e' allontanati di [MOVEMENT_NOTIFY_DISTANCE_M] dall'ultimo punto
      *      in cui si era fermi.
-     * Un cooldown per-persona ([MOVEMENT_NOTIFY_COOLDOWN_MS]) evita di ri-avvisare
-     * a ogni ripartenza dopo una sosta breve (spesa, benzina).
+     * Si notifica UNA volta per sessione di movimento: finche' non ci si ferma
+     * (Android torna a fermo / a piedi) non si ri-avvisa, anche se il viaggio dura
+     * ore e si percorrono altri chilometri. Il cooldown per-persona
+     * ([MOVEMENT_NOTIFY_COOLDOWN_MS]) e' la seconda rete: assorbe le soste brevi
+     * (spesa, benzina) che azzererebbero la sessione facendo ri-partire l'avviso.
      */
     private fun evaluateMovementNotification(location: UserLocation) {
         if (location.accuracy > TRIP_MAX_ACCURACY_METERS) return
@@ -4587,12 +4592,19 @@ class FirebaseRepository private constructor(private val context: Context) {
             kind == ActivityKind.BICYCLE ||
             kind == ActivityKind.RUNNING
 
-        // Fermo o a piedi: qui si ancora il punto di partenza del prossimo viaggio.
+        // Fermo o a piedi: si ancora il punto di partenza e si chiude la sessione,
+        // cosi' un nuovo spostamento potra' generare un nuovo avviso.
         if (!isTravel) {
             movementAnchorLat = location.latitude
             movementAnchorLon = location.longitude
+            movementNotifiedThisSession = false
             return
         }
+
+        // Gia' avvisato per questo spostamento: non si ripete finche' non ci si
+        // ferma. E' la correzione al caso "in auto da un'ora": lo stato non e'
+        // cambiato, quindi nessun nuovo avviso.
+        if (movementNotifiedThisSession) return
 
         // Primo fix "in viaggio" senza un'ancora: la si fissa adesso e si aspetta
         // il fix successivo per misurare l'allontanamento.
@@ -4618,10 +4630,8 @@ class FirebaseRepository private constructor(private val context: Context) {
 
         lastMovementNotifyAt = now
         settingsPrefs.edit().putLong("movement_notify_at", now).apply()
-        // Riparte da qui: perche' scatti di nuovo serve una nuova sosta seguita da
-        // un nuovo allontanamento, non basta continuare lo stesso viaggio.
-        movementAnchorLat = location.latitude
-        movementAnchorLon = location.longitude
+        // Sessione avvisata: non si ri-notifica finche' non si torna fermi.
+        movementNotifiedThisSession = true
 
         val notifiedKind = kind
         CoroutineScope(Dispatchers.IO).launch { emitMovementEvent(notifiedKind) }
@@ -4782,11 +4792,22 @@ class FirebaseRepository private constructor(private val context: Context) {
          */
         const val TRIP_RDP_EPSILON_METERS = 10.0
 
-        /** Ogni quanto la diretta (traccia RDP) viene riversata su Firestore. */
-        const val TRIP_LIVE_FLUSH_MS = 60_000L
+        /**
+         * Ogni quanto la diretta (traccia RDP) viene riversata su Firestore.
+         *
+         * A 60s la traccia che vedono gli altri avanzava a scatti: fra un flush e
+         * l'altro la mappa univa i punti radi con segmenti dritti, poi "saltava"
+         * alla curva reale. 10s la rende scorrevole tenendo il costo contenuto
+         * (6 scritture/min, solo durante un viaggio condiviso attivo).
+         */
+        const val TRIP_LIVE_FLUSH_MS = 10_000L
 
-        /** Durante un viaggio, scrive locations/{uid} al massimo ogni 30 s. */
-        const val TRIP_LOCATION_WRITE_INTERVAL_MS = 30_000L
+        /**
+         * Durante un viaggio, scrive locations/{uid} al massimo ogni 10 s: e' da qui
+         * che gli altri leggono la posizione del pallino, quindi deve tenere il
+         * passo con la traccia, altrimenti il marker resta indietro a scatti.
+         */
+        const val TRIP_LOCATION_WRITE_INTERVAL_MS = 10_000L
 
         /**
          * Oltre questo intervallo fra due punti non si conta tempo in movimento:

@@ -10,11 +10,12 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.19-beta"
+    const val VERSION = "0.13.20-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🎙️ Push-to-talk finalmente live: il vocale di un membro parte da solo sulla mappa con il pulse sul suo pallino.",
-        "🐞 Corretto il mittente mancante sui vocali, che bloccava l'ascolto in diretta."
+        "🎙️ Vocali fino a 2 minuti (prima erano max 5 secondi).",
+        "🗺️ Traccia dei viaggi in diretta più fluida: aggiornata ogni 10s invece di 30-60s.",
+        "🔔 Notifica \"in movimento\": una sola volta per spostamento, niente ripetizioni durante lo stesso viaggio."
     )
 }

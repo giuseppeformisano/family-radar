@@ -12,14 +12,15 @@ import java.io.File
  * come le immagini) e file temporaneo per la riproduzione.
  *
  * La durata massima e' un parametro unico [MAX_DURATION_MS]: alzarlo qui basta.
- * A 5s in AAC ~24kbps il file e' di pochi KB, ben sotto il limite Firestore di 1 MB.
+ * L'audio ora va su Cloudinary (non piu' Base64 su Firestore), quindi il limite
+ * del documento da 1 MB non vincola piu': a 24kbps 2 minuti sono ~360 KB.
  */
 object VoiceUtils {
 
     private const val TAG = "VoiceUtils"
 
     /** Durata massima di una nota vocale. Parametro unico, facile da cambiare. */
-    const val MAX_DURATION_MS = 5_000L
+    const val MAX_DURATION_MS = 120_000L
 
     /** Bitrate/sampling volutamente bassi: e' voce, non musica. */
     private const val BITRATE = 24_000

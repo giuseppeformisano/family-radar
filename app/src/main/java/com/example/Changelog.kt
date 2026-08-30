@@ -10,12 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.17-beta"
+    const val VERSION = "0.13.18-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🔔 Notifica \"in movimento\": avvisa il gruppo quando ti sposti (auto/bici/corsa), max una ogni 30 min.",
-        "🚗 Auto-trip meno sensibile: soglie più alte, niente viaggi fantasma da fermo.",
-        "📍 La notifica movimento funziona anche con l'auto-trip spento."
+        "🔊 Backend audio corretto: le nuove note vocali ora sono riproducibili.",
+        "🐞 Push-to-talk: messaggi d'errore a schermo se un vocale non parte, per capire dove si rompe."
     )
 }

@@ -453,17 +453,37 @@ fun MainRadarScreen(
     // Riproduce una nota vocale una volta: scarica l'audio dal doc separato
     // (una sola volta, poi cache) e lo suona. Fire-and-forget.
     fun playVoiceNoteById(groupId: String?, messageId: String, audioUrl: String? = null) {
-        val gid = groupId ?: return
+        val gid = groupId ?: run {
+            android.util.Log.w("VoicePlay", "groupId nullo per $messageId")
+            return
+        }
         val resolvedUrl = audioUrl ?: repository.currentGroupMessages.value.find { it.id == messageId }?.audioUrl
+        android.util.Log.d("VoicePlay", "play $messageId url=$resolvedUrl")
         coroutineScope.launch {
-            val path = repository.getVoiceNotePath(gid, messageId, resolvedUrl) ?: return@launch
-            runCatching {
+            val path = repository.getVoiceNotePath(gid, messageId, resolvedUrl)
+            if (path == null) {
+                android.util.Log.w("VoicePlay", "path nullo per $messageId (url=$resolvedUrl)")
+                Toast.makeText(context, "Vocale: download fallito (url=${if (resolvedUrl.isNullOrBlank()) "assente" else "ok"})", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            android.util.Log.d("VoicePlay", "path risolto $path")
+            try {
                 MediaPlayer().apply {
                     setDataSource(path)
                     prepare()
                     setOnCompletionListener { runCatching { it.release() } }
+                    setOnErrorListener { mp, what, extra ->
+                        android.util.Log.e("VoicePlay", "MediaPlayer errore what=$what extra=$extra")
+                        Toast.makeText(context, "Vocale: player errore $what/$extra", Toast.LENGTH_LONG).show()
+                        runCatching { mp.release() }
+                        true
+                    }
                     start()
+                    android.util.Log.d("VoicePlay", "start() ok per $messageId")
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("VoicePlay", "riproduzione fallita $messageId: ${e.message}", e)
+                Toast.makeText(context, "Vocale: riproduzione fallita ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }

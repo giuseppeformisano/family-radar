@@ -269,9 +269,14 @@ fun OsmMapView(
         motionEstimate.keys.retainAll(activeIds)
     }
 
-    // Ticker del dead reckoning: ogni 100 ms calcola la posizione estrapolata
-    // di ogni membro in movimento e aggiorna direttamente il marker osmdroid e
-    // la polilinea del tragitto in corso per seguire l'interpolazione con continuita'.
+    // Ticker del dead reckoning: ogni 100 ms estrapola la posizione del PROPRIO
+    // marker durante il viaggio e ne fa scorrere linea e pallino con continuita'.
+    //
+    // Vale SOLO per l'utente stesso: per gli altri membri la posizione arriva ogni
+    // ~10s (flush della diretta) e anticiparla sarebbe indovinare un dato vecchio,
+    // con il marker che va avanti "a naso" e poi salta alla correzione. Meglio
+    // mostrarli sulle posizioni reali ricevute. In piu' si risparmia il lavoro del
+    // ticker su tutti i marker tranne il proprio.
     // Il LaunchedEffect si cancella automaticamente quando il composable esce
     // dalla composizione.
     LaunchedEffect(Unit) {
@@ -281,7 +286,8 @@ fun OsmMapView(
             var changed = false
             memberMarkerMap.forEach { (userId, marker) ->
                 val tag = marker.relatedObject as? UserLocation ?: return@forEach
-                // Solo chi sta facendo un viaggio: fuori da un viaggio niente anticipo.
+                // Solo il proprio marker, e solo mentre si e' in viaggio.
+                if (userId != currentUserId) return@forEach
                 if (userId !in liveTripUserIds) return@forEach
                 val motion = motionEstimate[userId] ?: return@forEach
                 if (motion.speedMs < INTERP_MIN_SPEED_MS) return@forEach

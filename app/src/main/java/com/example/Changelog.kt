@@ -10,12 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.20-beta"
+    const val VERSION = "0.13.21-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🎙️ Vocali fino a 2 minuti (prima erano max 5 secondi).",
-        "🗺️ Traccia dei viaggi in diretta più fluida: aggiornata ogni 10s invece di 30-60s.",
-        "🔔 Notifica \"in movimento\": una sola volta per spostamento, niente ripetizioni durante lo stesso viaggio."
+        "🗺️ Marker degli altri membri mostrato sulle posizioni reali, non più stimato in avanti (niente salti, meno consumo).",
+        "🧭 Interpolazione fluida mantenuta solo sul proprio viaggio."
     )
 }

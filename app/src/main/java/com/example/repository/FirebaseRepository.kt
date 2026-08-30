@@ -3305,14 +3305,16 @@ class FirebaseRepository private constructor(private val context: Context) {
 
     fun sendMessage(groupId: String, message: ChatMessage) {
         val user = _currentUserState.value
-        val msg = if (message.id.isBlank()) {
-            message.copy(
-                id = "msg_${UUID.randomUUID().toString().take(8)}",
-                senderId = user?.uid ?: "anon",
-                senderName = user?.displayName ?: "Utente",
-                timestamp = System.currentTimeMillis()
-            )
-        } else message
+        // I campi mittente vanno riempiti SEMPRE, anche quando chi chiama ha gia'
+        // assegnato l'id (es. sendVoiceMessage, che genera l'id per correlare la
+        // cache audio). Prima si saltava del tutto questo blocco per id non vuoto,
+        // e il messaggio finiva su Firestore con senderId = "": sul ricevente il
+        // ping live sulla mappa (che richiede senderId non vuoto) non partiva mai.
+        val msg = message.copy(
+            id = message.id.ifBlank { "msg_${UUID.randomUUID().toString().take(8)}" },
+            senderId = message.senderId.ifBlank { user?.uid ?: "anon" },
+            senderName = message.senderName.ifBlank { user?.displayName ?: "Utente" }
+        )
 
         // Idempotente come addPlace: il listener sui messaggi puo' riconsegnare
         // lo stesso documento, e una key duplicata fa crashare la LazyColumn.

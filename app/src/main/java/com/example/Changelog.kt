@@ -10,12 +10,12 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.16-beta"
+    const val VERSION = "0.13.17-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🎨 Pannello nome gruppo: fondo e bordo identici ai pulsanti mappa.",
-        "🎨 Dialog crea gruppo: radio button ora nero/viola come il resto.",
-        "🔄 Migrazione a nuovo progetto Firebase: nuovo ID app com.formisano.familyradar."
+        "🔔 Notifica \"in movimento\": avvisa il gruppo quando ti sposti (auto/bici/corsa), max una ogni 30 min.",
+        "🚗 Auto-trip meno sensibile: soglie più alte, niente viaggi fantasma da fermo.",
+        "📍 La notifica movimento funziona anche con l'auto-trip spento."
     )
 }

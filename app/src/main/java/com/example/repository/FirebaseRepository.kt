@@ -2256,6 +2256,23 @@ class FirebaseRepository private constructor(private val context: Context) {
                                             senderId = senderId
                                         )
                                     }
+                                    "movement" -> {
+                                        val kindText = movementKindText(data["activityKind"] as? String)
+                                        val body = if (kindText != null) {
+                                            str(R.string.notif_movement_body, userName, kindText)
+                                        } else {
+                                            str(R.string.notif_movement_body_generic, userName)
+                                        }
+                                        showLocalNotification(
+                                            title = str(R.string.notif_movement_title),
+                                            body = body,
+                                            isHighPriority = false,
+                                            notificationId = (timestamp % 100000).toInt(),
+                                            destination = "MAP",
+                                            groupId = groupId,
+                                            senderId = senderId
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -2762,6 +2779,10 @@ class FirebaseRepository private constructor(private val context: Context) {
         // viaggio qui, il fix corrente e' gia' stato usato per quello in corso e
         // non si perde nulla; se decide di chiuderlo, la traccia e' completa.
         evaluateAutoTrip(location)
+
+        // Notifica "in movimento" agli altri membri: indipendente dall'auto-trip,
+        // gira su ogni fix e si basa su Activity Recognition + spostamento netto.
+        evaluateMovementNotification(location)
 
         // La valutazione geofence gira su OGNI fix, anche su quelli che non
         // trasmettiamo: un ingresso o un'uscita da un luogo non va perso solo
@@ -4154,6 +4175,14 @@ class FirebaseRepository private constructor(private val context: Context) {
     private var stationaryAnchorLat: Double = 0.0
     private var stationaryAnchorLon: Double = 0.0
 
+    // --- Notifica "in movimento" (indipendente dall'auto-trip) ---
+    /** Ultimo punto in cui Android ci dava fermi/a piedi: ancora per la notifica. */
+    private var movementAnchorLat: Double = 0.0
+    private var movementAnchorLon: Double = 0.0
+    /** Quando e' partita l'ultima notifica di movimento: per il cooldown. */
+    private var lastMovementNotifyAt: Long =
+        settingsPrefs.getLong("movement_notify_at", 0L)
+
     /** Vero mentre i fix sono infittiti dopo uno scatto del sensore di movimento. */
     private var isFixRateBoosted: Boolean = false
     private var fixBoostStartedAt: Long = 0L
@@ -4386,7 +4415,22 @@ class FirebaseRepository private constructor(private val context: Context) {
             return
         }
 
-        Log.d(TAG, "Viaggio automatico avviato su conferma di sistema")
+        // La conferma di sistema non fa piu' partire da sola: da fermi Android
+        // puo' dire IN_VEHICLE per errore (sei su un mezzo fermo, o il telefono
+        // e' in un veicolo parcheggiato) e aprirebbe un viaggio fantasma. Si parte
+        // solo se ci si e' gia' allontanati dall'ancora di uno spostamento vero.
+        val lastFix = recentFixes.lastOrNull()
+        val displacementFromAnchor = if (lastFix != null) {
+            distanceFromStationaryAnchor(UserLocation(latitude = lastFix.latitude, longitude = lastFix.longitude))
+        } else 0.0
+        if (displacementFromAnchor < AUTO_TRIP_CONFIRM_MIN_DISPLACEMENT_M) {
+            // Ci si fida della conferma per non chiudere, ma per aprire si aspetta
+            // che la distanza dall'ancora superi la soglia (via evaluateAutoTrip).
+            autoStationarySinceMillis = 0L
+            return
+        }
+
+        Log.d(TAG, "Viaggio automatico avviato su conferma di sistema (${displacementFromAnchor.toInt()}m dall'ancora)")
         autoMovingSinceMillis = 0L
         autoStationarySinceMillis = 0L
         startTrip(TripSource.AUTO)
@@ -4518,6 +4562,105 @@ class FirebaseRepository private constructor(private val context: Context) {
             results
         )
         return results[0].toDouble()
+    }
+
+    /**
+     * Decide se avvisare gli altri che questo membro si sta muovendo.
+     *
+     * Del tutto indipendente dall'auto-trip: gira su OGNI fix, anche a viaggi
+     * automatici spenti, perche' l'Activity Recognition e' sempre attiva (serve
+     * gia' all'icona sulla mappa). La notifica scatta quando due condizioni sono
+     * vere insieme:
+     *   1. Android classifica il movimento come VIAGGIO (auto / bici / corsa);
+     *   2. ci si e' allontanati di [MOVEMENT_NOTIFY_DISTANCE_M] dall'ultimo punto
+     *      in cui si era fermi.
+     * Un cooldown per-persona ([MOVEMENT_NOTIFY_COOLDOWN_MS]) evita di ri-avvisare
+     * a ogni ripartenza dopo una sosta breve (spesa, benzina).
+     */
+    private fun evaluateMovementNotification(location: UserLocation) {
+        if (location.accuracy > TRIP_MAX_ACCURACY_METERS) return
+
+        val kind = _currentActivityKind
+        val isTravel = kind == ActivityKind.VEHICLE ||
+            kind == ActivityKind.BICYCLE ||
+            kind == ActivityKind.RUNNING
+
+        // Fermo o a piedi: qui si ancora il punto di partenza del prossimo viaggio.
+        if (!isTravel) {
+            movementAnchorLat = location.latitude
+            movementAnchorLon = location.longitude
+            return
+        }
+
+        // Primo fix "in viaggio" senza un'ancora: la si fissa adesso e si aspetta
+        // il fix successivo per misurare l'allontanamento.
+        if (movementAnchorLat == 0.0 && movementAnchorLon == 0.0) {
+            movementAnchorLat = location.latitude
+            movementAnchorLon = location.longitude
+            return
+        }
+
+        val results = FloatArray(1)
+        android.location.Location.distanceBetween(
+            movementAnchorLat, movementAnchorLon,
+            location.latitude, location.longitude,
+            results
+        )
+        val displacement = results[0].toDouble()
+        // Scarta i salti del GPS: lo spostamento deve superare l'incertezza del fix.
+        if (displacement < MOVEMENT_NOTIFY_DISTANCE_M) return
+        if (displacement < location.accuracy * 3f) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastMovementNotifyAt < MOVEMENT_NOTIFY_COOLDOWN_MS) return
+
+        lastMovementNotifyAt = now
+        settingsPrefs.edit().putLong("movement_notify_at", now).apply()
+        // Riparte da qui: perche' scatti di nuovo serve una nuova sosta seguita da
+        // un nuovo allontanamento, non basta continuare lo stesso viaggio.
+        movementAnchorLat = location.latitude
+        movementAnchorLon = location.longitude
+
+        val notifiedKind = kind
+        CoroutineScope(Dispatchers.IO).launch { emitMovementEvent(notifiedKind) }
+    }
+
+    /** Scrive l'evento "movement" cosi' che gli altri membri ricevano la notifica. */
+    private suspend fun emitMovementEvent(activityKind: String) {
+        val user = _currentUserState.value ?: return
+        val groupId = user.currentGroupId ?: return
+        val db = firestore ?: return
+        if (_isGlobalGhostMode.value) return
+        val myMember = _currentGroupMembers.value.find { it.userId == user.uid }
+        if (myMember != null && !myMember.isTrackingActive) return
+
+        try {
+            val eventId = "move_${UUID.randomUUID().toString().take(8)}"
+            val eventMap = hashMapOf(
+                "id" to eventId,
+                "groupId" to groupId,
+                "type" to "movement",
+                "userId" to user.uid,
+                "userName" to user.displayName,
+                "activityKind" to activityKind,
+                // Long come tutti gli altri eventi: il listener filtra per timestamp
+                // e Firestore scarta dai filtri di disuguaglianza i tipi diversi.
+                "timestamp" to System.currentTimeMillis()
+            )
+            db.collection("groups").document(groupId)
+                .collection("events").document(eventId).set(eventMap).await()
+        } catch (e: Exception) {
+            Log.w(TAG, "evento movement fallito: ${e.message}")
+        }
+    }
+
+    /** Traduce il tipo di attivita' nella frase mostrata in notifica, null se ignoto. */
+    private fun movementKindText(kind: String?): String? = when (kind) {
+        ActivityKind.VEHICLE -> str(R.string.activity_kind_vehicle)
+        ActivityKind.BICYCLE -> str(R.string.activity_kind_bicycle)
+        ActivityKind.RUNNING -> str(R.string.activity_kind_running)
+        ActivityKind.WALKING -> str(R.string.activity_kind_walking)
+        else -> null
     }
 
     private fun rdpSimplify(points: List<TripPoint>, epsilon: Double): List<TripPoint> {
@@ -4654,14 +4797,23 @@ class FirebaseRepository private constructor(private val context: Context) {
          * E' la via piu' lenta delle tre: di norma arrivano prima la conferma di
          * sistema o la soglia di distanza.
          */
-        const val AUTO_TRIP_START_MS = 90_000L
+        const val AUTO_TRIP_START_MS = 150_000L
 
         /**
          * Allontanamento dal punto in cui si era fermi che da' per certo lo
          * spostamento, senza attendere [AUTO_TRIP_START_MS]. Sopra i due isolati
          * non e' piu' un giro per casa.
          */
-        const val AUTO_TRIP_START_DISTANCE_M = 250.0
+        const val AUTO_TRIP_START_DISTANCE_M = 400.0
+
+        /**
+         * Allontanamento minimo dall'ancora richiesto perche' la conferma di
+         * sistema (Android dice IN_VEHICLE/bici/corsa) faccia partire un viaggio.
+         * Senza, bastava un falso "in vehicle" da fermi — o un tratto di pochi
+         * metri — per aprire un viaggio. Con 100 m la conferma resta reattiva ma
+         * solo dopo uno spostamento vero.
+         */
+        const val AUTO_TRIP_CONFIRM_MIN_DISPLACEMENT_M = 100.0
 
         /**
          * Velocita' oltre la quale si comincia a contare il tempo di movimento
@@ -4670,7 +4822,7 @@ class FirebaseRepository private constructor(private val context: Context) {
          * va bene, per decidere che e' cominciato un viaggio no. 2,8 m/s sono
          * circa 10 km/h, sopra il passo di chiunque cammini.
          */
-        const val AUTO_TRIP_START_SPEED_MS = 2.8f
+        const val AUTO_TRIP_START_SPEED_MS = 3.5f
 
         /**
          * Allontanamento netto dal punto in cui si era fermi, richiesto perche'
@@ -4681,7 +4833,7 @@ class FirebaseRepository private constructor(private val context: Context) {
          * soglia quanto vuole, ma la distanza dal punto di partenza resta
          * prossima a zero.
          */
-        const val AUTO_TRIP_MIN_NET_DISPLACEMENT_M = 150.0
+        const val AUTO_TRIP_MIN_NET_DISPLACEMENT_M = 250.0
 
         /**
          * Quanto indietro si guarda per ricostruire l'inizio di un viaggio
@@ -4702,6 +4854,20 @@ class FirebaseRepository private constructor(private val context: Context) {
 
         /** Immobilita' necessaria prima che un viaggio automatico si chiuda. */
         const val AUTO_TRIP_STOP_MS = 3 * 60_000L
+
+        /**
+         * Spostamento netto (dall'ultimo punto in cui si era fermi) oltre il quale
+         * si notifica agli altri che questo membro e' in movimento. Indipendente
+         * dall'auto-trip: si basa solo su Activity Recognition + questo spostamento.
+         */
+        const val MOVEMENT_NOTIFY_DISTANCE_M = 300.0
+
+        /**
+         * Silenzio minimo fra due notifiche "in movimento" della stessa persona.
+         * Copre soste intermedie (spesa, benzina) senza ri-notificare a ogni
+         * ripartenza. Persistito in SharedPreferences per sopravvivere ai riavvii.
+         */
+        const val MOVEMENT_NOTIFY_COOLDOWN_MS = 30 * 60_000L
 
         /** Attesa massima fra due fix quando il rilevamento automatico e' attivo. */
         const val AUTO_TRIP_MAX_IDLE_SEC = 60

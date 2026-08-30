@@ -68,6 +68,13 @@
     <string name="notif_trip_start_body">%1$s ha iniziato un viaggio</string>
     <string name="notif_trip_end_title">Viaggio concluso</string>
     <string name="notif_trip_end_body">%1$s ha concluso un viaggio</string>
+    <string name="notif_movement_title">In movimento</string>
+    <string name="notif_movement_body">%1$s si sta spostando %2$s</string>
+    <string name="notif_movement_body_generic">%1$s si sta spostando</string>
+    <string name="activity_kind_vehicle">in auto</string>
+    <string name="activity_kind_bicycle">in bici</string>
+    <string name="activity_kind_running">di corsa</string>
+    <string name="activity_kind_walking">a piedi</string>
     <string name="notif_generic_body">Nuovo aggiornamento sulla mappa</string>
     <string name="notif_member_fallback">Un membro</string>
     <string name="notif_place_fallback">la destinazione</string>

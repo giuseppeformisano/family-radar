@@ -51,6 +51,13 @@
     <string name="notif_trip_start_body">%1$s started a trip</string>
     <string name="notif_trip_end_title">Trip ended</string>
     <string name="notif_trip_end_body">%1$s ended a trip</string>
+    <string name="notif_movement_title">On the move</string>
+    <string name="notif_movement_body">%1$s is on the move %2$s</string>
+    <string name="notif_movement_body_generic">%1$s is on the move</string>
+    <string name="activity_kind_vehicle">by car</string>
+    <string name="activity_kind_bicycle">by bike</string>
+    <string name="activity_kind_running">running</string>
+    <string name="activity_kind_walking">on foot</string>
     <string name="notif_generic_body">New update on the map</string>
     <string name="notif_member_fallback">A member</string>
     <string name="notif_place_fallback">the destination</string>

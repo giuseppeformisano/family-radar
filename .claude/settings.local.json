@@ -6,7 +6,24 @@
       "Bash(cp \"/c/Users/giuseppe.a.formisano/Downloads/google-services.json\" app/google-services.json)",
       "Bash(git fetch *)",
       "mcp__visualize__read_me",
-      "mcp__visualize__show_widget"
+      "mcp__visualize__show_widget",
+      "PowerShell(git -C $repo add app/build.gradle.kts app/src/main/java/com/example/Changelog.kt)",
+      "PowerShell(git -C $repo push 2>&1)",
+      "PowerShell(git -C $repo stash pop 2>&1)",
+      "PowerShell(git -C $repo stash drop 2>&1)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "PowerShell(git clone https://github.com/giuseppeformisano/cross-notify-hub C:\\\\Users\\\\giuseppe.a.formisano\\\\Desktop\\\\Progetti\\\\PERSONALI\\\\cross-notify-hub)",
+      "Bash(copy \"C:\\\\Users\\\\giuseppe.a.formisano\\\\Downloads\\\\google-services.json\" \"C:\\\\Users\\\\giuseppe.a.formisano\\\\Desktop\\\\Progetti\\\\PERSONALI\\\\family-radar\\\\app\\\\google-services.json\")",
+      "PowerShell(keytool -list -v -keystore \"$env:USERPROFILE\\\\.android\\\\debug.keystore\" -alias androiddebugkey -storepass android -keypass android)",
+      "PowerShell(& \"C:\\\\jdk1.8.0_171\\\\bin\\\\keytool.exe\" -list -v -keystore \"$env:USERPROFILE\\\\.android\\\\debug.keystore\" -alias androiddebugkey -storepass android -keypass android 2>&1)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'chore: migrazione nuovo progetto Firebase, nuovo applicationId \\(v0.13.10-beta\\) *)",
+      "Bash(git commit -m 'chore: nuovo Firebase family-tracker-58524, applicationId com.formisano.familyradar \\(v0.13.11-beta\\) *)",
+      "PowerShell(Copy-Item \"$env:USERPROFILE\\\\.android\\\\debug2.keystore\" \"C:\\\\Users\\\\giuseppe.a.formisano\\\\Desktop\\\\Progetti\\\\PERSONALI\\\\family-radar\\\\debug.keystore\" -Force)",
+      "Bash(git commit *)",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\giuseppe.a.formisano\\\\Desktop\\\\Progetti\\\\PERSONALI\\\\family-radar\\\\app\\\\src\\\\main\\\\java\\\\com\\\\example\\\\ui\\\\screens\\\\main\\\\MainRadarScreen.kt\" -Pattern \"voice|audio|play|speak|ptt|pulse\" -CaseSensitive:$false)",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\giuseppe.a.formisano\\\\Desktop\\\\Progetti\\\\PERSONALI\\\\family-radar\\\\app\\\\src\\\\main\\\\java\\\\com\\\\example\\\\repository\\\\FirebaseRepository.kt\" -Pattern \"getVoiceNotePath|latestVoicePing|VoicePing|voicePing\" -CaseSensitive:$false)"
     ]
   }
 }

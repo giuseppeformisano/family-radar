@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.29-beta"
+    const val VERSION = "0.13.30-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🐞 Spinner di caricamento infinito all'avvio con più gruppi: risolto."
+        "🔊 Push-to-talk: la notifica non interrompe più il vocale in autoplay sulla mappa (ora si sente)."
     )
 }

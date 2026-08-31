@@ -142,6 +142,9 @@ class FirebaseRepository private constructor(private val context: Context) {
     // ruberebbe il focus audio troncando la riproduzione, quindi la si sopprime.
     @Volatile private var radarForeground = false
     fun setRadarForeground(value: Boolean) { radarForeground = value }
+    /** La schermata radar e' in primo piano? Usato anche dal servizio FCM per non
+     *  postare la notifica di un vocale che sta gia' partendo in autoplay sulla mappa. */
+    fun isRadarForeground(): Boolean = radarForeground
 
     private val _currentGroupMembers = MutableStateFlow<List<GroupMember>>(emptyList())
     val currentGroupMembers = _currentGroupMembers.asStateFlow()

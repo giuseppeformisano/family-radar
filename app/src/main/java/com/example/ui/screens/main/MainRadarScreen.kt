@@ -471,6 +471,12 @@ fun MainRadarScreen(
             android.util.Log.d("VoicePlay", "path risolto $path")
             try {
                 MediaPlayer().apply {
+                    setAudioAttributes(
+                        android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
                     setDataSource(path)
                     prepare()
                     setOnCompletionListener { runCatching { it.release() } }

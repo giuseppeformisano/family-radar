@@ -67,8 +67,20 @@ class FamilyRadarMessagingService : FirebaseMessagingService() {
 
         RadarNotifier.ensureChannels(this)
 
+        // Se la mappa e' in primo piano, la chat e' gestita in-app: il listener
+        // mostra il messaggio e, per i vocali con autoplay, li riproduce sulla
+        // mappa. La notifica FCM col suo suono ruberebbe il focus audio troncando
+        // il vocale (e sarebbe comunque ridondante), quindi qui non la si posta.
+        val radarForeground = runCatching {
+            FirebaseRepository.getInstance(applicationContext).isRadarForeground()
+        }.getOrDefault(false)
+
         when (type) {
             "chat_message" -> {
+                if (radarForeground) {
+                    Log.d(TAG, "Push chat ignorata: radar in primo piano (gestita in-app)")
+                    return
+                }
                 if (groupId.isNullOrBlank()) {
                     // Senza groupId non si può impilare né cancellare: meglio una
                     // notifica semplice che perdere il messaggio.

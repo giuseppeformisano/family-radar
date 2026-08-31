@@ -118,14 +118,23 @@ class FamilyRadarMessagingService : FirebaseMessagingService() {
                 senderId = senderId
             )
 
-            else -> RadarNotifier.notifyGeneric(
-                context = this,
-                destination = data["destination"] ?: destinationFor(type),
-                title = title,
-                body = body,
-                groupId = groupId,
-                senderId = senderId
-            )
+            else -> {
+                // Se il radar e' in primo piano, un eventuale vocale/chat con tipo
+                // non standard non deve postare una notifica sonora che tronchi
+                // l'autoplay sulla mappa.
+                if (radarForeground && (type == "chat_message" || type.isBlank())) {
+                    Log.d(TAG, "Push generica ignorata: radar in primo piano")
+                    return
+                }
+                RadarNotifier.notifyGeneric(
+                    context = this,
+                    destination = data["destination"] ?: destinationFor(type),
+                    title = title,
+                    body = body,
+                    groupId = groupId,
+                    senderId = senderId
+                )
+            }
         }
     }
 

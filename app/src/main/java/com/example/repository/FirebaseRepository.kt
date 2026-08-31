@@ -198,8 +198,10 @@ class FirebaseRepository private constructor(private val context: Context) {
     private val _isGlobalGhostMode = MutableStateFlow(settingsPrefs.getBoolean("global_ghost_mode", false))
     val isGlobalGhostMode = _isGlobalGhostMode.asStateFlow()
 
-    // Autoplay note vocali per chi guarda la mappa (default spento) persistito.
-    private val _isVoiceAutoplayEnabled = MutableStateFlow(settingsPrefs.getBoolean("voice_autoplay", false))
+    // Autoplay note vocali per chi guarda la mappa (default ATTIVO) persistito.
+    // E' il cuore del push-to-talk: da spento, chi guarda la mappa non sentiva il
+    // vocale e riceveva invece la notifica, che sembrava "interrompere" l'audio.
+    private val _isVoiceAutoplayEnabled = MutableStateFlow(settingsPrefs.getBoolean("voice_autoplay", true))
     val isVoiceAutoplayEnabled = _isVoiceAutoplayEnabled.asStateFlow()
 
     fun setVoiceAutoplayEnabled(enabled: Boolean) {
@@ -3760,11 +3762,19 @@ class FirebaseRepository private constructor(private val context: Context) {
         com.example.notification.RadarNotifier.clearChatNotifications(context, groupId)
         // Pubblica l'ultimo istante di lettura sul proprio documento membro, cosi'
         // gli altri possono mostrare "visto da…". Una scrittura per apertura chat.
+        //
+        // IMPORTANTE: NON si usa l'ora locale. Il mittente confronta questo valore
+        // con il timestamp del proprio messaggio, che porta l'orologio del SUO
+        // telefono: con lo sfasamento fra i due dispositivi la lettura non risultava
+        // mai. Si salva invece il timestamp del messaggio piu' recente che questo
+        // utente ha effettivamente in lista — stesso "orologio" dei messaggi — cosi'
+        // il confronto e' coerente. Se non ci sono messaggi, ripiega sull'ora locale.
+        val latestSeen = _currentGroupMessages.value.maxOfOrNull { it.timestamp } ?: now
         val uid = _currentUserState.value?.uid ?: return
         try {
             firestore?.collection("groups")?.document(groupId)
                 ?.collection("members")?.document(uid)
-                ?.update("chatLastReadAt", now)
+                ?.update("chatLastReadAt", latestSeen)
         } catch (e: Exception) {
             Log.w(TAG, "chatLastReadAt update fallita: ${e.message}")
         }

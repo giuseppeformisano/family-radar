@@ -470,13 +470,27 @@ fun MainRadarScreen(
             }
             android.util.Log.d("VoicePlay", "path risolto $path")
             try {
-                MediaPlayer().apply {
-                    setAudioAttributes(
-                        android.media.AudioAttributes.Builder()
-                            .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                // Chiede il focus audio: se in quel momento parte un suono di
+                // notifica, viene abbassato/messo in pausa invece di troncare il
+                // vocale in riproduzione.
+                val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+                val audioAttrs = android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+                runCatching {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        val req = android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                            .setAudioAttributes(audioAttrs)
                             .build()
-                    )
+                        audioManager?.requestAudioFocus(req)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        audioManager?.requestAudioFocus(null, android.media.AudioManager.STREAM_MUSIC, android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                    }
+                }
+                MediaPlayer().apply {
+                    setAudioAttributes(audioAttrs)
                     setDataSource(path)
                     prepare()
                     setOnCompletionListener { runCatching { it.release() } }

@@ -10,10 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.31-beta"
+    const val VERSION = "0.13.32-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🐞 Multi-gruppo: risolto il rimbalzo continuo tra un gruppo e l'altro all'avvio con più gruppi."
+        "🎙️ Push-to-talk: autoplay del vocale ora attivo di default e niente notifica che lo interrompe.",
+        "🔵 Spunte blu \"visto da\" ora funzionano anche a chat già aperta (risolto lo sfasamento di orario tra telefoni)."
     )
 }

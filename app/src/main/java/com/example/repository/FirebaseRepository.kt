@@ -1074,7 +1074,15 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     )
                                     val updated = (_userGroupsState.value + gData).distinctBy { it.id }
                                     _userGroupsState.value = updated
-                                    selectGroup(targetGroupId)
+                                    // Guardie come sopra: non ri-selezionare se gia'
+                                    // dentro, se l'utente sta scegliendo, o se e' il
+                                    // gruppo appena lasciato.
+                                    if (_currentUserState.value?.currentGroupId != targetGroupId &&
+                                        !_isChoosingGroup.value &&
+                                        groupIdDismissedByUser != targetGroupId
+                                    ) {
+                                        selectGroup(targetGroupId)
+                                    }
                                 }
                             }
                     }
@@ -1144,7 +1152,18 @@ class FirebaseRepository private constructor(private val context: Context) {
                 _userGroupsState.value = merged
 
                 val activeGroups = merged.filter { it.userMembershipStatus == "ACTIVE" }
-                if (_currentUserState.value?.currentGroupId.isNullOrBlank() && activeGroups.isNotEmpty()) {
+                // Auto-selezione SOLO se sicura, con le stesse regole di MainActivity.
+                // Questo listener rifà emit a ogni modifica di un qualsiasi documento
+                // gruppo: senza queste guardie, con piu' gruppi attivi selezionava
+                // activeGroups.first() a ripetizione e — poiche' l'ordine della lista
+                // cambia tra un emit e l'altro — l'app rimbalzava di continuo da un
+                // gruppo all'altro. Inoltre va rispettato isChoosingGroup (l'utente sta
+                // scegliendo a mano) e il veto sul gruppo appena lasciato.
+                if (_currentUserState.value?.currentGroupId.isNullOrBlank() &&
+                    activeGroups.size == 1 &&
+                    !_isChoosingGroup.value &&
+                    groupIdDismissedByUser == null
+                ) {
                     selectGroup(activeGroups.first().id)
                 }
             }

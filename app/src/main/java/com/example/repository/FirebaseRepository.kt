@@ -92,6 +92,10 @@ class FirebaseRepository private constructor(private val context: Context) {
     // coda quando nel frattempo si e' cambiato gruppo o fatto cleanup.
     private var groupListenerGeneration = 0
     @Volatile private var reattachScheduled = false
+    // Gruppo per cui i listener di gruppo sono attualmente agganciati (null = nessuno).
+    // Rende selectGroup un no-op affidabile sullo stesso gruppo, a prescindere dallo
+    // stato di caricamento dei membri.
+    @Volatile private var listenersAttachedForGroup: String? = null
     private var groupsCollectionListener: ListenerRegistration? = null
     private val memberStatusListeners = java.util.concurrent.ConcurrentHashMap<String, ListenerRegistration>()
     // Ultimo status visto per gruppo. Serve a distinguere una vera approvazione
@@ -1773,9 +1777,13 @@ class FirebaseRepository private constructor(private val context: Context) {
         if (groupId.isBlank()) return
 
         val previousGroupId = _currentUserState.value?.currentGroupId
-        if (previousGroupId == groupId && _currentGroupMembers.value.isNotEmpty()) {
-            // Già dentro e con i listener attivi: rifare tutto provocherebbe solo
-            // un giro inutile di detach/attach e un lampeggio della UI.
+        // No-op affidabile: se siamo gia' su questo gruppo E i suoi listener sono
+        // gia' agganciati, non si rifa' nulla. Prima la guardia dipendeva da
+        // "_currentGroupMembers non vuoto", ma cleanupGroupListeners svuota i membri
+        // a ogni selectGroup: durante un flip i membri erano sempre vuoti e la
+        // guardia non scattava mai, alimentando il rimbalzo. Tracciare il gruppo dei
+        // listener rende il no-op indipendente dal caricamento dei membri.
+        if (previousGroupId == groupId && listenersAttachedForGroup == groupId) {
             _isChoosingGroup.value = false
             return
         }
@@ -1914,6 +1922,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         // ricreati (o azzerati), non deve ripartire quello vecchio.
         groupListenerGeneration++
         reattachScheduled = false
+        listenersAttachedForGroup = null
         locationsListener?.remove()
         placesListener?.remove()
         messagesListener?.remove()
@@ -2103,6 +2112,9 @@ class FirebaseRepository private constructor(private val context: Context) {
     private fun listenToGroupData(groupId: String) {
         if (firestore == null) return
         cleanupGroupListeners()
+        // I listener di questo gruppo stanno per essere agganciati: registralo cosi'
+        // un selectGroup ripetuto sullo stesso gruppo diventa un no-op affidabile.
+        listenersAttachedForGroup = groupId
 
         val joinTime = System.currentTimeMillis()
         lastObservedEventTimestamp = joinTime

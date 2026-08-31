@@ -188,7 +188,12 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
         val activeGroups = userGroups.filter { it.userMembershipStatus == "ACTIVE" }
 
         if (target?.groupId != null && activeGroups.any { it.id == target.groupId }) {
-            repository.selectGroup(target.groupId)
+            // Qui NON si chiama selectGroup: questo blocco gira a ogni emit e il
+            // deepLinkTarget non viene consumato qui (lo consuma MainRadarScreen),
+            // quindi ri-selezionava il gruppo del target a ripetizione, in lotta col
+            // listener del documento utente che ripristina il gruppo salvato -> flip
+            // infinito tra i due gruppi. Ci si limita a mostrare il radar: sara'
+            // MainRadarScreen a fare selectGroup(target) UNA volta e poi consumarlo.
             currentScreen = AppScreen.MAIN_RADAR
             return@LaunchedEffect
         }

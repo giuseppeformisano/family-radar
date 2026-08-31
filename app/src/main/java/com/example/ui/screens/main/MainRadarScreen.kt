@@ -1470,8 +1470,19 @@ fun MainRadarScreen(
         )
     }
 
-    // Mostra overlay di caricamento mentre i dati del gruppo si caricano
-    val isGroupDataLoading = currentGroup != null && currentUserId.isNotBlank() && members.isEmpty()
+    // Mostra overlay di caricamento mentre i dati del gruppo si caricano, ma con un
+    // timeout di sicurezza: se i membri non arrivano (errore di rete, permessi,
+    // race sulla creazione) l'overlay non deve restare appeso all'infinito
+    // costringendo a chiudere l'app e svuotare i dati. Scaduto il tempo si mostra
+    // comunque la mappa; i membri compariranno appena il listener risponde.
+    var loadingTimedOut by remember(currentGroup?.id) { mutableStateOf(false) }
+    LaunchedEffect(currentGroup?.id) {
+        loadingTimedOut = false
+        delay(8000)
+        loadingTimedOut = true
+    }
+    val isGroupDataLoading = currentGroup != null && currentUserId.isNotBlank() &&
+        members.isEmpty() && !loadingTimedOut
     if (isGroupDataLoading) {
         GroupLoadingOverlay()
     }

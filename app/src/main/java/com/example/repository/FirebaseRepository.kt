@@ -1301,6 +1301,24 @@ class FirebaseRepository private constructor(private val context: Context) {
         val updatedGroups = (_userGroupsState.value + newGroup).distinctBy { it.id }
         _userGroupsState.value = updatedGroups
         selectGroup(groupId)
+        // Semina subito il proprietario tra i membri: l'overlay di caricamento resta
+        // finche' [_currentGroupMembers] e' vuoto, e aspettare il primo snapshot del
+        // listener poteva lasciarlo appeso all'infinito appena creato il gruppo.
+        // selectGroup ha appena azzerato i membri (cleanup): questo li ripristina, e
+        // il listener poi confermera'/sostituira' con i dati reali.
+        _currentGroupMembers.value = listOf(
+            GroupMember(
+                userId = currentUser.uid,
+                displayName = currentUser.displayName,
+                email = currentUser.email,
+                photoBase64 = currentUser.photoBase64,
+                role = "owner",
+                status = "ACTIVE",
+                joinedAt = System.currentTimeMillis(),
+                isTrackingActive = true,
+                isOnline = true
+            )
+        )
         return Result.success(newGroup)
     }
 

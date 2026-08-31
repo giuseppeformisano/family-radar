@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.25-beta"
+    const val VERSION = "0.13.26-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✅ Spunta di stato sui tuoi messaggi: orologio (in invio) → spunta (inviato) → doppia spunta (letto).",
-        "👀 \"Visto da…\" sotto il tuo ultimo messaggio quando gli altri lo leggono."
+        "🐞 Risolto il blocco sullo spinner dopo aver creato un gruppo: non serve più chiudere l'app o svuotare i dati."
     )
 }

@@ -34,7 +34,10 @@ data class ChatMessage(
     val replyToText: String = "",
     val replyToSender: String = "",
     // Elimina per tutti: il testo/allegati vengono ignorati e si mostra un segnaposto.
-    val deleted: Boolean = false
+    val deleted: Boolean = false,
+    // Solo UI, non salvato su Firestore: true finche' la scrittura non e' confermata
+    // dal server (orologio → spunta). Deriva da doc.metadata.hasPendingWrites().
+    val pending: Boolean = false
 ) {
     /**
      * Returns the image model suitable for Coil AsyncImage.

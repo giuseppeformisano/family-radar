@@ -1922,7 +1922,10 @@ class FirebaseRepository private constructor(private val context: Context) {
             .collection("messages")
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .limit(limit)
-            .addSnapshotListener { snapshot, e ->
+            // INCLUDE i cambi di soli metadati: cosi' quando una scrittura passa da
+            // "in invio" a confermata dal server il listener rifà callback e la
+            // spunta di stato (orologio → check) si aggiorna.
+            .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snapshot, e ->
                 if (e != null) {
                     isLoadingMoreChat = false
                     if (isRecoverableListenerError(e)) scheduleGroupListenersReattach(groupId, "messages: ${e.message}")
@@ -1962,7 +1965,9 @@ class FirebaseRepository private constructor(private val context: Context) {
                                 replyToId = doc.getString("replyToId") ?: "",
                                 replyToText = doc.getString("replyToText") ?: "",
                                 replyToSender = doc.getString("replyToSender") ?: "",
-                                deleted = doc.getBoolean("deleted") ?: false
+                                deleted = doc.getBoolean("deleted") ?: false,
+                                // Non ancora confermato dal server = "in invio".
+                                pending = doc.metadata.hasPendingWrites()
                             )
 
                             // Check if this is a new message from another member
@@ -2308,7 +2313,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     joinedAt = doc.getLong("joinedAt") ?: System.currentTimeMillis(),
                                     batteryLevel = (doc.getLong("batteryLevel") ?: 100L).toInt(),
                                     isTrackingActive = doc.getBoolean("isTrackingActive") ?: true,
-                                    isOnline = doc.getBoolean("isOnline") ?: true
+                                    isOnline = doc.getBoolean("isOnline") ?: true,
+                                    chatLastReadAt = doc.getLong("chatLastReadAt") ?: 0L
                                 )
                             } catch (ex: Exception) {
                                 null
@@ -3316,7 +3322,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         // Idempotente come addPlace: il listener sui messaggi puo' riconsegnare
         // lo stesso documento, e una key duplicata fa crashare la LazyColumn.
         _currentGroupMessages.value =
-            _currentGroupMessages.value.filterNot { it.id == msg.id } + msg
+            _currentGroupMessages.value.filterNot { it.id == msg.id } + msg.copy(pending = true)
 
         try {
             if (firestore != null) {
@@ -3708,9 +3714,20 @@ class FirebaseRepository private constructor(private val context: Context) {
     /** Da chiamare quando l'utente apre la chat: azzera badge e notifiche in status bar. */
     fun markChatRead(groupId: String) {
         if (groupId.isBlank()) return
-        settingsPrefs.edit().putLong(lastReadKey(groupId), System.currentTimeMillis()).apply()
+        val now = System.currentTimeMillis()
+        settingsPrefs.edit().putLong(lastReadKey(groupId), now).apply()
         _unreadChatCount.value = 0
         com.example.notification.RadarNotifier.clearChatNotifications(context, groupId)
+        // Pubblica l'ultimo istante di lettura sul proprio documento membro, cosi'
+        // gli altri possono mostrare "visto da…". Una scrittura per apertura chat.
+        val uid = _currentUserState.value?.uid ?: return
+        try {
+            firestore?.collection("groups")?.document(groupId)
+                ?.collection("members")?.document(uid)
+                ?.update("chatLastReadAt", now)
+        } catch (e: Exception) {
+            Log.w(TAG, "chatLastReadAt update fallita: ${e.message}")
+        }
     }
 
     private fun recomputeUnreadChat(groupId: String, messages: List<ChatMessage>) {

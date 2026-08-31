@@ -2532,10 +2532,13 @@ private fun ChatPanel(
 
     val hiddenMessages by repository.locallyHiddenMessages.collectAsState()
     val allLocations by repository.currentGroupLocations.collectAsState()
+    val chatMembers by repository.currentGroupMembers.collectAsState()
     val myLocation = allLocations.find { it.userId == currentUserId }
     val visibleMessages = remember(messages, hiddenMessages) {
         messages.filterNot { it.id in hiddenMessages }
     }
+    // Id dell'ultimo mio messaggio: solo sotto quello mostro "visto da…".
+    val lastMyMessageId = visibleMessages.lastOrNull { it.senderId == currentUserId }?.id
 
     val hasMoreChat by repository.hasMoreChat.collectAsState()
 
@@ -2609,14 +2612,23 @@ private fun ChatPanel(
                     if (prev == null || !isSameDay(prev.timestamp, msg.timestamp)) {
                         ChatDateSeparator(msg.timestamp)
                     }
+                    val isMine = msg.senderId == currentUserId
+                    val readers = if (isMine) {
+                        chatMembers
+                            .filter { it.userId != currentUserId && it.chatLastReadAt >= msg.timestamp }
+                            .map { it.nickname?.takeIf { n -> n.isNotBlank() } ?: it.displayName }
+                    } else emptyList()
                     ChatBubble(
                         message = msg,
-                        isMe = msg.senderId == currentUserId,
+                        isMe = isMine,
                         onImageClick = onImageClick,
                         groupId = groupId,
                         repository = repository,
                         myLatitude = myLocation?.latitude,
                         myLongitude = myLocation?.longitude,
+                        isPending = msg.pending,
+                        readerNames = readers,
+                        showReadReceipt = msg.id == lastMyMessageId,
                         onReply = { replyingTo = msg },
                         onCopy = {
                             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
@@ -2789,6 +2801,9 @@ private fun ChatBubble(
     repository: FirebaseRepository,
     myLatitude: Double? = null,
     myLongitude: Double? = null,
+    isPending: Boolean = false,
+    readerNames: List<String> = emptyList(),
+    showReadReceipt: Boolean = false,
     onReply: () -> Unit = {},
     onCopy: () -> Unit = {},
     onDeleteForMe: () -> Unit = {},
@@ -3010,15 +3025,35 @@ private fun ChatBubble(
                     )
                 }
 
-                Text(
-                    text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                Row(
                     modifier = Modifier
                         .align(Alignment.End)
-                        .padding(top = Spacing.xxs)
-                )
+                        .padding(top = Spacing.xxs),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xxs)
+                ) {
+                    Text(
+                        text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    // Stato di consegna solo sui propri messaggi: orologio (in invio),
+                    // spunta (inviato), doppia spunta blu (letto da qualcuno).
+                    if (isMe) {
+                        val (icon, tint) = when {
+                            isPending -> Icons.Default.Schedule to MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                            readerNames.isNotEmpty() -> Icons.Default.DoneAll to Color(0xFF34D399)
+                            else -> Icons.Default.Done to MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                        }
+                        Icon(
+                            icon,
+                            contentDescription = null,
+                            tint = tint,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
             }
           }
 
@@ -3078,6 +3113,16 @@ private fun ChatBubble(
                     start = if (isMe) 0.dp else Spacing.md,
                     end = if (isMe) Spacing.md else 0.dp
                 )
+            )
+        }
+
+        // "Visto da…" solo sotto il proprio ultimo messaggio letto da altri.
+        if (isMe && showReadReceipt && readerNames.isNotEmpty()) {
+            Text(
+                text = "Visto da ${readerNames.joinToString(", ")}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF34D399),
+                modifier = Modifier.padding(top = Spacing.xxs, end = Spacing.md)
             )
         }
     }

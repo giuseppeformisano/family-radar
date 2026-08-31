@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.28-beta"
+    const val VERSION = "0.13.29-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🖼️ Foto a schermo intero più pulita: immagine a tutto schermo, controlli minimali, niente spazio sprecato in alto.",
-        "👀 La lettura si segna da sola se hai la chat aperta: non serve rientrare dall'icona."
+        "🐞 Spinner di caricamento infinito all'avvio con più gruppi: risolto."
     )
 }

@@ -1473,20 +1473,30 @@ fun MainRadarScreen(
         )
     }
 
-    // Mostra overlay di caricamento mentre i dati del gruppo si caricano, ma con un
-    // timeout di sicurezza: se i membri non arrivano (errore di rete, permessi,
-    // race sulla creazione) l'overlay non deve restare appeso all'infinito
-    // costringendo a chiudere l'app e svuotare i dati. Scaduto il tempo si mostra
-    // comunque la mappa; i membri compariranno appena il listener risponde.
-    var loadingTimedOut by remember(currentGroup?.id) { mutableStateOf(false) }
-    LaunchedEffect(currentGroup?.id) {
-        loadingTimedOut = false
-        delay(8000)
-        loadingTimedOut = true
+    // Overlay di caricamento dati gruppo, robusto contro il caso "due gruppi".
+    //
+    // Si mostra SOLO quando il gruppo visualizzato e' davvero quello selezionato
+    // dall'utente: con piu' gruppi, `currentGroup` ha un fallback su
+    // `userGroups.firstOrNull()` che oscilla mentre la lista si riordina agli emit
+    // di Firestore, e puntava a un gruppo i cui membri non erano ancora caricati.
+    //
+    // Il timeout di sicurezza e' agganciato al booleano di caricamento, non
+    // all'id del gruppo: cosi' l'oscillazione del gruppo corrente non lo resetta
+    // di continuo lasciando lo spinner appeso all'infinito.
+    val hasRealSelection = !currentUser?.currentGroupId.isNullOrBlank() &&
+        currentGroup?.id == currentUser?.currentGroupId
+    val rawGroupLoading = hasRealSelection && currentUserId.isNotBlank() && members.isEmpty()
+    var showLoadingOverlay by remember { mutableStateOf(false) }
+    LaunchedEffect(rawGroupLoading) {
+        if (rawGroupLoading) {
+            showLoadingOverlay = true
+            delay(8000)
+            showLoadingOverlay = false
+        } else {
+            showLoadingOverlay = false
+        }
     }
-    val isGroupDataLoading = currentGroup != null && currentUserId.isNotBlank() &&
-        members.isEmpty() && !loadingTimedOut
-    if (isGroupDataLoading) {
+    if (showLoadingOverlay) {
         GroupLoadingOverlay()
     }
 

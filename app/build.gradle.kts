@@ -17,8 +17,8 @@ android {
     applicationId = "com.formisano.familyradar"
     minSdk = 24
     targetSdk = 36
-    versionCode = 146
-    versionName = "0.13.22-beta"
+    versionCode = 147
+    versionName = "0.13.23-beta"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

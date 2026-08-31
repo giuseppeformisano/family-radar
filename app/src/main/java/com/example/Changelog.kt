@@ -10,10 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.22-beta"
+    const val VERSION = "0.13.23-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "📍 Tocca una notifica di un membro (movimento o ingresso/uscita da un luogo): la mappa si centra sulla sua posizione."
+        "🔍 Foto a schermo intero con zoom: pizzica, trascina e doppio-tap per ingrandire.",
+        "🖼️ Immagini inviate in chat a qualità più alta (fino a 2560px)."
     )
 }

@@ -2414,17 +2414,25 @@ private fun ChatPanel(
         if (groupId.isBlank()) return
         isUploading = true
         coroutineScope.launch {
-            val res = repository.compressImageToBase64(uri, maxDimension = 1280, quality = 85)
+            // Qualita' alta: l'immagine va su Cloudinary, non piu' sul documento
+            // Firestore da 1 MB, quindi non serve comprimerla in modo aggressivo.
+            val res = repository.compressImageToBase64(uri, maxDimension = 2560, quality = 92)
             val base64 = res.getOrNull()
             if (res.isSuccess && !base64.isNullOrBlank()) {
                 // Prova upload su Cloudinary; fallback a Base64 inline se fallisce.
                 val imageUrl = repository.uploadImageToCloudinary(base64)
+                // Se Cloudinary fallisce si ripiega sul Base64 dentro il documento
+                // Firestore, che ha il limite di 1 MB: l'alta qualita' (2560/92) lo
+                // sforerebbe, quindi per l'inline si ricomprime piu' piccolo.
+                val inlineBase64 = if (imageUrl != null) null else
+                    repository.compressImageToBase64(uri, maxDimension = 1280, quality = 80)
+                        .getOrNull() ?: base64
                 isUploading = false
                 repository.sendMessage(
                     groupId,
                     ChatMessage(
                         text = caption,
-                        imageBase64 = if (imageUrl != null) null else base64,
+                        imageBase64 = inlineBase64,
                         imageUrl = imageUrl,
                         type = MessageType.IMAGE
                     )

@@ -517,10 +517,19 @@ fun MainRadarScreen(
             "SETTINGS" -> openPanel(RadarPanel.SETTINGS)
             "MAP" -> {
                 activeFullPanel = null
-                if (target.latitude != null && target.longitude != null &&
-                    !target.latitude.isNaN() && !target.longitude.isNaN()
-                ) {
-                    focusMapOn(target.latitude, target.longitude, collapse = false)
+                // Notifica su un membro (movimento, ingresso/uscita da un luogo):
+                // si centra sulla sua posizione ATTUALE, non sul punto — magari
+                // vecchio — arrivato nel payload. Il fix del payload resta come
+                // fallback se quel membro non e' ancora nelle posizioni caricate.
+                val memberLoc = target.senderId?.let { sid ->
+                    locations.find { it.userId == sid }
+                }
+                when {
+                    memberLoc != null ->
+                        focusMapOn(memberLoc.latitude, memberLoc.longitude, collapse = false)
+                    target.latitude != null && target.longitude != null &&
+                        !target.latitude.isNaN() && !target.longitude.isNaN() ->
+                        focusMapOn(target.latitude, target.longitude, collapse = false)
                 }
             }
         }

@@ -2270,6 +2270,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                                             notificationId = (timestamp % 100000).toInt(),
                                             destination = "MAP",
                                             groupId = groupId,
+                                            latitude = eventLat,
+                                            longitude = eventLon,
                                             senderId = senderId
                                         )
                                     }
@@ -4634,11 +4636,13 @@ class FirebaseRepository private constructor(private val context: Context) {
         movementNotifiedThisSession = true
 
         val notifiedKind = kind
-        CoroutineScope(Dispatchers.IO).launch { emitMovementEvent(notifiedKind) }
+        val lat = location.latitude
+        val lon = location.longitude
+        CoroutineScope(Dispatchers.IO).launch { emitMovementEvent(notifiedKind, lat, lon) }
     }
 
     /** Scrive l'evento "movement" cosi' che gli altri membri ricevano la notifica. */
-    private suspend fun emitMovementEvent(activityKind: String) {
+    private suspend fun emitMovementEvent(activityKind: String, latitude: Double, longitude: Double) {
         val user = _currentUserState.value ?: return
         val groupId = user.currentGroupId ?: return
         val db = firestore ?: return
@@ -4655,6 +4659,10 @@ class FirebaseRepository private constructor(private val context: Context) {
                 "userId" to user.uid,
                 "userName" to user.displayName,
                 "activityKind" to activityKind,
+                // Posizione al momento dell'avviso: fa da fallback per centrare la
+                // mappa se chi riceve non ha ancora caricato le posizioni del gruppo.
+                "latitude" to latitude,
+                "longitude" to longitude,
                 // Long come tutti gli altri eventi: il listener filtra per timestamp
                 // e Firestore scarta dai filtri di disuguaglianza i tipi diversi.
                 "timestamp" to System.currentTimeMillis()

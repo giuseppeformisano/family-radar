@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.21-beta"
+    const val VERSION = "0.13.22-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🗺️ Marker degli altri membri mostrato sulle posizioni reali, non più stimato in avanti (niente salti, meno consumo).",
-        "🧭 Interpolazione fluida mantenuta solo sul proprio viaggio."
+        "📍 Tocca una notifica di un membro (movimento o ingresso/uscita da un luogo): la mappa si centra sulla sua posizione."
     )
 }

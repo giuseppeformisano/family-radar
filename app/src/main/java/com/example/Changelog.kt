@@ -10,10 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.26-beta"
+    const val VERSION = "0.13.27-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🐞 Risolto il blocco sullo spinner dopo aver creato un gruppo: non serve più chiudere l'app o svuotare i dati."
+        "💬 Chat ridisegnata: bolle più morbide, testo più grande e barra messaggio più comoda.",
+        "📍 La distanza appare solo sui messaggi degli altri, non sui tuoi."
     )
 }

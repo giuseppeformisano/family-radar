@@ -2711,15 +2711,15 @@ private fun ChatPanel(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = Spacing.md, vertical = Spacing.sm),
-            shape = RoundedCornerShape(28.dp),
-            color = Color(0xEE121216),
-            border = BorderStroke(1.dp, Color(0x1F71717A)),
+            shape = RoundedCornerShape(30.dp),
+            color = Color(0xFF17171F),
+            border = BorderStroke(1.dp, Color(0x2671717A)),
             shadowElevation = 8.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -2757,7 +2757,7 @@ private fun ChatPanel(
                         .weight(1f)
                         .padding(horizontal = 8.dp, vertical = 8.dp)
                         .testTag("chat_input_field"),
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFFF2F2F7)),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFFF2F2F7), fontSize = 15.5.sp),
                     cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF6366F1)),
                     maxLines = 4,
                     keyboardOptions = KeyboardOptions(
@@ -2770,8 +2770,8 @@ private fun ChatPanel(
                             if (inputText.isEmpty()) {
                                 Text(
                                     text = stringResource(R.string.chat_input_placeholder),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = Color(0xFFA1A1AA)
+                                    fontSize = 15.5.sp,
+                                    color = Color(0xFF7C7C8A)
                                 )
                             }
                             innerTextField()
@@ -2784,17 +2784,17 @@ private fun ChatPanel(
                     onClick = { sendText() },
                     enabled = canSend,
                     shape = CircleShape,
-                    color = if (canSend) Color(0xFF6366F1) else Color(0x3371717A),
+                    color = if (canSend) Color(0xFF4F46E5) else Color(0x3371717A),
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(44.dp)
                         .testTag("send_message_button")
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            Icons.Default.Send,
+                            Icons.Default.ArrowUpward,
                             contentDescription = stringResource(R.string.chat_send_desc),
                             tint = Color.White,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
@@ -2933,9 +2933,10 @@ private fun ChatBubble(
         if (!isMe) {
             Text(
                 text = message.senderName,
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF818CF8),
-                modifier = Modifier.padding(start = Spacing.md, bottom = Spacing.xxs)
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF8B87F5),
+                modifier = Modifier.padding(start = Spacing.md, bottom = 3.dp)
             )
         }
 
@@ -2943,12 +2944,12 @@ private fun ChatBubble(
         Box {
           Surface(
             shape = RoundedCornerShape(
-                topStart = Radius.md,
-                topEnd = Radius.md,
-                bottomStart = if (isMe) Radius.md else Radius.xs,
-                bottomEnd = if (isMe) Radius.xs else Radius.md
+                topStart = 18.dp,
+                topEnd = 18.dp,
+                bottomStart = if (isMe) 18.dp else 6.dp,
+                bottomEnd = if (isMe) 6.dp else 18.dp
             ),
-            color = if (isMe) Color(0xFF6366F1) else Color(0xFF27272A),
+            color = if (isMe) Color(0xFF4F46E5) else Color(0xFF1C1C26),
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .combinedClickable(
@@ -2956,7 +2957,7 @@ private fun ChatBubble(
                     onLongClick = { menuOpen = true }
                 )
         ) {
-            Column(modifier = Modifier.padding(Spacing.sm)) {
+            Column(modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp)) {
                 // Anteprima del messaggio citato (reply).
                 if (message.replyToId.isNotBlank()) {
                     Row(
@@ -3031,7 +3032,8 @@ private fun ChatBubble(
                 if (message.text.isNotBlank() && !hidePlaceholderCaption) {
                     Text(
                         text = message.text,
-                        style = MaterialTheme.typography.bodyMedium,
+                        fontSize = 15.5.sp,
+                        lineHeight = 21.sp,
                         color = Color(0xFFF2F2F7)
                     )
                 }
@@ -3097,9 +3099,11 @@ private fun ChatBubble(
         }
 
         // Etichetta luogo del mittente + distanza da me (calcolo locale, zero rete).
-        val distanceLabel = remember(message.latitude, message.longitude, myLatitude, myLongitude) {
+        // La distanza ha senso solo sui messaggi ALTRUI: sui propri sarebbe la
+        // distanza da se stessi (~0), inutile.
+        val distanceLabel = remember(message.latitude, message.longitude, myLatitude, myLongitude, isMe) {
             val mLat = message.latitude; val mLon = message.longitude
-            if (mLat != null && mLon != null && myLatitude != null && myLongitude != null &&
+            if (!isMe && mLat != null && mLon != null && myLatitude != null && myLongitude != null &&
                 !(mLat == 0.0 && mLon == 0.0)
             ) {
                 val res = FloatArray(1)
@@ -3117,7 +3121,7 @@ private fun ChatBubble(
         if (geoLine.isNotBlank()) {
             Text(
                 text = geoLine,
-                style = MaterialTheme.typography.labelSmall,
+                fontSize = 12.sp,
                 color = Color(0xFF8E8E93),
                 modifier = Modifier.padding(
                     top = Spacing.xxs,
@@ -3131,7 +3135,7 @@ private fun ChatBubble(
         if (isMe && showReadReceipt && readerNames.isNotEmpty()) {
             Text(
                 text = "Visto da ${readerNames.joinToString(", ")}",
-                style = MaterialTheme.typography.labelSmall,
+                fontSize = 12.sp,
                 color = Color(0xFF34D399),
                 modifier = Modifier.padding(top = Spacing.xxs, end = Spacing.md)
             )
@@ -3160,13 +3164,13 @@ private fun ChatDateSeparator(timestamp: Long) {
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Surface(
             shape = RoundedCornerShape(Radius.pill),
-            color = Color(0x3327272A)
+            color = Color(0xFF17171F)
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFFA1A1AA),
-                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xxs)
+                fontSize = 12.5.sp,
+                color = Color(0xFF8A8A98),
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
             )
         }
     }

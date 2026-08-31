@@ -50,6 +50,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -2409,6 +2410,17 @@ private fun ChatPanel(
     var isUploading by remember { mutableStateOf(false) }
     var pendingChatCamera by remember { mutableStateOf(false) }
     var pendingChatCameraUri by remember { mutableStateOf<Uri?>(null) }
+    // Messaggio a cui si sta rispondendo (null = nessuna citazione in corso).
+    var replyingTo by remember { mutableStateOf<ChatMessage?>(null) }
+
+    // Anteprima breve di un messaggio citato: testo, o etichetta del tipo media.
+    fun replyPreviewText(m: ChatMessage): String = when {
+        m.text.isNotBlank() -> m.text
+        m.type == MessageType.IMAGE -> "📷 Foto"
+        m.type == MessageType.VOICE -> "🎤 Vocale"
+        m.type == MessageType.LOCATION_SHARE -> "📍 Posizione"
+        else -> "Messaggio"
+    }
 
     fun sendImage(uri: Uri, caption: String) {
         if (groupId.isBlank()) return
@@ -2428,15 +2440,20 @@ private fun ChatPanel(
                     repository.compressImageToBase64(uri, maxDimension = 1280, quality = 80)
                         .getOrNull() ?: base64
                 isUploading = false
+                val reply = replyingTo
                 repository.sendMessage(
                     groupId,
                     ChatMessage(
                         text = caption,
                         imageBase64 = inlineBase64,
                         imageUrl = imageUrl,
-                        type = MessageType.IMAGE
+                        type = MessageType.IMAGE,
+                        replyToId = reply?.id ?: "",
+                        replyToText = reply?.let { replyPreviewText(it) } ?: "",
+                        replyToSender = reply?.senderName ?: ""
                     )
                 )
+                replyingTo = null
             } else {
                 isUploading = false
                 Toast.makeText(context, "Errore elaborazione immagine", Toast.LENGTH_SHORT).show()
@@ -2497,9 +2514,27 @@ private fun ChatPanel(
     fun sendText() {
         val trimmed = inputText.trim()
         if (trimmed.isNotBlank() && groupId.isNotBlank()) {
-            repository.sendMessage(groupId, ChatMessage(text = trimmed, type = MessageType.TEXT))
+            val reply = replyingTo
+            repository.sendMessage(
+                groupId,
+                ChatMessage(
+                    text = trimmed,
+                    type = MessageType.TEXT,
+                    replyToId = reply?.id ?: "",
+                    replyToText = reply?.let { replyPreviewText(it) } ?: "",
+                    replyToSender = reply?.senderName ?: ""
+                )
+            )
             inputText = ""
+            replyingTo = null
         }
+    }
+
+    val hiddenMessages by repository.locallyHiddenMessages.collectAsState()
+    val allLocations by repository.currentGroupLocations.collectAsState()
+    val myLocation = allLocations.find { it.userId == currentUserId }
+    val visibleMessages = remember(messages, hiddenMessages) {
+        messages.filterNot { it.id in hiddenMessages }
     }
 
     val hasMoreChat by repository.hasMoreChat.collectAsState()
@@ -2549,7 +2584,7 @@ private fun ChatPanel(
                 })
             }
     ) {
-        if (messages.isEmpty()) {
+        if (visibleMessages.isEmpty()) {
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 EmptyState(
                     title = stringResource(R.string.chat_empty_title),
@@ -2567,13 +2602,29 @@ private fun ChatPanel(
                 contentPadding = PaddingValues(horizontal = Spacing.lg, vertical = Spacing.sm),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
-                items(messages, key = { it.id }) { msg ->
+                itemsIndexed(visibleMessages, key = { _, m -> m.id }) { index, msg ->
+                    // Separatore data: appare quando cambia il giorno rispetto al
+                    // messaggio precedente (o all'inizio della lista).
+                    val prev = visibleMessages.getOrNull(index - 1)
+                    if (prev == null || !isSameDay(prev.timestamp, msg.timestamp)) {
+                        ChatDateSeparator(msg.timestamp)
+                    }
                     ChatBubble(
                         message = msg,
                         isMe = msg.senderId == currentUserId,
                         onImageClick = onImageClick,
                         groupId = groupId,
-                        repository = repository
+                        repository = repository,
+                        myLatitude = myLocation?.latitude,
+                        myLongitude = myLocation?.longitude,
+                        onReply = { replyingTo = msg },
+                        onCopy = {
+                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                            cm?.setPrimaryClip(android.content.ClipData.newPlainText("messaggio", msg.text))
+                            Toast.makeText(context, "Testo copiato", Toast.LENGTH_SHORT).show()
+                        },
+                        onDeleteForMe = { repository.deleteMessageForMe(msg.id) },
+                        onDeleteForEveryone = { repository.deleteMessageForEveryone(groupId, msg.id) }
                     )
                 }
             }
@@ -2581,6 +2632,55 @@ private fun ChatPanel(
 
         AnimatedVisibility(visible = isUploading) {
             RadarLinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+
+        // Barra "stai rispondendo a…": mostra l'anteprima del messaggio citato.
+        AnimatedVisibility(visible = replyingTo != null) {
+            replyingTo?.let { reply ->
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.md),
+                    shape = RoundedCornerShape(Radius.sm),
+                    color = Color(0x1F6366F1)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(3.dp)
+                                .height(34.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color(0xFF6366F1))
+                        )
+                        Spacer(Modifier.width(Spacing.sm))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Rispondi a ${reply.senderName}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF818CF8)
+                            )
+                            Text(
+                                text = replyPreviewText(reply),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFA1A1AA),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        IconButton(onClick = { replyingTo = null }, modifier = Modifier.size(28.dp)) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Annulla risposta",
+                                tint = Color(0xFFA1A1AA),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         // Barra di input stile Floating Capsule
@@ -2686,8 +2786,48 @@ private fun ChatBubble(
     isMe: Boolean,
     onImageClick: (Any) -> Unit,
     groupId: String,
-    repository: FirebaseRepository
+    repository: FirebaseRepository,
+    myLatitude: Double? = null,
+    myLongitude: Double? = null,
+    onReply: () -> Unit = {},
+    onCopy: () -> Unit = {},
+    onDeleteForMe: () -> Unit = {},
+    onDeleteForEveryone: () -> Unit = {}
 ) {
+    // Messaggio eliminato per tutti: si mostra un segnaposto, niente contenuto.
+    if (message.deleted) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
+        ) {
+            Surface(
+                shape = RoundedCornerShape(Radius.md),
+                color = Color(0xFF27272A),
+                modifier = Modifier.widthIn(max = 300.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(Spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+                ) {
+                    Icon(
+                        Icons.Default.Block,
+                        contentDescription = null,
+                        tint = Color(0xFFA1A1AA),
+                        modifier = Modifier.size(Sizes.iconSm)
+                    )
+                    Text(
+                        text = "Messaggio eliminato",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color(0xFFA1A1AA),
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                    )
+                }
+            }
+        }
+        return
+    }
+
     when (message.type) {
         MessageType.GEOFENCE_ALERT -> {
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -2773,7 +2913,9 @@ private fun ChatBubble(
             )
         }
 
-        Surface(
+        var menuOpen by remember { mutableStateOf(false) }
+        Box {
+          Surface(
             shape = RoundedCornerShape(
                 topStart = Radius.md,
                 topEnd = Radius.md,
@@ -2781,9 +2923,47 @@ private fun ChatBubble(
                 bottomEnd = if (isMe) Radius.xs else Radius.md
             ),
             color = if (isMe) Color(0xFF6366F1) else Color(0xFF27272A),
-            modifier = Modifier.widthIn(max = 300.dp)
+            modifier = Modifier
+                .widthIn(max = 300.dp)
+                .combinedClickable(
+                    onClick = {},
+                    onLongClick = { menuOpen = true }
+                )
         ) {
             Column(modifier = Modifier.padding(Spacing.sm)) {
+                // Anteprima del messaggio citato (reply).
+                if (message.replyToId.isNotBlank()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = Spacing.xs)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(3.dp)
+                                .height(30.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color(0xFF818CF8))
+                        )
+                        Spacer(Modifier.width(Spacing.xs))
+                        Column {
+                            Text(
+                                text = message.replyToSender.ifBlank { "Messaggio" },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color(0xFF818CF8),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = message.replyToText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFFC7C7CC),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
                 if (message.type == MessageType.VOICE) {
                     VoiceMessagePlayer(message = message, isMe = isMe, groupId = groupId, repository = repository)
                 }
@@ -2840,6 +3020,98 @@ private fun ChatBubble(
                         .padding(top = Spacing.xxs)
                 )
             }
+          }
+
+          DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+              DropdownMenuItem(
+                  text = { Text("Rispondi") },
+                  leadingIcon = { Icon(Icons.Default.Reply, contentDescription = null) },
+                  onClick = { menuOpen = false; onReply() }
+              )
+              if (message.text.isNotBlank()) {
+                  DropdownMenuItem(
+                      text = { Text("Copia") },
+                      leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                      onClick = { menuOpen = false; onCopy() }
+                  )
+              }
+              DropdownMenuItem(
+                  text = { Text("Elimina per me") },
+                  leadingIcon = { Icon(Icons.Default.VisibilityOff, contentDescription = null) },
+                  onClick = { menuOpen = false; onDeleteForMe() }
+              )
+              if (isMe) {
+                  DropdownMenuItem(
+                      text = { Text("Elimina per tutti") },
+                      leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                      onClick = { menuOpen = false; onDeleteForEveryone() }
+                  )
+              }
+          }
+        }
+
+        // Etichetta luogo del mittente + distanza da me (calcolo locale, zero rete).
+        val distanceLabel = remember(message.latitude, message.longitude, myLatitude, myLongitude) {
+            val mLat = message.latitude; val mLon = message.longitude
+            if (mLat != null && mLon != null && myLatitude != null && myLongitude != null &&
+                !(mLat == 0.0 && mLon == 0.0)
+            ) {
+                val res = FloatArray(1)
+                android.location.Location.distanceBetween(myLatitude, myLongitude, mLat, mLon, res)
+                val m = res[0]
+                when {
+                    m < 100f -> "qui vicino"
+                    m < 1000f -> "a ${m.toInt()} m da te"
+                    else -> "a ${"%.1f".format(m / 1000f)} km da te"
+                }
+            } else null
+        }
+        val placeLabel = message.placeName?.takeIf { it.isNotBlank() }
+        val geoLine = listOfNotNull(placeLabel?.let { "📍 $it" }, distanceLabel).joinToString(" • ")
+        if (geoLine.isNotBlank()) {
+            Text(
+                text = geoLine,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF8E8E93),
+                modifier = Modifier.padding(
+                    top = Spacing.xxs,
+                    start = if (isMe) 0.dp else Spacing.md,
+                    end = if (isMe) Spacing.md else 0.dp
+                )
+            )
+        }
+    }
+}
+
+/** Due timestamp cadono nello stesso giorno solare? */
+private fun isSameDay(a: Long, b: Long): Boolean {
+    val ca = java.util.Calendar.getInstance().apply { timeInMillis = a }
+    val cb = java.util.Calendar.getInstance().apply { timeInMillis = b }
+    return ca.get(java.util.Calendar.YEAR) == cb.get(java.util.Calendar.YEAR) &&
+        ca.get(java.util.Calendar.DAY_OF_YEAR) == cb.get(java.util.Calendar.DAY_OF_YEAR)
+}
+
+/** Separatore data centrato nel flusso chat: "Oggi", "Ieri" o la data. */
+@Composable
+private fun ChatDateSeparator(timestamp: Long) {
+    val now = System.currentTimeMillis()
+    val yesterday = now - 24L * 60 * 60 * 1000
+    val label = when {
+        isSameDay(timestamp, now) -> "Oggi"
+        isSameDay(timestamp, yesterday) -> "Ieri"
+        else -> SimpleDateFormat("d MMMM yyyy", Locale.getDefault()).format(Date(timestamp))
+    }
+    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Surface(
+            shape = RoundedCornerShape(Radius.pill),
+            color = Color(0x3327272A)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFFA1A1AA),
+                modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xxs)
+            )
         }
     }
 }

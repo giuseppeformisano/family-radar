@@ -27,7 +27,14 @@ data class ChatMessage(
     val audioBase64: String? = null,
     val audioUrl: String? = null,
     val audioDurationMs: Long = 0L,
-    val placeName: String? = null
+    val placeName: String? = null,
+    // Reply/cita: anteprima denormalizzata del messaggio citato, cosi' non serve
+    // ritrovarlo in lista. replyToId vuoto = non e' una risposta.
+    val replyToId: String = "",
+    val replyToText: String = "",
+    val replyToSender: String = "",
+    // Elimina per tutti: il testo/allegati vengono ignorati e si mostra un segnaposto.
+    val deleted: Boolean = false
 ) {
     /**
      * Returns the image model suitable for Coil AsyncImage.

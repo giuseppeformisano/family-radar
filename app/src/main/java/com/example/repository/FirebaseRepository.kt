@@ -1958,7 +1958,11 @@ class FirebaseRepository private constructor(private val context: Context) {
                                 audioBase64 = if (!audioBase64.isNullOrBlank()) audioBase64 else null,
                                 audioUrl = if (!audioUrl.isNullOrBlank()) audioUrl else null,
                                 audioDurationMs = doc.getLong("audioDurationMs") ?: 0L,
-                                placeName = doc.getString("placeName")?.ifBlank { null }
+                                placeName = doc.getString("placeName")?.ifBlank { null },
+                                replyToId = doc.getString("replyToId") ?: "",
+                                replyToText = doc.getString("replyToText") ?: "",
+                                replyToSender = doc.getString("replyToSender") ?: "",
+                                deleted = doc.getBoolean("deleted") ?: false
                             )
 
                             // Check if this is a new message from another member
@@ -2960,16 +2964,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                     Log.w(TAG, "Failed to write geofence_entry event to Firestore: ${e.message}")
                 }
 
-                // 2. Also send system message to chat in Firestore
-                val sysMsg = ChatMessage(
-                    id = UUID.randomUUID().toString(),
-                    senderId = user.uid,
-                    senderName = "Radar Alert",
-                    text = str(R.string.msg_arrived_at, userName, place.name),
-                    timestamp = System.currentTimeMillis(),
-                    type = MessageType.GEOFENCE_ALERT
-                )
-                sendMessage(groupId, sysMsg)
+                // Niente piu' messaggio di sistema in chat: l'arrivo si legge dalla
+                // notifica e dall'etichetta luogo mostrata sotto ogni messaggio.
             }
         } else {
             if (lastNotifiedPlaceId != null) {
@@ -3009,16 +3005,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                     Log.w(TAG, "Failed to write geofence_exit event to Firestore: ${e.message}")
                 }
 
-                // System message in chat
-                val sysMsg = ChatMessage(
-                    id = UUID.randomUUID().toString(),
-                    senderId = user.uid,
-                    senderName = "Radar Alert",
-                    text = str(R.string.msg_left_place, userName, previousPlaceName),
-                    timestamp = System.currentTimeMillis(),
-                    type = MessageType.GEOFENCE_ALERT
-                )
-                sendMessage(groupId, sysMsg)
+                // Niente piu' messaggio di sistema in chat (vedi geofence_entry).
 
                 lastNotifiedPlaceId = null
                 lastNotifiedPlaceName = null
@@ -3312,10 +3299,18 @@ class FirebaseRepository private constructor(private val context: Context) {
         // cache audio). Prima si saltava del tutto questo blocco per id non vuoto,
         // e il messaggio finiva su Firestore con senderId = "": sul ricevente il
         // ping live sulla mappa (che richiede senderId non vuoto) non partiva mai.
+        // Ogni messaggio porta con se' dove si trovava chi scrive (luogo salvato o
+        // coordinate): la chat mostra "e' a Casa" sotto la bolla senza bisogno dei
+        // vecchi messaggi di sistema "arrivato/partito". Si prende dall'ultima
+        // posizione nota del mittente, solo se chi chiama non l'ha gia' impostata.
+        val myLoc = user?.let { u -> _currentGroupLocations.value.find { it.userId == u.uid } }
         val msg = message.copy(
             id = message.id.ifBlank { "msg_${UUID.randomUUID().toString().take(8)}" },
             senderId = message.senderId.ifBlank { user?.uid ?: "anon" },
-            senderName = message.senderName.ifBlank { user?.displayName ?: "Utente" }
+            senderName = message.senderName.ifBlank { user?.displayName ?: "Utente" },
+            placeName = message.placeName ?: myLoc?.currentPlaceName,
+            latitude = message.latitude ?: myLoc?.latitude,
+            longitude = message.longitude ?: myLoc?.longitude
         )
 
         // Idempotente come addPlace: il listener sui messaggi puo' riconsegnare
@@ -3341,13 +3336,44 @@ class FirebaseRepository private constructor(private val context: Context) {
                     "audioBase64" to (msg.audioBase64 ?: ""),
                     "audioUrl" to (msg.audioUrl ?: ""),
                     "audioDurationMs" to msg.audioDurationMs,
-                    "placeName" to (msg.placeName ?: "")
+                    "placeName" to (msg.placeName ?: ""),
+                    "replyToId" to msg.replyToId,
+                    "replyToText" to msg.replyToText,
+                    "replyToSender" to msg.replyToSender,
+                    "deleted" to msg.deleted
                 )
                 firestore.collection("groups").document(groupId)
                     .collection("messages").document(msg.id).set(map)
             }
         } catch (e: Exception) {
             Log.w(TAG, "sendMessage firestore failed: ${e.message}")
+        }
+    }
+
+    /** Messaggi che l'utente ha nascosto "solo per me": id in SharedPreferences. */
+    private val _locallyHiddenMessages = MutableStateFlow(
+        settingsPrefs.getStringSet("hidden_messages", emptySet())?.toSet() ?: emptySet()
+    )
+    val locallyHiddenMessages = _locallyHiddenMessages.asStateFlow()
+
+    /** Nasconde un messaggio solo su questo dispositivo (nessuna scrittura remota). */
+    fun deleteMessageForMe(messageId: String) {
+        val next = _locallyHiddenMessages.value + messageId
+        _locallyHiddenMessages.value = next
+        settingsPrefs.edit().putStringSet("hidden_messages", next).apply()
+    }
+
+    /** Elimina per tutti: marca il doc come [ChatMessage.deleted]; il testo sparisce. */
+    fun deleteMessageForEveryone(groupId: String, messageId: String) {
+        _currentGroupMessages.value = _currentGroupMessages.value.map {
+            if (it.id == messageId) it.copy(deleted = true, text = "", imageBase64 = null, imageUrl = null) else it
+        }
+        try {
+            firestore?.collection("groups")?.document(groupId)
+                ?.collection("messages")?.document(messageId)
+                ?.update(mapOf("deleted" to true, "text" to "", "imageBase64" to "", "imageUrl" to ""))
+        } catch (e: Exception) {
+            Log.w(TAG, "deleteMessageForEveryone fallita: ${e.message}")
         }
     }
 

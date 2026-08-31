@@ -10,11 +10,12 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.23-beta"
+    const val VERSION = "0.13.24-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🔍 Foto a schermo intero con zoom: pizzica, trascina e doppio-tap per ingrandire.",
-        "🖼️ Immagini inviate in chat a qualità più alta (fino a 2560px)."
+        "↩️ Rispondi a un messaggio, elimina (per tutti/per me) e copia: tieni premuto sulla bolla.",
+        "📍 Sotto ogni messaggio vedi dov'è chi scrive e la distanza da te.",
+        "📅 Separatori Oggi/Ieri tra i messaggi; via i vecchi avvisi arrivato/partito dalla chat."
     )
 }

@@ -393,11 +393,12 @@ fun MainRadarScreen(
     // Segnala al repository quando il radar e' in primo piano: serve a sopprimere
     // la notifica del vocale mentre e' in autoplay sulla mappa (evita il taglio audio).
     val lifecycleOwner = LocalLifecycleOwner.current
+    var isAppForeground by remember { mutableStateOf(true) }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> repository.setRadarForeground(true)
-                Lifecycle.Event.ON_PAUSE -> repository.setRadarForeground(false)
+                Lifecycle.Event.ON_RESUME -> { repository.setRadarForeground(true); isAppForeground = true }
+                Lifecycle.Event.ON_PAUSE -> { repository.setRadarForeground(false); isAppForeground = false }
                 else -> {}
             }
         }
@@ -537,10 +538,12 @@ fun MainRadarScreen(
         repository.consumeDeepLinkTarget()
     }
 
-    // Aprire la chat equivale a leggerla: azzera badge e notifiche in status bar.
-    LaunchedEffect(activeFullPanel, currentGroup?.id, messages.size) {
+    // Avere la chat aperta e in primo piano equivale a leggerla: non serve rientrare
+    // dall'icona. Rifà mark-read a OGNI nuovo messaggio (chiave sull'ultimo id) e al
+    // ritorno in primo piano, cosi' chi ha la chat davanti risulta subito "ha letto".
+    LaunchedEffect(activeFullPanel, currentGroup?.id, messages.lastOrNull()?.id, isAppForeground) {
         val gid = currentGroup?.id
-        if (activeFullPanel == RadarPanel.CHAT && !gid.isNullOrBlank()) {
+        if (activeFullPanel == RadarPanel.CHAT && isAppForeground && !gid.isNullOrBlank()) {
             repository.markChatRead(gid)
         }
     }

@@ -89,137 +89,84 @@ fun FullScreenMediaViewer(
             dismissOnClickOutside = false
         )
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFA080C14))
+                .background(Color(0xFF06080D))
         ) {
-            // Top Bar
-            Surface(
-                color = Color.Black.copy(alpha = 0.7f),
+            // Immagine a tutto schermo: nessuna barra piena, niente spazio sprecato.
+            ZoomableImage(
+                bitmap = decodedBitmap,
+                imageSource = imageSource,
+                contentDescription = strFullscreenImage
+            )
+
+            // Controlli minimali sovrapposti in alto: chiudi e salva, pillole scure.
+            Row(
                 modifier = Modifier
+                    .align(Alignment.TopCenter)
                     .fillMaxWidth()
                     .statusBarsPadding()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x66000000))
+                        .clickable { onDismiss() },
+                    contentAlignment = Alignment.Center
                 ) {
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = strCloseViewer,
-                            tint = Color.White
-                        )
-                    }
+                    Icon(Icons.Default.Close, contentDescription = strCloseViewer, tint = Color.White, modifier = Modifier.size(22.dp))
+                }
 
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = title ?: authorName ?: strPhotoFallback,
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        if (timestamp != null && timestamp > 0) {
-                            val timeStr = remember(timestamp) {
-                                SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(timestamp))
-                            }
-                            Text(
-                                text = timeStr,
-                                color = Color.White.copy(alpha = 0.75f),
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-
-                    IconButton(
-                        onClick = {
-                            if (isDownloading) return@IconButton
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x66000000))
+                        .clickable {
+                            if (isDownloading) return@clickable
                             coroutineScope.launch {
                                 isDownloading = true
                                 val success = when {
-                                    decodedBitmap != null -> {
-                                        ImageUtils.saveBitmapToGallery(context, decodedBitmap) != null
-                                    }
-                                    imageSource is String -> {
-                                        ImageUtils.saveBase64ToGallery(context, imageSource)
-                                    }
+                                    decodedBitmap != null -> ImageUtils.saveBitmapToGallery(context, decodedBitmap) != null
+                                    imageSource is String -> ImageUtils.saveBase64ToGallery(context, imageSource)
                                     else -> false
                                 }
                                 isDownloading = false
-                                if (success) {
-                                    Toast.makeText(context, strPhotoSavedGallery, Toast.LENGTH_SHORT).show()
-                                } else {
-                                    Toast.makeText(context, strPhotoSaveFailed, Toast.LENGTH_SHORT).show()
-                                }
+                                Toast.makeText(
+                                    context,
+                                    if (success) strPhotoSavedGallery else strPhotoSaveFailed,
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             }
                         },
-                        modifier = Modifier.size(44.dp)
-                    ) {
-                        if (isDownloading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                color = Color.White,
-                                trackColor = Color(0x33FFFFFF),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = strSaveToGallery,
-                                tint = Color.White
-                            )
-                        }
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isDownloading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, trackColor = Color(0x33FFFFFF), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.Download, contentDescription = strSaveToGallery, tint = Color.White, modifier = Modifier.size(22.dp))
                     }
                 }
             }
 
-            // Main image display centered at high fidelity, occupies remaining space without pushing content off screen
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .padding(8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                ZoomableImage(
-                    bitmap = decodedBitmap,
-                    imageSource = imageSource,
-                    contentDescription = strFullscreenImage
-                )
-            }
-
-            // Bottom Caption Bar (if caption present)
+            // Didascalia (se presente) sovrapposta in basso, discreta.
             if (!caption.isNullOrBlank()) {
-                Surface(
-                    color = Color.Black.copy(alpha = 0.85f),
-                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                Text(
+                    text = caption,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier
+                        .align(Alignment.BottomStart)
                         .fillMaxWidth()
+                        .background(Color(0x99000000))
                         .navigationBarsPadding()
-                ) {
-                    Text(
-                        text = caption,
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-            } else {
-                Spacer(modifier = Modifier.navigationBarsPadding())
+                        .padding(16.dp)
+                )
             }
         }
     }

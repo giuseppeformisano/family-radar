@@ -12,10 +12,13 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Density
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
@@ -150,7 +153,17 @@ fun MyApplicationTheme(
         }
     }
 
-    CompositionLocalProvider(LocalRadarPalette provides palette) {
+    // Clamp del font scale: impedisce che testi enormi (150%+) rompano i layout.
+    // Il limite 1.3 copre accessibilità comune senza far esplodere contenitori fissi.
+    val density = LocalDensity.current
+    val cappedDensity = remember(density) {
+        Density(density.density, fontScale = density.fontScale.coerceAtMost(1.3f))
+    }
+
+    CompositionLocalProvider(
+        LocalRadarPalette provides palette,
+        LocalDensity provides cappedDensity
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = RadarTypography,

@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.33-beta"
+    const val VERSION = "0.13.34-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🐞 Multi-gruppo: risolto DAVVERO il rimbalzo continuo tra gruppi aprendo l'app da una notifica."
+        "✨ Testi grandi: l'interfaccia ora si adatta correttamente anche con font di sistema al 125-150%."
     )
 }

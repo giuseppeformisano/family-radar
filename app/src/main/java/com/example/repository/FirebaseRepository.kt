@@ -255,6 +255,21 @@ class FirebaseRepository private constructor(private val context: Context) {
         settingsPrefs.edit().putBoolean("auto_trip_shared", shared).apply()
     }
 
+    // Alta precisione in movimento: quando attiva, i fix GPS arrivano ogni 1s
+    // invece dell'intervallo scelto dall'utente. Le scritture su Firestore restano
+    // filtrate da evaluateLocationGate — quindi la quota non esplode.
+    private val _isHighPrecisionMovement = MutableStateFlow(
+        settingsPrefs.getBoolean("high_precision_movement", false)
+    )
+    val isHighPrecisionMovement = _isHighPrecisionMovement.asStateFlow()
+
+    fun setHighPrecisionMovement(enabled: Boolean) {
+        if (_isHighPrecisionMovement.value == enabled) return
+        _isHighPrecisionMovement.value = enabled
+        settingsPrefs.edit().putBoolean("high_precision_movement", enabled).apply()
+        applyEffectiveTrackingInterval()
+    }
+
     /**
      * Precisione da chiedere a Play Services. Unico punto di verita': la usano
      * sia il tracciamento in-app silenzioso sia il servizio in foreground.
@@ -2782,14 +2797,10 @@ class FirebaseRepository private constructor(private val context: Context) {
             return LocationGate(true, if (isAppInForeground) "in-app heartbeat" else "heartbeat", isHeartbeat = true)
         }
 
-        // Durante un viaggio attivo, la velocità supera quasi sempre la soglia
-        // e causerebbe una scrittura su locations/{uid} ogni 500 ms. Limitiamo
-        // a una scrittura ogni TRIP_LOCATION_WRITE_INTERVAL_MS (30 s): gli altri
-        // membri vedono comunque la posizione aggiornata di frequente tramite
-        // la traccia live (flushLiveTrip), non dal documento locations.
-        if (_activeTrip.value != null && elapsed < TRIP_LOCATION_WRITE_INTERVAL_MS) {
-            return LocationGate(false, "trip throttle: ultimo invio ${elapsed / 1000}s fa")
-        }
+        // [TRIP TRACKING DISABILITATO] Throttle durante viaggio — commentato insieme al resto del trip tracking.
+        // if (_activeTrip.value != null && elapsed < TRIP_LOCATION_WRITE_INTERVAL_MS) {
+        //     return LocationGate(false, "trip throttle: ultimo invio ${elapsed / 1000}s fa")
+        // }
 
         if (location.speed > MOVING_SPEED_THRESHOLD_MS) {
             return LocationGate(true, "in movimento (${"%.1f".format(location.speed)} m/s)")
@@ -2827,24 +2838,14 @@ class FirebaseRepository private constructor(private val context: Context) {
             return
         }
 
-        // Il viaggio registra su OGNI fix, prima del gate. Il gate decide cosa
-        // vale la pena scrivere su Firestore, non cosa vale la pena tracciare: i
-        // punti del viaggio stanno in memoria e non costano scritture. Stando
-        // dopo il gate, la traccia ereditava le sue soglie e finiva ridotta a
-        // pochissimi punti -- su una strada dritta, a due.
-        // Il filtro dei 15 m dentro recordTripPoint basta a togliere il rumore.
-        if (_activeTrip.value != null) {
-            recordTripPoint(location)
-        } else {
-            // Fuori dal viaggio i fix finiscono nel buffer: se fra poco parte un
-            // rilevamento automatico, sono loro il tratto iniziale da recuperare.
-            rememberFix(location)
-        }
-
-        // Va valutato DOPO la registrazione del punto: se decide di avviare un
-        // viaggio qui, il fix corrente e' gia' stato usato per quello in corso e
-        // non si perde nulla; se decide di chiuderlo, la traccia e' completa.
-        evaluateAutoTrip(location)
+        // [TRIP TRACKING DISABILITATO] Registrazione punti del viaggio — commentato.
+        // Per riabilitare: decommentare il blocco sotto e ripristinare evaluateAutoTrip.
+        // if (_activeTrip.value != null) {
+        //     recordTripPoint(location)
+        // } else {
+        //     rememberFix(location)
+        // }
+        // evaluateAutoTrip(location)
 
         // Notifica "in movimento" agli altri membri: indipendente dall'auto-trip,
         // gira su ogni fix e si basa su Activity Recognition + spostamento netto.
@@ -3823,12 +3824,10 @@ class FirebaseRepository private constructor(private val context: Context) {
      * ce n'e' uno in registrazione, altrimenti quello scelto dall'utente.
      */
     private fun effectiveTrackingIntervalMs(): Long = when {
-        _activeTrip.value != null -> TRIP_TRACKING_INTERVAL_MS
-        // Col rilevamento automatico attivo non si puo' aspettare l'intervallo
-        // dell'utente: l'app si accorge della partenza solo quando guarda dove
-        // sei, quindi con 10 minuti perderebbe l'inizio del tragitto — o un giro
-        // breve per intero. Da fermi si guarda al massimo ogni minuto.
-        _isAutoTripEnabled.value -> minOf(_trackingFrequencySeconds.value, AUTO_TRIP_MAX_IDLE_SEC) * 1000L
+        // [TRIP TRACKING DISABILITATO] Branche viaggio commentate — ripristinare se si riabilita.
+        // _activeTrip.value != null -> TRIP_TRACKING_INTERVAL_MS
+        // _isAutoTripEnabled.value -> minOf(_trackingFrequencySeconds.value, AUTO_TRIP_MAX_IDLE_SEC) * 1000L
+        _isHighPrecisionMovement.value -> HIGH_PRECISION_INTERVAL_MS
         else -> _trackingFrequencySeconds.value * 1000L
     }
 
@@ -4867,6 +4866,9 @@ class FirebaseRepository private constructor(private val context: Context) {
          * scrive) e la precisione adattiva del servizio, non la rarefazione dei fix.
          */
         const val DEFAULT_TRACKING_INTERVAL_SEC = 30
+
+        /** Fix GPS ogni 1s quando "Alta precisione in movimento" è attiva. */
+        const val HIGH_PRECISION_INTERVAL_MS = 1000L
 
         /**
          * Cadenza dei fix mentre un viaggio e' in registrazione (500 ms = 2 fix/sec).

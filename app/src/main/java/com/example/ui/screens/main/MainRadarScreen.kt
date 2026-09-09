@@ -191,6 +191,7 @@ fun MainRadarScreen(
     val isPowerSavingMode by repository.isPowerSavingMode.collectAsState()
     val isAutoTripEnabled by repository.isAutoTripEnabled.collectAsState()
     val isAutoTripShared by repository.isAutoTripShared.collectAsState()
+    val isHighPrecisionMovement by repository.isHighPrecisionMovement.collectAsState()
     val deepLinkTarget by repository.deepLinkTarget.collectAsState()
 
     // GPS check — mostra dialog se GPS spento e non si è in risparmio batteria
@@ -1096,6 +1097,8 @@ fun MainRadarScreen(
                                 isPowerSavingMode = isPowerSavingMode,
                                 isAutoTripEnabled = isAutoTripEnabled,
                                 isAutoTripShared = isAutoTripShared,
+                                isHighPrecisionMovement = isHighPrecisionMovement,
+                                onToggleHighPrecisionMovement = { repository.setHighPrecisionMovement(it) },
                                 isSimulationRunning = isSimulationRunning,
                                 isVoiceAutoplayEnabled = voiceAutoplay,
                                 onToggleVoiceAutoplay = { repository.setVoiceAutoplayEnabled(it) },
@@ -3580,6 +3583,7 @@ private fun SettingsPanel(
     isPowerSavingMode: Boolean,
     isAutoTripEnabled: Boolean,
     isAutoTripShared: Boolean,
+    isHighPrecisionMovement: Boolean,
     isSimulationRunning: Boolean,
     isVoiceAutoplayEnabled: Boolean,
     onToggleVoiceAutoplay: (Boolean) -> Unit,
@@ -3591,6 +3595,7 @@ private fun SettingsPanel(
     onTogglePowerSaving: (Boolean) -> Unit,
     onToggleAutoTrip: (Boolean) -> Unit,
     onToggleAutoTripShared: (Boolean) -> Unit,
+    onToggleHighPrecisionMovement: (Boolean) -> Unit,
     onToggleGlobalGhostMode: (Boolean) -> Unit,
     onToggleGroupTracking: (Boolean) -> Unit,
     onToggleAccessPolicy: (Boolean) -> Unit,
@@ -3850,6 +3855,14 @@ private fun SettingsPanel(
                         testTag = "auto_trip_shared_switch"
                     )
                 }
+                SettingsToggleRow(
+                    title = "Alta precisione in movimento",
+                    description = "Fix GPS ogni secondo quando ti sposti (più fluido, più batteria)",
+                    icon = Icons.Default.Speed,
+                    checked = isHighPrecisionMovement,
+                    onCheckedChange = onToggleHighPrecisionMovement,
+                    testTag = "high_precision_switch"
+                )
             }
         }
 

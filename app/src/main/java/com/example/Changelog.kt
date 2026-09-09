@@ -10,10 +10,12 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.13.34-beta"
+    const val VERSION = "0.13.35-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Testi grandi: l'interfaccia ora si adatta correttamente anche con font di sistema al 125-150%."
+        "✨ Alta precisione in movimento: attiva dai settaggi per fix GPS ogni secondo.",
+        "✨ Segui membro: il pallino e la mappa seguono in tempo reale anche tra un fix e l'altro.",
+        "🗂 Tracciamento viaggi temporaneamente disabilitato (riprogettazione in corso)."
     )
 }

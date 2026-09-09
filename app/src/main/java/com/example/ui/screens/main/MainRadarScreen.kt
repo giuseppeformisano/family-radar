@@ -583,7 +583,7 @@ fun MainRadarScreen(
     // la variabile catturata al lancio dell'effetto resterebbe congelata alla prima
     // composizione, e la simulazione partirebbe dalla posizione "vecchia" del membro.
     val currentLocations by rememberUpdatedState(locations)
-    val currentUserId by rememberUpdatedState(currentUser?.uid)
+    val simCurrentUid by rememberUpdatedState(currentUser?.uid)
 
     // Simulazione percorso realistico in auto: waypoint che formano un loop con curve,
     // velocita' ~40 km/h (11 m/s), bearing calcolato dal segmento corrente, update ogni 1s.
@@ -617,7 +617,7 @@ fun MainRadarScreen(
         while (isSimulationRunning) {
             // Legge la posizione ATTUALE del membro al momento di (ri)partenza del loop,
             // così ogni giro parte da dove si trovava davvero — senza salti.
-            val target = currentLocations.firstOrNull { it.userId != currentUserId }
+            val target = currentLocations.firstOrNull { it.userId != simCurrentUid }
                 ?: break
             val originLat = target.latitude
             val originLon = target.longitude

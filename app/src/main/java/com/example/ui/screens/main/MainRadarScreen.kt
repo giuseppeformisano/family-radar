@@ -3767,6 +3767,14 @@ private fun SettingsPanel(
                     onCheckedChange = onTogglePowerSaving,
                     testTag = "power_saving_switch"
                 )
+                SettingsToggleRow(
+                    title = "Alta precisione in movimento",
+                    description = "Fix GPS ogni secondo quando ti sposti — più fluido, consuma più batteria",
+                    icon = Icons.Default.Speed,
+                    checked = isHighPrecisionMovement,
+                    onCheckedChange = onToggleHighPrecisionMovement,
+                    testTag = "high_precision_switch"
+                )
                 Spacer(Modifier.height(Spacing.md))
                 Text(
                     text = stringResource(R.string.settings_update_frequency),
@@ -3825,43 +3833,6 @@ private fun SettingsPanel(
                     text = stringResource(R.string.settings_trip_speed_note),
                     style = MaterialTheme.typography.bodySmall,
                     color = RadarDark.TextMuted
-                )
-            }
-        }
-
-        // ---- Viaggi ----
-        item {
-            SettingsCard {
-                SettingsSectionHeader(
-                    title = stringResource(R.string.settings_section_trips),
-                    subtitle = stringResource(R.string.settings_trips_subtitle),
-                    icon = Icons.Default.Route
-                )
-                SettingsToggleRow(
-                    title = stringResource(R.string.settings_auto_trip_title),
-                    description = stringResource(R.string.settings_auto_trip_desc),
-                    icon = Icons.Default.AutoMode,
-                    checked = isAutoTripEnabled,
-                    onCheckedChange = onToggleAutoTrip,
-                    testTag = "auto_trip_switch"
-                )
-                if (isAutoTripEnabled) {
-                    SettingsToggleRow(
-                        title = stringResource(R.string.settings_auto_trip_shared_title),
-                        description = stringResource(R.string.settings_auto_trip_shared_desc),
-                        icon = if (isAutoTripShared) Icons.Default.Group else Icons.Default.Lock,
-                        checked = isAutoTripShared,
-                        onCheckedChange = onToggleAutoTripShared,
-                        testTag = "auto_trip_shared_switch"
-                    )
-                }
-                SettingsToggleRow(
-                    title = "Alta precisione in movimento",
-                    description = "Fix GPS ogni secondo quando ti sposti (più fluido, più batteria)",
-                    icon = Icons.Default.Speed,
-                    checked = isHighPrecisionMovement,
-                    onCheckedChange = onToggleHighPrecisionMovement,
-                    testTag = "high_precision_switch"
                 )
             }
         }

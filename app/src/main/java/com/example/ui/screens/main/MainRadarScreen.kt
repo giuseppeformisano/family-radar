@@ -579,20 +579,87 @@ fun MainRadarScreen(
     }
 
     // --- Simulazione movimento (utile su emulatore) ---
+    // Simulazione percorso realistico in auto: waypoint che formano un loop con curve,
+    // velocita' ~40 km/h (11 m/s), bearing calcolato dal segmento corrente, update ogni 1s.
+    // Muove il PRIMO membro non-self presente nel gruppo.
     LaunchedEffect(isSimulationRunning) {
-        while (isSimulationRunning) {
-            delay(4000)
-            locations.forEach { loc ->
-                if (loc.userId != currentUser?.uid) {
-                    repository.updateLocation(
-                        loc.copy(
-                            latitude = loc.latitude + (Random.nextDouble() - 0.5) * 0.0008,
-                            longitude = loc.longitude + (Random.nextDouble() - 0.5) * 0.0008,
-                            speed = (Random.nextFloat() * 10f) + 2f,
-                            timestamp = System.currentTimeMillis()
-                        )
+        if (!isSimulationRunning) return@LaunchedEffect
+
+        // Waypoint relativi (lat, lon) in gradi dal punto di partenza.
+        // Formano un percorso a loop con svoltate realistiche (~500m x 300m).
+        val routeOffsets = listOf(
+            Pair(0.000,  0.000),   // partenza
+            Pair(0.001,  0.000),   // dritto nord ~111m
+            Pair(0.002,  0.001),   // curva dx
+            Pair(0.003,  0.002),   // continua curva
+            Pair(0.004,  0.003),   // rettilineo diagonale
+            Pair(0.004,  0.005),   // svolta est
+            Pair(0.003,  0.006),
+            Pair(0.002,  0.007),   // curva giù
+            Pair(0.001,  0.006),
+            Pair(0.000,  0.005),   // svolta sud
+            Pair(-0.001, 0.004),
+            Pair(-0.001, 0.003),   // curva
+            Pair(-0.001, 0.002),
+            Pair(-0.001, 0.001),   // rientro
+            Pair(0.000,  0.000),   // chiude il loop
+        )
+
+        // Scegli il primo membro non-self come bersaglio
+        val target = locations.firstOrNull { it.userId != currentUser?.uid } ?: return@LaunchedEffect
+        val originLat = target.latitude
+        val originLon = target.longitude
+
+        // Costruisce la lista assoluta di punti
+        val route = routeOffsets.map { (dLat, dLon) ->
+            Pair(originLat + dLat, originLon + dLon)
+        }
+
+        var segIdx = 0
+        var tInSeg = 0.0  // 0..1 dentro il segmento corrente
+        val speedMs = 11.0  // ~40 km/h
+
+        while (isSimulationRunning && segIdx < route.size - 1) {
+            val (aLat, aLon) = route[segIdx]
+            val (bLat, bLon) = route[segIdx + 1]
+
+            // Distanza del segmento in metri
+            val results = FloatArray(1)
+            android.location.Location.distanceBetween(aLat, aLon, bLat, bLon, results)
+            val segLen = results[0].toDouble().coerceAtLeast(1.0)
+
+            // Bearing del segmento
+            val dLat = Math.toRadians(bLat - aLat)
+            val dLon = Math.toRadians(bLon - aLon)
+            val y = Math.sin(dLon) * Math.cos(Math.toRadians(bLat))
+            val x = Math.cos(Math.toRadians(aLat)) * Math.sin(Math.toRadians(bLat)) -
+                    Math.sin(Math.toRadians(aLat)) * Math.cos(Math.toRadians(bLat)) * Math.cos(dLon)
+            val bearing = ((Math.toDegrees(Math.atan2(y, x)) + 360) % 360).toFloat()
+
+            // Avanza lungo il segmento a 1s per step
+            while (tInSeg < 1.0 && isSimulationRunning) {
+                val curLat = aLat + (bLat - aLat) * tInSeg
+                val curLon = aLon + (bLon - aLon) * tInSeg
+                repository.updateLocation(
+                    target.copy(
+                        latitude = curLat,
+                        longitude = curLon,
+                        speed = speedMs.toFloat() + (Random.nextFloat() - 0.5f) * 2f,
+                        bearing = bearing,
+                        accuracy = 8f,
+                        timestamp = System.currentTimeMillis()
                     )
-                }
+                )
+                delay(1000L)
+                tInSeg += speedMs / segLen
+            }
+            tInSeg -= 1.0
+            segIdx++
+
+            // Loop infinito: riparte dall'inizio
+            if (segIdx >= route.size - 1) {
+                segIdx = 0
+                tInSeg = 0.0
             }
         }
     }

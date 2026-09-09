@@ -645,7 +645,7 @@ fun MainRadarScreen(
                 while (t < 1.0 && isSimulationRunning) {
                     val curLat = aLat + (bLat - aLat) * t
                     val curLon = aLon + (bLon - aLon) * t
-                    repository.updateLocation(
+                    repository.simulateMemberLocation(
                         target.copy(
                             latitude = curLat,
                             longitude = curLon,

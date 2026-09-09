@@ -2958,6 +2958,39 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
     }
 
+    /**
+     * Scrive la posizione di un membro arbitrario — usato solo dalla simulazione.
+     * Non passa per updateLocation (che sovrascrive sempre con l'uid corrente).
+     */
+    suspend fun simulateMemberLocation(location: UserLocation) {
+        val groupId = _currentUserState.value?.currentGroupId ?: return
+        val db = firestore ?: return
+        try {
+            val locMap = hashMapOf<String, Any?>(
+                "userId" to location.userId,
+                "latitude" to location.latitude,
+                "longitude" to location.longitude,
+                "accuracy" to location.accuracy,
+                "speed" to location.speed,
+                "bearing" to location.bearing,
+                "timestamp" to location.timestamp,
+                "isOnline" to true,
+                "currentPlaceName" to (location.currentPlaceName ?: "")
+            )
+            db.collection("groups").document(groupId)
+                .collection("locations").document(location.userId)
+                .set(locMap, com.google.firebase.firestore.SetOptions.merge()).await()
+
+            // Aggiorna anche il StateFlow locale per l'interpolazione immediata
+            val list = _currentGroupLocations.value.toMutableList()
+            val idx = list.indexOfFirst { it.userId == location.userId }
+            if (idx >= 0) list[idx] = location else list.add(location)
+            _currentGroupLocations.value = list
+        } catch (e: Exception) {
+            Log.w(TAG, "simulateMemberLocation error: ${e.message}")
+        }
+    }
+
     private var lastNotifiedPlaceId: String? = null
     private var lastNotifiedPlaceName: String? = null
     private var geofenceExitMissCount = 0

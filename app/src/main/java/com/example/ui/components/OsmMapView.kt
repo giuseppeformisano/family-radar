@@ -691,6 +691,10 @@ fun OsmMapView(
                 }
 
                 // 3. Rebuild Members Overlays
+                // Salva le posizioni correnti (interpolate dal ticker) prima di
+                // azzerare la mappa: i marker in movimento ripartono da li' invece
+                // che dal fix grezzo, eliminando il salto avanti-indietro visibile.
+                val prevTickerPositions = memberMarkerMap.mapValues { it.value.position }
                 memberOverlays.clear()
                 memberMarkerMap.clear()
                 locations.forEach { userLoc ->
@@ -699,9 +703,14 @@ fun OsmMapView(
                             !userLoc.latitude.isNaN() && !userLoc.longitude.isNaN()
                         ) {
                             val memberPoint = GeoPoint(userLoc.latitude, userLoc.longitude)
+                            // Se il ticker stava gia' animando questo membro, usa la
+                            // sua posizione corrente come punto di partenza invece del
+                            // raw fix. Il ticker continuera' a estrapolarne la posizione
+                            // a partire dal nuovo timestamp (relatedObject aggiornato).
+                            val startPos = prevTickerPositions[userLoc.userId] ?: memberPoint
                             val isSelf = userLoc.userId == currentUserId
                             val memberMarker = Marker(mapView).apply {
-                                position = memberPoint
+                                position = startPos
                                 // relatedObject porta il fix reale: il ticker del dead
                                 // reckoning lo legge per calcolare la posizione estrapolata
                                 // senza dover cercare nel flows né ricostruire l'overlay.
@@ -1204,11 +1213,13 @@ fun clusterSnapshots(snapshots: List<PlaceSnapshot>, thresholdMeters: Double = 3
 
 private fun formatRelativeTime(ctx: Context, timestamp: Long): String {
     val diff = System.currentTimeMillis() - timestamp
+    val totalSec = (diff / 1000).toInt().coerceAtLeast(0)
+    val min = totalSec / 60
+    val sec = totalSec % 60
     return when {
-        diff < 30_000 -> ctx.getString(R.string.map_time_just_now)
-        diff < 60_000 -> ctx.getString(R.string.map_time_seconds_ago, (diff / 1000).toInt())
-        diff < 3600_000 -> ctx.getString(R.string.map_time_minutes_ago, (diff / 60_000).toInt())
-        else -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestamp))
+        totalSec < 60 -> "${totalSec}s fa"
+        min < 60 -> "${min}m ${sec}s fa"
+        else -> SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(timestamp))
     }
 }
 

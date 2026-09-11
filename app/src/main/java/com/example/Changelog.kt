@@ -10,13 +10,12 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.16.0-beta"
+    const val VERSION = "0.16.1-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Interpolazione GPS per tutti i membri in movimento, non solo chi si segue.",
-        "✨ Filtro low-pass sui fix GPS: meno sbalzi e jitter sui marker.",
-        "✨ Animazione di recupero dopo gap di connettivita': niente piu' salti bruschi.",
-        "🐞 Multi-gruppo: con piu' gruppi attivi si vede sempre la lista gruppi all'avvio."
+        "🐞 Marker GPS: eliminato il salto avanti-indietro al cambio di fix — il ticker ora mantiene la posizione interpolata.",
+        "✨ Timestamp ultimo fix preciso al secondo (es. '5s fa', '2m 30s fa').",
+        "✨ Interpolazione GPS per tutti i membri in movimento, low-pass filter, recupero post-gap."
     )
 }

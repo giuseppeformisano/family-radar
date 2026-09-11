@@ -1057,6 +1057,12 @@ class FirebaseRepository private constructor(private val context: Context) {
         userDocListener = firestore.collection("users").document(userId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null || !snapshot.exists()) return@addSnapshotListener
+
+                // Con piu' gruppi attivi l'utente deve scegliere dalla schermata di selezione:
+                // qualsiasi auto-selezione qui dentro scatenerebbe il rimbalzo tra listener.
+                val activeCount = _userGroupsState.value.count { it.userMembershipStatus == "ACTIVE" }
+                if (activeCount > 1) return@addSnapshotListener
+
                 val lastApproved = snapshot.getString("lastApprovedGroupId")
                 val currentGroupId = snapshot.getString("currentGroupId")
 

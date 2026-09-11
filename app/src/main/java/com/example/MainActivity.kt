@@ -167,10 +167,15 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
     var currentScreen by remember { mutableStateOf(AppScreen.MAIN_RADAR) }
     var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     var showChangelog by remember { mutableStateOf(false) }
+    // Flag di sessione: true quando l'utente ha scelto esplicitamente un gruppo
+    // dalla GroupSelectScreen. Resettato al logout. Finché è false e ci sono più
+    // gruppi attivi, la UI resta su GROUP_SELECT senza auto-entrare.
+    var hasPickedGroupThisSession by remember { mutableStateOf(false) }
 
     // Synchronize screen state with auth, group & deep link state
     LaunchedEffect(currentUser, userGroups, deepLinkTarget, isChoosingGroup) {
         if (currentUser == null) {
+            hasPickedGroupThisSession = false
             currentScreen = AppScreen.AUTH
             return@LaunchedEffect
         }
@@ -201,15 +206,13 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
         val currentGid = currentUser?.currentGroupId
         val currentGroupActive = activeGroups.find { it.id == currentGid }
         currentScreen = when {
+            // Piu' gruppi attivi: GROUP_SELECT finché l'utente non sceglie
+            // esplicitamente in questa sessione. Nessuna auto-selezione: è
+            // proprio quella la causa del rimbalzo infinito tra listener.
+            activeGroups.size > 1 && !hasPickedGroupThisSession -> AppScreen.GROUP_SELECT
+
             currentGroupActive != null -> AppScreen.MAIN_RADAR
 
-            // Con UN SOLO gruppo entrare da soli e' comodo e non c'e' scelta da
-            // fare. Con piu' gruppi no: prima si prendeva `activeGroups.first()`,
-            // cioe' un gruppo qualunque nell'ordine in cui era arrivato da
-            // Firestore. Dopo un logout e un nuovo accesso era proprio questo a
-            // far entrare nel gruppo sbagliato, o a lasciare la UI in bilico
-            // mentre l'elenco si popolava. Se la scelta non e' ovvia, la fa
-            // l'utente.
             currentGid.isNullOrBlank() && activeGroups.size == 1 -> {
                 repository.selectGroup(activeGroups.first().id)
                 AppScreen.MAIN_RADAR
@@ -481,6 +484,7 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
                     repository = repository,
                     onGroupSelected = { group ->
                         repository.selectGroup(group.id)
+                        hasPickedGroupThisSession = true
                         currentScreen = AppScreen.MAIN_RADAR
                     }
                 )
@@ -490,6 +494,7 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
                     repository = repository,
                     onSwitchGroup = {
                         repository.clearCurrentGroupSelection()
+                        hasPickedGroupThisSession = false
                         currentScreen = AppScreen.GROUP_SELECT
                     }
                 )

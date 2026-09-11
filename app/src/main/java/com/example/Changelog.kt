@@ -10,13 +10,12 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.14.5-beta"
+    const val VERSION = "0.15.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
+        "🐞 Multi-gruppo: con piu' gruppi attivi si vede sempre la lista gruppi all'avvio — niente piu' rimbalzo infinito.",
         "✨ Alta precisione in movimento: attiva dai settaggi per fix GPS ogni secondo.",
-        "✨ Segui membro: il pallino e la mappa seguono in tempo reale anche tra un fix e l'altro.",
-        "🗂 Sezione Viaggi rimossa dalle impostazioni (riprogettazione in corso).",
-        "🧪 Simulazione: percorso realistico in auto con curve a ~40 km/h."
+        "✨ Segui membro: il pallino e la mappa seguono in tempo reale anche tra un fix e l'altro."
     )
 }

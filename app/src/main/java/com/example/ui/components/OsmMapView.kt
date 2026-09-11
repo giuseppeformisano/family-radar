@@ -230,16 +230,12 @@ fun OsmMapView(
     val previousFix = remember { mutableMapOf<String, UserLocation>() }
     val motionEstimate = remember { mutableMapOf<String, MotionEstimate>() }
 
-    // Posizioni smussate (low-pass) per ridurre il jitter GPS.
-    // Il ticker usa queste come base per l'estrapolazione invece del fix grezzo.
-    val smoothedPos = remember { mutableMapOf<String, Pair<Double, Double>>() }
-
-    // Timestamp dell'ultimo fix reale per rilevare gap di connettivita'.
-    val lastFixTime = remember { mutableMapOf<String, Long>() }
-
-    // Animazioni di recupero dopo un gap: userId -> Triple(fromPos, toPos, startMs).
-    // Il ticker interpola da fromPos a toPos in ~500 ms.
-    val gapRecovery = remember { mutableMapOf<String, Triple<GeoPoint, GeoPoint, Long>>() }
+    // Punto di partenza e istante in cui e' iniziata l'estrapolazione corrente.
+    // Vengono aggiornati SOLO quando arriva un fix GPS con timestamp diverso,
+    // non quando l'app ricostruisce i pallini per altri motivi. Cosi' elapsedSec
+    // non puo' mai esplodere a 14 secondi per un aggiornamento non GPS.
+    val interpBasePos = remember { mutableMapOf<String, Pair<Double, Double>>() }
+    val interpStartTime = remember { mutableMapOf<String, Long>() }
 
     // Utenti con un viaggio in corso: SOLO per loro si applica il dead reckoning.
     // Fuori da un viaggio il marker resta sul fix reale — anticiparlo mentre uno
@@ -260,48 +256,32 @@ fun OsmMapView(
             if (loc.latitude == 0.0 && loc.longitude == 0.0) return@forEach
             val prev = previousFix[loc.userId]
 
-            // Low-pass filter: smussa la posizione per ridurre il jitter GPS.
-            // Alpha 0.35 sul nuovo fix, 0.65 sul precedente smussato.
-            val prevSmoothed = smoothedPos[loc.userId]
-            val sLat = if (prevSmoothed != null) 0.65 * prevSmoothed.first + 0.35 * loc.latitude else loc.latitude
-            val sLon = if (prevSmoothed != null) 0.65 * prevSmoothed.second + 0.35 * loc.longitude else loc.longitude
-            smoothedPos[loc.userId] = Pair(sLat, sLon)
+            // Nuovo fix reale: aggiorna base e istante di partenza dell'estrapolazione.
+            // Condizione: timestamp diverso dal precedente (fix davvero nuovo).
+            if (prev == null || prev.timestamp != loc.timestamp) {
+                interpBasePos[loc.userId] = Pair(loc.latitude, loc.longitude)
+                interpStartTime[loc.userId] = now
 
-            // Rilevamento gap di connettivita': se il fix arriva dopo >2 s di silenzio
-            // salva la posizione attuale del marker (interpolata) per l'animazione di recupero.
-            val lastT = lastFixTime[loc.userId]
-            if (lastT != null && (now - lastT) > 2000L && prev != null && prev.timestamp != loc.timestamp) {
-                val currentMarkerPos = memberMarkerMap[loc.userId]?.position
-                if (currentMarkerPos != null) {
-                    val toPos = GeoPoint(sLat, sLon)
-                    gapRecovery[loc.userId] = Triple(currentMarkerPos, toPos, now)
+                if (prev != null) {
+                    val dtSec = (loc.timestamp - prev.timestamp) / 1000.0
+                    if (dtSec > 0.3) {
+                        val dist = distanceMeters(prev.latitude, prev.longitude, loc.latitude, loc.longitude)
+                        val computedSpeed = (dist / dtSec).toFloat()
+                        val bearing = if (loc.bearing != 0.0f) loc.bearing.toDouble()
+                            else bearingDegrees(prev.latitude, prev.longitude, loc.latitude, loc.longitude)
+                        val effSpeed = max(computedSpeed, loc.speed)
+                        motionEstimate[loc.userId] = MotionEstimate(effSpeed, bearing)
+                    }
                 }
+                previousFix[loc.userId] = loc
             }
-            lastFixTime[loc.userId] = now
-
-            if (prev != null && prev.timestamp != loc.timestamp) {
-                val dtSec = (loc.timestamp - prev.timestamp) / 1000.0
-                if (dtSec > 0.3) {
-                    val dist = distanceMeters(prev.latitude, prev.longitude, loc.latitude, loc.longitude)
-                    val computedSpeed = (dist / dtSec).toFloat()
-                    // Se il fix ha gia' un bearing valido lo si preferisce; altrimenti
-                    // si ricava la direzione dal segmento prev→cur.
-                    val bearing = if (loc.bearing != 0.0f) loc.bearing.toDouble()
-                        else bearingDegrees(prev.latitude, prev.longitude, loc.latitude, loc.longitude)
-                    // Velocita' effettiva: la maggiore fra quella GPS e quella calcolata.
-                    val effSpeed = max(computedSpeed, loc.speed)
-                    motionEstimate[loc.userId] = MotionEstimate(effSpeed, bearing)
-                }
-            }
-            previousFix[loc.userId] = loc
         }
         // Pulisce le stime di utenti non piu' presenti.
         val activeIds = locations.map { it.userId }.toSet()
         previousFix.keys.retainAll(activeIds)
         motionEstimate.keys.retainAll(activeIds)
-        smoothedPos.keys.retainAll(activeIds)
-        lastFixTime.keys.retainAll(activeIds)
-        gapRecovery.keys.retainAll(activeIds)
+        interpBasePos.keys.retainAll(activeIds)
+        interpStartTime.keys.retainAll(activeIds)
     }
 
     // Stato aggiornato del membro inseguito: catturato dentro al ticker tramite
@@ -310,8 +290,9 @@ fun OsmMapView(
     val currentFollowedUserId by rememberUpdatedState(followedUserId)
 
     // Ticker di interpolazione: ogni 100 ms estrapola la posizione di TUTTI i membri
-    // in movimento, applica l'animazione di recupero post-gap e — se il Follow Mode
-    // e' attivo — centra la mappa sulla posizione interpolata del membro inseguito.
+    // in movimento. Usa interpBasePos/interpStartTime — aggiornati SOLO su fix GPS
+    // realmente nuovi — cosi' elapsedSec non puo' mai esplodere per aggiornamenti
+    // non GPS e il pallino non puo' fare salti enormi in avanti.
     LaunchedEffect(Unit) {
         while (true) {
             delay(100L)
@@ -319,36 +300,16 @@ fun OsmMapView(
             val tickNow = System.currentTimeMillis()
             var changed = false
             memberMarkerMap.forEach { (userId, marker) ->
-                val tag = marker.relatedObject as? UserLocation ?: return@forEach
-
-                // --- Animazione di recupero post-gap ---
-                // Se c'e' un gap recente, anima il marker da fromPos a toPos in 500 ms
-                // prima di riprendere la normale estrapolazione.
-                val recovery = gapRecovery[userId]
-                if (recovery != null) {
-                    val (fromPos, toPos, startMs) = recovery
-                    val t = ((tickNow - startMs) / 500.0).coerceIn(0.0, 1.0)
-                    val lat = fromPos.latitude + (toPos.latitude - fromPos.latitude) * t
-                    val lon = fromPos.longitude + (toPos.longitude - fromPos.longitude) * t
-                    marker.position = GeoPoint(lat, lon)
-                    changed = true
-                    if (t >= 1.0) gapRecovery.remove(userId)
-                    val isFollowNow = !currentFollowedUserId.isNullOrBlank() && userId == currentFollowedUserId
-                    if (isFollowNow) {
-                        try { mapView.controller?.animateTo(marker.position) } catch (_: Throwable) {}
-                    }
-                    return@forEach
-                }
-
-                // --- Dead reckoning per tutti i membri in movimento ---
                 val motion = motionEstimate[userId] ?: return@forEach
                 if (motion.speedMs < INTERP_MIN_SPEED_MS) return@forEach
-                // Usa la posizione smussata come base; se non disponibile cade sul fix reale.
-                val baseLat = smoothedPos[userId]?.first ?: tag.latitude
-                val baseLon = smoothedPos[userId]?.second ?: tag.longitude
-                val elapsedSec = ((tickNow - tag.timestamp) / 1000.0)
+
+                val basePair = interpBasePos[userId] ?: return@forEach
+                val startTime = interpStartTime[userId] ?: return@forEach
+                val baseLat = basePair.first
+                val baseLon = basePair.second
+
+                val elapsedSec = ((tickNow - startTime) / 1000.0)
                     .coerceIn(0.0, INTERP_MAX_ELAPSED_SEC)
-                if (elapsedSec <= 0.0) return@forEach
                 val deltaMeters = motion.speedMs * elapsedSec
                 val bearingRad = Math.toRadians(motion.bearingDeg)
                 val dLat = deltaMeters * cos(bearingRad) / 111320.0
@@ -358,7 +319,8 @@ fun OsmMapView(
                 marker.position = newPos
                 changed = true
 
-                val isSelfInTrip = userId == currentUserId && userId in liveTripUserIds
+                val tag = marker.relatedObject as? UserLocation
+                val isSelfInTrip = tag != null && userId == currentUserId && userId in liveTripUserIds
                 if (isSelfInTrip) {
                     activeTripPolylineRef?.let { poly ->
                         if (baseActiveTripPoints.isNotEmpty()) {
@@ -373,7 +335,6 @@ fun OsmMapView(
                     }
                 }
 
-                // Centra la mappa sulla posizione interpolata del membro inseguito.
                 val isFollowTarget = !currentFollowedUserId.isNullOrBlank() && userId == currentFollowedUserId
                 if (isFollowTarget) {
                     try { mapView.controller?.animateTo(newPos) } catch (_: Throwable) {}

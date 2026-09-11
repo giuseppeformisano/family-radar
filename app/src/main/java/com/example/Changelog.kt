@@ -10,12 +10,13 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.16.1-beta"
+    const val VERSION = "0.16.2-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🐞 Marker GPS: eliminato il salto avanti-indietro al cambio di fix — il ticker ora mantiene la posizione interpolata.",
-        "✨ Timestamp ultimo fix preciso al secondo (es. '5s fa', '2m 30s fa').",
-        "✨ Interpolazione GPS per tutti i membri in movimento, low-pass filter, recupero post-gap."
+        "🐞 Pallino GPS: eliminato il salto enorme in avanti — il calcolo dello spostamento non puo' piu' usare un orario sbagliato.",
+        "🐞 Eliminato il ritorno lento all'indietro dopo il salto.",
+        "✨ Timestamp ultimo fix preciso al secondo.",
+        "✨ Interpolazione GPS per tutti i membri in movimento."
     )
 }

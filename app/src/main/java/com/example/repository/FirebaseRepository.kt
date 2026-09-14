@@ -2808,6 +2808,12 @@ class FirebaseRepository private constructor(private val context: Context) {
         //     return LocationGate(false, "trip throttle: ultimo invio ${elapsed / 1000}s fa")
         // }
 
+        // Con l'alta precisione in movimento l'utente vuole ogni fix su Firestore:
+        // il filtro displacement/speed non ha senso a 1s di intervallo.
+        if (_isHighPrecisionMovement.value) {
+            return LocationGate(true, "alta precisione")
+        }
+
         if (location.speed > MOVING_SPEED_THRESHOLD_MS) {
             return LocationGate(true, "in movimento (${"%.1f".format(location.speed)} m/s)")
         }

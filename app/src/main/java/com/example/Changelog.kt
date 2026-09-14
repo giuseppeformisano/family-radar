@@ -10,12 +10,12 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.16.2-beta"
+    const val VERSION = "0.16.3-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🐞 Pallino GPS: eliminato il salto enorme in avanti — il calcolo dello spostamento non puo' piu' usare un orario sbagliato.",
-        "🐞 Eliminato il ritorno lento all'indietro dopo il salto.",
+        "🐞 Alta precisione in movimento: ora manda davvero ogni fix su Firestore — il filtro di distanza non la bloccava piu'.",
+        "🐞 Pallino GPS: eliminato il salto enorme in avanti e il ritorno lento indietro.",
         "✨ Timestamp ultimo fix preciso al secondo.",
         "✨ Interpolazione GPS per tutti i membri in movimento."
     )

@@ -3229,7 +3229,7 @@ private fun ChatBubble(
                   offset = androidx.compose.ui.unit.IntOffset(0, -140),
                   onDismissRequest = { reactionPickerOpen = false }
               ) {
-                  AnimatedVisibility(
+                  androidx.compose.animation.AnimatedVisibility(
                       visible = reactionPickerOpen,
                       enter = fadeIn() + scaleIn(initialScale = 0.85f),
                       exit = fadeOut() + scaleOut(targetScale = 0.85f)

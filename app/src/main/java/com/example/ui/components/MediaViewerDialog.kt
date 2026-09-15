@@ -37,7 +37,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -313,8 +312,9 @@ fun ZoomableImage(
         }
         .pointerInput(Unit) {
             awaitEachGesture {
-                awaitFirstDown(requireUnconsumed = false)
-                do {
+                // Loop per tutta la durata del gesto corrente.
+                // awaitEachGesture si ripete automaticamente al prossimo touch-down.
+                while (true) {
                     val event = awaitPointerEvent()
                     val activeCount = event.changes.count { it.pressed }
                     when {
@@ -335,7 +335,9 @@ fun ZoomableImage(
                         }
                         // Single-finger con scale==1: NON consumare → il Pager riceve lo swipe
                     }
-                } while (event.changes.any { it.pressed })
+                    // Esci dal loop quando tutte le dita sono alzate
+                    if (!event.changes.any { it.pressed }) break
+                }
             }
         }
         .graphicsLayer {

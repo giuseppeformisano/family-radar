@@ -122,11 +122,10 @@ fun MyApplicationTheme(
     val context = LocalContext.current
     val supportsDynamic = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
+    // Il dynamic color (Material You) è usato solo in light mode: il dark theme
+    // ha un look fisso nero/indigo (RadarDark) e il wallpaper non deve alterarlo.
     val colorScheme: ColorScheme = when {
-        supportsDynamic && darkTheme -> runCatching { dynamicDarkColorScheme(context) }
-            .getOrDefault(DarkColorScheme)
-
-        supportsDynamic -> runCatching { dynamicLightColorScheme(context) }
+        supportsDynamic && !darkTheme -> runCatching { dynamicLightColorScheme(context) }
             .getOrDefault(LightColorScheme)
 
         darkTheme -> DarkColorScheme

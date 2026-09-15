@@ -85,10 +85,12 @@ val ErrorContainerLight = Red200
 val OnErrorContainerLight = Color(0xFF7F1D1D)
 
 // ============================================================================
-// DARK
+// DARK — allineati a RadarDark per mantenere l'aspetto originale invariato.
+// RadarDark.Bg = Black, Card = 0x0A71717A su nero ≈ #0A0A0A, TextPrimary = #F2F2F7,
+// TextMuted = #A1A1AA, Accent = Indigo600, Divider = 0x1FFFFFFF.
 // ============================================================================
-val PrimaryDark = Indigo400
-val OnPrimaryDark = Indigo950
+val PrimaryDark = Indigo600          // RadarDark.Accent
+val OnPrimaryDark = Color.White
 val PrimaryContainerDark = Indigo900
 val OnPrimaryContainerDark = Indigo200
 
@@ -102,12 +104,12 @@ val OnTertiaryDark = Color(0xFF451A03)
 val TertiaryContainerDark = Amber900
 val OnTertiaryContainerDark = Amber200
 
-val BackgroundDark = Ink900
-val SurfaceDark = Ink800
-val SurfaceVariantDark = Ink700
-val OnSurfaceDark = Slate50
-val OnSurfaceVariantDark = Slate400
-val OutlineDark = Ink600
+val BackgroundDark = Color.Black          // RadarDark.Bg
+val SurfaceDark = Color(0xFF0D0D0D)      // RadarDark.Card su sfondo nero
+val SurfaceVariantDark = Color(0xFF1A1A1A) // RadarDark.Surface su sfondo nero
+val OnSurfaceDark = Color(0xFFF2F2F7)    // RadarDark.TextPrimary
+val OnSurfaceVariantDark = Color(0xFFA1A1AA) // RadarDark.TextMuted
+val OutlineDark = Color(0x1FFFFFFF)      // RadarDark.Divider
 
 val ErrorDark = Red400
 val OnErrorDark = Red950

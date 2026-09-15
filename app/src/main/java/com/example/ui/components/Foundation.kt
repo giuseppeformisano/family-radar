@@ -53,7 +53,6 @@ import com.example.ui.theme.BadgeTextStyle
 import com.example.ui.theme.Elevation
 import com.example.ui.theme.MetricTextStyle
 import com.example.ui.theme.Radius
-import com.example.ui.theme.RadarDark
 import com.example.ui.theme.RadarSemantic
 import com.example.ui.theme.RadarTheme
 import com.example.ui.theme.Sizes
@@ -91,6 +90,82 @@ fun GlassSurface(
         border = BorderStroke(1.dp, palette.gradients.glassBorder)
     ) {
         Box(modifier = Modifier.padding(contentPadding)) { content() }
+    }
+}
+
+/**
+ * Dialog di conferma/alert con lo stesso look "vetro" del resto dell'app, al posto
+ * dell'`AlertDialog` di Material stock (superficie piena, bordi netti) che stona con
+ * `GlassSurface`. Pensato per essere generico: legge solo da `MaterialTheme` /
+ * `RadarTheme.palette`, nessuna dipendenza dal chiamante.
+ *
+ * `dismissLabel` è facoltativo: se assente, viene mostrato solo il pulsante di conferma
+ * (caso di semplice avviso informativo). `isDestructive` colora il pulsante di conferma
+ * con `MaterialTheme.colorScheme.error` invece che `primary`, per le azioni distruttive
+ * (es. eliminazione).
+ */
+@Composable
+fun GlassAlertDialog(
+    onDismissRequest: () -> Unit,
+    title: String,
+    text: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier,
+    dismissLabel: String? = null,
+    onDismissClick: (() -> Unit)? = null,
+    isDestructive: Boolean = false
+) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismissRequest) {
+        GlassSurface(
+            modifier = modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(Radius.xl),
+            contentPadding = Spacing.xl
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(Spacing.sm))
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(Spacing.xl))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md)
+                ) {
+                    if (dismissLabel != null) {
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = { onDismissClick?.invoke() ?: onDismissRequest() },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(Radius.md),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        ) {
+                            Text(dismissLabel)
+                        }
+                    }
+                    androidx.compose.material3.Button(
+                        onClick = onConfirm,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(Radius.md),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                            contentColor = if (isDestructive) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) {
+                        Text(confirmLabel)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -311,12 +386,12 @@ fun PillChip(
     badgeCount: Int = 0
 ) {
     val container by animateColorAsState(
-        targetValue = if (selected) RadarDark.Accent else RadarDark.Surface,
+        targetValue = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
         animationSpec = tween(180),
         label = "pill_container"
     )
     val content by animateColorAsState(
-        targetValue = if (selected) Color.White else RadarDark.TextMuted,
+        targetValue = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
         animationSpec = tween(180),
         label = "pill_content"
     )
@@ -356,7 +431,7 @@ fun PillChip(
                         .size(16.dp)
                         .clip(CircleShape)
                         .background(
-                            if (selected) Color.White
+                            if (selected) MaterialTheme.colorScheme.onPrimary
                             else MaterialTheme.colorScheme.error
                         ),
                     contentAlignment = Alignment.Center
@@ -364,7 +439,7 @@ fun PillChip(
                     Text(
                         text = if (badgeCount > 9) "9+" else badgeCount.toString(),
                         style = BadgeTextStyle,
-                        color = if (selected) RadarDark.Accent
+                        color = if (selected) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onError,
                         maxLines = 1
                     )

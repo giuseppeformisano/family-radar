@@ -31,6 +31,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Offset
@@ -666,7 +668,7 @@ fun MainRadarScreen(
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val sheetContentHeight = screenHeight * 0.86f
 
-    Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
+    Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         OsmMapView(
             locations = locations,
             places = places,
@@ -840,8 +842,8 @@ fun MainRadarScreen(
 
                 Surface(
                     shape = RoundedCornerShape(Radius.pill),
-                    color = Color(0xCC18181B),
-                    border = BorderStroke(1.dp, Color(0x1F71717A)),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.padding(Spacing.xs)
                 ) {
                     Row(
@@ -850,13 +852,13 @@ fun MainRadarScreen(
                         modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs)
                     ) {
                         RadarPulseAnimation(
-                            color = Color(0xFFF43F5E),
+                            color = RadarSemantic.Sos,
                             modifier = Modifier.size(10.dp)
                         )
                         Text(
                             text = "%02d:%02d  •  %.2f km".format(elapsedMin, elapsedSec, km),
                             style = MaterialTheme.typography.labelMedium,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -900,7 +902,7 @@ fun MainRadarScreen(
                             alpha = haloAlpha
                         }
                         .clip(CircleShape)
-                        .background(Color(0xFFF43F5E))
+                        .background(RadarSemantic.Sos)
                 )
             }
 
@@ -913,8 +915,8 @@ fun MainRadarScreen(
                         scaleY = s
                     }
                     .clip(CircleShape)
-                    .background(if (isRecordingVoice) Color(0xFFF43F5E) else Color(0xCC18181B))
-                    .border(1.dp, Color(0x1F71717A), CircleShape)
+                    .background(if (isRecordingVoice) RadarSemantic.Sos else MaterialTheme.colorScheme.surface)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onPress = {
@@ -933,7 +935,7 @@ fun MainRadarScreen(
                 Icon(
                     imageVector = Icons.Default.Mic,
                     contentDescription = "Nota vocale",
-                    tint = Color.White,
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(26.dp)
                 )
             }
@@ -1016,7 +1018,7 @@ fun MainRadarScreen(
     activeFullPanel?.let { currentPanel ->
         Surface(
             modifier = Modifier.fillMaxSize(),
-            color = Color.Black
+            color = MaterialTheme.colorScheme.background
         ) {
             Column(
                 modifier = Modifier
@@ -1035,7 +1037,7 @@ fun MainRadarScreen(
                         Icon(
                             Icons.Default.ArrowBack,
                             contentDescription = stringResource(R.string.action_close),
-                            tint = Color(0xFFF2F2F7)
+                            tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Text(
@@ -1043,7 +1045,7 @@ fun MainRadarScreen(
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                         ),
-                        color = Color(0xFFF2F2F7),
+                        color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -1594,8 +1596,8 @@ fun MainRadarScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(Radius.xl),
-                border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder),
-                colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
@@ -1610,12 +1612,12 @@ fun MainRadarScreen(
                             tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(Sizes.iconLg))
                     }
                     Spacer(Modifier.height(Spacing.md))
-                    Text(stringResource(R.string.dialog_gps_title), style = MaterialTheme.typography.titleLarge, color = RadarDark.TextPrimary, textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.dialog_gps_title), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(Spacing.xs))
                     Text(
                         stringResource(R.string.dialog_gps_body),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = RadarDark.TextMuted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
                     Spacer(Modifier.height(Spacing.xl))
@@ -1626,13 +1628,13 @@ fun MainRadarScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(Radius.sm),
-                        colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)
                     ) { Text(stringResource(R.string.action_enable_gps)) }
                     Spacer(Modifier.height(Spacing.sm))
                     TextButton(
                         onClick = { showGpsDialog = false },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.textButtonColors(contentColor = RadarDark.TextMuted)
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)
                     ) { Text(stringResource(R.string.action_not_now)) }
                 }
             }
@@ -1658,8 +1660,8 @@ private fun MapTopBar(
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        color = Color(0xCC18181B),
-        border = BorderStroke(1.dp, Color(0x1F71717A))
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -1676,7 +1678,7 @@ private fun MapTopBar(
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                     ),
-                    color = Color(0xFFF2F2F7),
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1688,13 +1690,13 @@ private fun MapTopBar(
                         modifier = Modifier
                             .size(7.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF34D399))
+                            .background(RadarSemantic.Online)
                     )
                     val subtitle = stringResource(R.string.map_topbar_subtitle, onlineCount, memberCount)
                     Text(
                         text = if (!joinCode.isNullOrBlank()) "$subtitle · $joinCode" else subtitle,
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFFA1A1AA),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -1708,7 +1710,7 @@ private fun MapTopBar(
                 Icon(
                     Icons.Default.SwapHoriz,
                     contentDescription = stringResource(R.string.action_change_group),
-                    tint = Color(0xFFF2F2F7)
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -1719,7 +1721,7 @@ private fun MapTopBar(
                 Icon(
                     Icons.Default.Settings,
                     contentDescription = stringResource(R.string.tab_settings),
-                    tint = Color(0xFFF2F2F7)
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -1727,8 +1729,8 @@ private fun MapTopBar(
             Surface(
                 onClick = onSos,
                 shape = CircleShape,
-                color = Color(0x26F43F5E),
-                border = BorderStroke(1.dp, Color(0x66F43F5E)),
+                color = RadarSemantic.Sos.copy(alpha = 0.15f),
+                border = BorderStroke(1.dp, RadarSemantic.Sos.copy(alpha = 0.4f)),
                 modifier = Modifier
                     .size(Sizes.fab)
                     .testTag("sos_button")
@@ -1737,7 +1739,7 @@ private fun MapTopBar(
                     Icon(
                         Icons.Default.Warning,
                         contentDescription = stringResource(R.string.action_send_sos),
-                        tint = Color(0xFFF43F5E),
+                        tint = RadarSemantic.Sos,
                         modifier = Modifier.size(Sizes.iconLg)
                     )
                 }
@@ -1766,8 +1768,8 @@ private fun MapActionRail(
             icon = if (isFollowing) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed,
             contentDescription = if (isFollowing) stringResource(R.string.action_follow_off) else stringResource(R.string.action_follow_on_label),
             onClick = onToggleFollow,
-            container = if (isFollowing) Color(0xFF6366F1) else Color(0xCC18181B),
-            content = if (isFollowing) Color.White else Color(0xFFF2F2F7),
+            container = if (isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+            content = if (isFollowing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
             testTag = "follow_mode_fab"
         )
         RailButton(
@@ -1780,8 +1782,8 @@ private fun MapActionRail(
             icon = if (isRecording) Icons.Default.Stop else Icons.Default.DirectionsCar,
             contentDescription = if (isRecording) stringResource(R.string.action_stop_trip) else stringResource(R.string.action_record_trip),
             onClick = onToggleTrip,
-            container = if (isRecording) Color(0xFFF43F5E) else Color(0xCC18181B),
-            content = Color.White,
+            container = if (isRecording) RadarSemantic.Sos else MaterialTheme.colorScheme.surface,
+            content = if (isRecording) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurface,
             testTag = "trip_record_fab"
         )
         RailButton(
@@ -1794,8 +1796,8 @@ private fun MapActionRail(
             icon = Icons.Default.AddAPhoto,
             contentDescription = stringResource(R.string.action_take_snapshot),
             onClick = onTakeSnapshot,
-            container = Color(0xFF6366F1),
-            content = Color.White,
+            container = MaterialTheme.colorScheme.primary,
+            content = MaterialTheme.colorScheme.onPrimary,
             testTag = "take_geo_snapshot_fab"
         )
     }
@@ -1807,15 +1809,15 @@ private fun RailButton(
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    container: Color = Color(0xCC18181B),
-    content: Color = Color(0xFFF2F2F7),
+    container: Color = MaterialTheme.colorScheme.surface,
+    content: Color = MaterialTheme.colorScheme.onSurface,
     testTag: String? = null
 ) {
     Surface(
         onClick = onClick,
         shape = CircleShape,
         color = container,
-        border = BorderStroke(1.dp, Color(0x1F71717A)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = modifier
             .size(48.dp)
             .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
@@ -1839,9 +1841,9 @@ private data class MemberPresence(
 private fun getMemberPresence(timestamp: Long): MemberPresence {
     val elapsed = System.currentTimeMillis() - timestamp
     return when {
-        elapsed < PRESENCE_ONLINE_MS -> MemberPresence("Online", Color(0xFF34D399))
-        elapsed < PRESENCE_IDLE_MS -> MemberPresence("Inattivo", Color(0xFFFBBF24))
-        else -> MemberPresence("Offline", Color(0xFF71717A))
+        elapsed < PRESENCE_ONLINE_MS -> MemberPresence("Online", RadarSemantic.Online)
+        elapsed < PRESENCE_IDLE_MS -> MemberPresence("Inattivo", RadarSemantic.BatteryMid)
+        else -> MemberPresence("Offline", RadarSemantic.Offline)
     }
 }
 
@@ -1933,7 +1935,7 @@ private fun PerspectiveMemberCoverFlow(
         } else 1f
     }
 
-    val sage = Color(0xFF34D399)
+    val sage = RadarSemantic.Online
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -2002,8 +2004,8 @@ private fun PerspectiveMemberCoverFlow(
                         modifier = Modifier
                             .size(itemSlot)
                             .clip(CircleShape)
-                            .background(Color(0xCC18181B))
-                            .border(1.dp, Color(0x1F71717A), CircleShape),
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         if (bmp != null) {
@@ -2017,7 +2019,7 @@ private fun PerspectiveMemberCoverFlow(
                             Text(
                                 text = initial,
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                color = Color(0xFFD4D4D8)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -2052,14 +2054,14 @@ private fun PerspectiveMemberCoverFlow(
                                 .align(Alignment.BottomEnd)
                                 .size(18.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF18181B))
-                                .border(1.5.dp, Color(0xFF27272A), CircleShape),
+                                .background(MaterialTheme.colorScheme.surface)
+                                .border(1.5.dp, MaterialTheme.colorScheme.surfaceVariant, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = movementIcon,
                                 contentDescription = null,
-                                tint = Color(0xFF34D399),
+                                tint = RadarSemantic.Online,
                                 modifier = Modifier.size(11.dp)
                             )
                         }
@@ -2076,7 +2078,7 @@ private fun PerspectiveMemberCoverFlow(
             else activeMemberLoc.userName
         val isSelf = activeMemberLoc.userId == currentUserId
         val activePresence = if (isSelf) {
-            MemberPresence("Online", Color(0xFF34D399))
+            MemberPresence("Online", RadarSemantic.Online)
         } else {
             getMemberPresence(activeMemberLoc.timestamp)
         }
@@ -2089,7 +2091,7 @@ private fun PerspectiveMemberCoverFlow(
             else -> if (movingKmH > 2) "In movimento ($movingKmH km/h)" else null
         }
         val statusLabel = activityDescription ?: activePresence.label
-        val statusColor = if (activityDescription != null) Color(0xFF34D399) else activePresence.color
+        val statusColor = if (activityDescription != null) RadarSemantic.Online else activePresence.color
         val relativeTimeStr = if (isSelf) "ora" else formatRelativeShort(activeMemberLoc.timestamp)
         val textShadow = Shadow(color = Color.Black, offset = Offset(0f, 1.5f), blurRadius = 6f)
 
@@ -2101,7 +2103,7 @@ private fun PerspectiveMemberCoverFlow(
                 fontSize = 14.sp,
                 shadow = textShadow
             ),
-            color = Color(0xFFF2F2F7),
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -2120,19 +2122,19 @@ private fun PerspectiveMemberCoverFlow(
                 ),
                 color = statusColor
             )
-            Text("•", style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow), color = Color(0xFFA1A1AA))
+            Text("•", style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow), color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
                 text = relativeTimeStr,
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow),
-                color = Color(0xFFA1A1AA)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Text("•", style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow), color = Color(0xFFA1A1AA))
+            Text("•", style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow), color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
                 text = "${activeMemberLoc.batteryLevel}%",
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontSize = 12.sp, fontWeight = FontWeight.Medium, shadow = textShadow
                 ),
-                color = Color(0xFFA1A1AA)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -2170,8 +2172,8 @@ private fun FloatingDock(
             .fillMaxWidth()
             .padding(horizontal = Spacing.md),
         shape = RoundedCornerShape(24.dp),
-        color = Color(0xCC18181B),
-        border = BorderStroke(1.dp, Color(0x1F71717A)),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         shadowElevation = 8.dp
     ) {
         Row(
@@ -2188,7 +2190,7 @@ private fun FloatingDock(
                 Icon(
                     Icons.Default.Home,
                     contentDescription = "Home",
-                    tint = if (selectedPanel == RadarPanel.MEMBERS) Color(0xFF6366F1) else Color(0xFFF2F2F7)
+                    tint = if (selectedPanel == RadarPanel.MEMBERS) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -2199,7 +2201,7 @@ private fun FloatingDock(
                 Icon(
                     Icons.Default.Place,
                     contentDescription = "Places",
-                    tint = if (selectedPanel == RadarPanel.PLACES) Color(0xFF6366F1) else Color(0xFFA1A1AA)
+                    tint = if (selectedPanel == RadarPanel.PLACES) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -2212,7 +2214,7 @@ private fun FloatingDock(
                         Icon(
                             Icons.Default.ChatBubbleOutline,
                             contentDescription = "Chat",
-                            tint = if (selectedPanel == RadarPanel.CHAT) Color(0xFF6366F1) else Color(0xFFA1A1AA)
+                            tint = if (selectedPanel == RadarPanel.CHAT) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     if (chatCount > 0) {
@@ -2222,8 +2224,8 @@ private fun FloatingDock(
                                 .offset(x = (-9).dp, y = 9.dp)
                                 .size(9.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFF43F5E))
-                                .border(1.5.dp, Color(0xCC18181B), CircleShape)
+                                .background(RadarSemantic.Sos)
+                                .border(1.5.dp, MaterialTheme.colorScheme.surface, CircleShape)
                         )
                     }
                 }
@@ -2236,7 +2238,7 @@ private fun FloatingDock(
                 Icon(
                     Icons.Default.Route,
                     contentDescription = "Trips",
-                    tint = if (selectedPanel == RadarPanel.TRIPS) Color(0xFF6366F1) else Color(0xFFA1A1AA)
+                    tint = if (selectedPanel == RadarPanel.TRIPS) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -2335,10 +2337,10 @@ private fun MemberRow(
         onClick = onClick,
         enabled = location != null,
         shape = RoundedCornerShape(16.dp),
-        color = Color(0x0A71717A),
+        color = MaterialTheme.colorScheme.surfaceVariant,
         border = BorderStroke(
             if (isSelf) 1.5.dp else 1.dp,
-            if (isSelf) Color(0xFF6366F1) else Color(0x1F71717A)
+            if (isSelf) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
         ),
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -2352,8 +2354,8 @@ private fun MemberRow(
                     name = member.displayName,
                     photoBase64 = member.photoBase64,
                     size = Sizes.avatarMd,
-                    containerColor = if (isSelf) Color(0xFF6366F1) else Color(0xFF27272A),
-                    contentColor = Color.White
+                    containerColor = if (isSelf) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (isSelf) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (location != null) {
                     PresenceDot(
@@ -2371,7 +2373,7 @@ private fun MemberRow(
                     Text(
                         text = if (isSelf) stringResource(R.string.member_name_self, member.displayName) else member.displayName,
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold),
-                        color = Color(0xFFF2F2F7),
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
@@ -2379,13 +2381,13 @@ private fun MemberRow(
                     when (member.role) {
                         "owner" -> RadarBadge(
                             text = stringResource(R.string.role_owner),
-                            containerColor = Color(0x266366F1),
-                            contentColor = Color(0xFF6366F1)
+                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            contentColor = MaterialTheme.colorScheme.primary
                         )
                         "admin" -> RadarBadge(
                             text = stringResource(R.string.role_admin),
-                            containerColor = Color(0x2634D399),
-                            contentColor = Color(0xFF34D399)
+                            containerColor = RadarSemantic.Online.copy(alpha = 0.15f),
+                            contentColor = RadarSemantic.Online
                         )
                     }
                 }
@@ -2402,7 +2404,7 @@ private fun MemberRow(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFFA1A1AA),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -2418,7 +2420,7 @@ private fun MemberRow(
                     Icon(
                         Icons.Default.NearMe,
                         contentDescription = stringResource(R.string.action_show_on_map),
-                        tint = Color(0xFF6366F1),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(Sizes.iconMd)
                     )
                 }
@@ -2428,7 +2430,7 @@ private fun MemberRow(
                     Icon(
                         Icons.Default.PersonRemove,
                         contentDescription = stringResource(R.string.action_remove_member),
-                        tint = Color(0xFFF43F5E),
+                        tint = RadarSemantic.Sos,
                         modifier = Modifier.size(Sizes.iconMd)
                     )
                 }
@@ -2525,6 +2527,11 @@ private fun ChatPanel(
     var pendingChatCameraUri by remember { mutableStateOf<Uri?>(null) }
     // Messaggio a cui si sta rispondendo (null = nessuna citazione in corso).
     var replyingTo by remember { mutableStateOf<ChatMessage?>(null) }
+
+    // Reazioni emoji ai messaggi: prototipo solo-UI, non persistito su Firestore.
+    // Mappa messageId -> emoji scelta. Sopravvive allo scroll perche' vive qui in
+    // ChatPanel (fuori dai singoli item della LazyColumn) invece che dentro ChatBubble.
+    val messageReactions = remember { mutableStateMapOf<String, String>() }
 
     // Anteprima breve di un messaggio citato: testo, o etichetta del tipo media.
     fun replyPreviewText(m: ChatMessage): String = when {
@@ -2749,7 +2756,16 @@ private fun ChatPanel(
                             Toast.makeText(context, "Testo copiato", Toast.LENGTH_SHORT).show()
                         },
                         onDeleteForMe = { repository.deleteMessageForMe(msg.id) },
-                        onDeleteForEveryone = { repository.deleteMessageForEveryone(groupId, msg.id) }
+                        onDeleteForEveryone = { repository.deleteMessageForEveryone(groupId, msg.id) },
+                        reaction = messageReactions[msg.id],
+                        onReactionSelected = { emoji ->
+                            // Toggle: selezionare di nuovo la stessa emoji la rimuove.
+                            if (messageReactions[msg.id] == emoji) {
+                                messageReactions.remove(msg.id)
+                            } else {
+                                messageReactions[msg.id] = emoji
+                            }
+                        }
                     )
                 }
             }
@@ -2767,7 +2783,7 @@ private fun ChatPanel(
                         .fillMaxWidth()
                         .padding(horizontal = Spacing.md),
                     shape = RoundedCornerShape(Radius.sm),
-                    color = Color(0x1F6366F1)
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
@@ -2778,19 +2794,19 @@ private fun ChatPanel(
                                 .width(3.dp)
                                 .height(34.dp)
                                 .clip(RoundedCornerShape(2.dp))
-                                .background(Color(0xFF6366F1))
+                                .background(MaterialTheme.colorScheme.primary)
                         )
                         Spacer(Modifier.width(Spacing.sm))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Rispondi a ${reply.senderName}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF818CF8)
+                                color = MaterialTheme.colorScheme.primary
                             )
                             Text(
                                 text = replyPreviewText(reply),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFA1A1AA),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -2799,7 +2815,7 @@ private fun ChatPanel(
                             Icon(
                                 Icons.Default.Close,
                                 contentDescription = "Annulla risposta",
-                                tint = Color(0xFFA1A1AA),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
@@ -2814,8 +2830,8 @@ private fun ChatPanel(
                 .fillMaxWidth()
                 .padding(horizontal = Spacing.md, vertical = Spacing.sm),
             shape = RoundedCornerShape(30.dp),
-            color = Color(0xFF17171F),
-            border = BorderStroke(1.dp, Color(0x2671717A)),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)),
             shadowElevation = 8.dp
         ) {
             Row(
@@ -2834,7 +2850,7 @@ private fun ChatPanel(
                     Icon(
                         Icons.Default.PhotoCamera,
                         contentDescription = stringResource(R.string.chat_take_photo_desc),
-                        tint = Color(0xFF6366F1),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -2847,7 +2863,7 @@ private fun ChatPanel(
                     Icon(
                         Icons.Default.AddPhotoAlternate,
                         contentDescription = stringResource(R.string.chat_attach_image_desc),
-                        tint = Color(0xFF6366F1),
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -2859,8 +2875,8 @@ private fun ChatPanel(
                         .weight(1f)
                         .padding(horizontal = 8.dp, vertical = 8.dp)
                         .testTag("chat_input_field"),
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFFF2F2F7), fontSize = 15.5.sp),
-                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Color(0xFF6366F1)),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface, fontSize = 15.5.sp),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
                     maxLines = 4,
                     keyboardOptions = KeyboardOptions(
                         capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
@@ -2873,7 +2889,7 @@ private fun ChatPanel(
                                 Text(
                                     text = stringResource(R.string.chat_input_placeholder),
                                     fontSize = 15.5.sp,
-                                    color = Color(0xFF7C7C8A)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             innerTextField()
@@ -2886,7 +2902,7 @@ private fun ChatPanel(
                     onClick = { sendText() },
                     enabled = canSend,
                     shape = CircleShape,
-                    color = if (canSend) Color(0xFF4F46E5) else Color(0x3371717A),
+                    color = if (canSend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
                     modifier = Modifier
                         .size(44.dp)
                         .testTag("send_message_button")
@@ -2895,7 +2911,7 @@ private fun ChatPanel(
                         Icon(
                             Icons.Default.ArrowUpward,
                             contentDescription = stringResource(R.string.chat_send_desc),
-                            tint = Color.White,
+                            tint = if (canSend) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -2920,7 +2936,9 @@ private fun ChatBubble(
     onReply: () -> Unit = {},
     onCopy: () -> Unit = {},
     onDeleteForMe: () -> Unit = {},
-    onDeleteForEveryone: () -> Unit = {}
+    onDeleteForEveryone: () -> Unit = {},
+    reaction: String? = null,
+    onReactionSelected: (String) -> Unit = {}
 ) {
     // Messaggio eliminato per tutti: si mostra un segnaposto, niente contenuto.
     if (message.deleted) {
@@ -2930,7 +2948,7 @@ private fun ChatBubble(
         ) {
             Surface(
                 shape = RoundedCornerShape(Radius.md),
-                color = Color(0xFF27272A),
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.widthIn(max = 300.dp)
             ) {
                 Row(
@@ -2941,13 +2959,13 @@ private fun ChatBubble(
                     Icon(
                         Icons.Default.Block,
                         contentDescription = null,
-                        tint = Color(0xFFA1A1AA),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(Sizes.iconSm)
                     )
                     Text(
                         text = "Messaggio eliminato",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFFA1A1AA),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
                     )
                 }
@@ -2961,7 +2979,7 @@ private fun ChatBubble(
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Surface(
                     shape = RoundedCornerShape(Radius.pill),
-                    color = Color(0x266366F1)
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
@@ -2971,18 +2989,18 @@ private fun ChatBubble(
                         Icon(
                             Icons.Default.NotificationsActive,
                             contentDescription = null,
-                            tint = Color(0xFF818CF8),
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(Sizes.iconSm)
                         )
                         Text(
                             text = message.text,
                             style = MaterialTheme.typography.labelMedium,
-                            color = Color(0xFFF2F2F7)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFA1A1AA)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -2993,8 +3011,8 @@ private fun ChatBubble(
         MessageType.SOS_ALERT -> {
             Surface(
                 shape = RoundedCornerShape(Radius.md),
-                color = Color(0x33F43F5E),
-                border = BorderStroke(1.dp, Color(0xFFF43F5E)),
+                color = RadarSemantic.Sos.copy(alpha = 0.2f),
+                border = BorderStroke(1.dp, RadarSemantic.Sos),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -3005,19 +3023,19 @@ private fun ChatBubble(
                     Icon(
                         Icons.Default.CrisisAlert,
                         contentDescription = null,
-                        tint = Color(0xFFF43F5E),
+                        tint = RadarSemantic.Sos,
                         modifier = Modifier.size(Sizes.iconXl)
                     )
                     Column {
                         Text(
                             text = stringResource(R.string.chat_sos_alert_label, message.senderName),
                             style = MaterialTheme.typography.titleSmall,
-                            color = Color(0xFFF43F5E)
+                            color = RadarSemantic.Sos
                         )
                         Text(
                             text = message.text,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color(0xFFF2F2F7)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -3037,12 +3055,13 @@ private fun ChatBubble(
                 text = message.senderName,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFF8B87F5),
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = Spacing.md, bottom = 3.dp)
             )
         }
 
         var menuOpen by remember { mutableStateOf(false) }
+        var reactionPickerOpen by remember { mutableStateOf(false) }
         Box {
           Surface(
             shape = RoundedCornerShape(
@@ -3051,12 +3070,15 @@ private fun ChatBubble(
                 bottomStart = if (isMe) 18.dp else 6.dp,
                 bottomEnd = if (isMe) 6.dp else 18.dp
             ),
-            color = if (isMe) Color(0xFF4F46E5) else Color(0xFF1C1C26),
+            color = if (isMe) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .combinedClickable(
                     onClick = {},
-                    onLongClick = { menuOpen = true }
+                    onLongClick = {
+                        menuOpen = true
+                        reactionPickerOpen = true
+                    }
                 )
         ) {
             Column(modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp)) {
@@ -3072,21 +3094,21 @@ private fun ChatBubble(
                                 .width(3.dp)
                                 .height(30.dp)
                                 .clip(RoundedCornerShape(2.dp))
-                                .background(Color(0xFF818CF8))
+                                .background(MaterialTheme.colorScheme.primary)
                         )
                         Spacer(Modifier.width(Spacing.xs))
                         Column {
                             Text(
                                 text = message.replyToSender.ifBlank { "Messaggio" },
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF818CF8),
+                                color = MaterialTheme.colorScheme.primary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = message.replyToText,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFFC7C7CC),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -3136,7 +3158,7 @@ private fun ChatBubble(
                         text = message.text,
                         fontSize = 15.5.sp,
                         lineHeight = 21.sp,
-                        color = Color(0xFFF2F2F7)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
@@ -3158,7 +3180,7 @@ private fun ChatBubble(
                     if (isMe) {
                         val (icon, tint) = when {
                             isPending -> Icons.Default.Schedule to MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
-                            readerNames.isNotEmpty() -> Icons.Default.DoneAll to Color(0xFF34D399)
+                            readerNames.isNotEmpty() -> Icons.Default.DoneAll to RadarSemantic.Online
                             else -> Icons.Default.Done to MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
                         }
                         Icon(
@@ -3198,6 +3220,68 @@ private fun ChatBubble(
                   )
               }
           }
+
+          // Picker reazioni rapide: appare al long-press come pillola fluttuante
+          // sopra la bolla. Prototipo solo-UI (vedi messageReactions in ChatPanel).
+          if (reactionPickerOpen) {
+              androidx.compose.ui.window.Popup(
+                  alignment = Alignment.TopCenter,
+                  offset = androidx.compose.ui.unit.IntOffset(0, -140),
+                  onDismissRequest = { reactionPickerOpen = false }
+              ) {
+                  AnimatedVisibility(
+                      visible = reactionPickerOpen,
+                      enter = fadeIn() + scaleIn(initialScale = 0.85f),
+                      exit = fadeOut() + scaleOut(targetScale = 0.85f)
+                  ) {
+                      Surface(
+                          shape = RoundedCornerShape(Radius.pill),
+                          color = MaterialTheme.colorScheme.surface,
+                          shadowElevation = 6.dp,
+                          border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                      ) {
+                          Row(
+                              modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                              horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+                          ) {
+                              listOf("👍", "❤️", "😂", "😮", "😢").forEach { emoji ->
+                                  Text(
+                                      text = emoji,
+                                      fontSize = 22.sp,
+                                      modifier = Modifier
+                                          .clip(CircleShape)
+                                          .clickable {
+                                              onReactionSelected(emoji)
+                                              reactionPickerOpen = false
+                                          }
+                                          .padding(Spacing.xs)
+                                  )
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+
+          // Badge della reazione scelta, in overlap sull'angolo in basso a destra della bolla.
+          if (reaction != null) {
+              Surface(
+                  shape = CircleShape,
+                  color = MaterialTheme.colorScheme.surface,
+                  shadowElevation = 2.dp,
+                  border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                  modifier = Modifier
+                      .align(Alignment.BottomEnd)
+                      .offset(x = 6.dp, y = 6.dp)
+                      .clickable { onReactionSelected(reaction) }
+              ) {
+                  Text(
+                      text = reaction,
+                      fontSize = 13.sp,
+                      modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                  )
+              }
+          }
         }
 
         // Etichetta luogo del mittente + distanza da me (calcolo locale, zero rete).
@@ -3224,7 +3308,7 @@ private fun ChatBubble(
             Text(
                 text = geoLine,
                 fontSize = 12.sp,
-                color = Color(0xFF8E8E93),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(
                     top = Spacing.xxs,
                     start = if (isMe) 0.dp else Spacing.md,
@@ -3238,7 +3322,7 @@ private fun ChatBubble(
             Text(
                 text = "Visto da ${readerNames.joinToString(", ")}",
                 fontSize = 12.sp,
-                color = Color(0xFF34D399),
+                color = RadarSemantic.Online,
                 modifier = Modifier.padding(top = Spacing.xxs, end = Spacing.md)
             )
         }
@@ -3266,12 +3350,12 @@ private fun ChatDateSeparator(timestamp: Long) {
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Surface(
             shape = RoundedCornerShape(Radius.pill),
-            color = Color(0xFF17171F)
+            color = MaterialTheme.colorScheme.surface
         ) {
             Text(
                 text = label,
                 fontSize = 12.5.sp,
-                color = Color(0xFF8A8A98),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp)
             )
         }
@@ -3297,8 +3381,8 @@ private fun VoiceMessagePlayer(
         }
     }
 
-    val onSurface = if (isMe) Color.White else Color(0xFFF2F2F7)
-    val muted = if (isMe) Color(0xCCFFFFFF) else Color(0xFFA1A1AA)
+    val onSurface = if (isMe) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val muted = if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
     val durationSec = (message.audioDurationMs / 1000.0).roundToInt().coerceAtLeast(1)
     val place = message.placeName?.takeIf { it.isNotBlank() }
         ?: message.latitude?.let { lat ->
@@ -3346,7 +3430,7 @@ private fun VoiceMessagePlayer(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
-                    .background(if (isMe) Color(0x33FFFFFF) else Color(0xFF6366F1))
+                    .background(if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primary)
                     .clickable { toggle() },
                 contentAlignment = Alignment.Center
             ) {
@@ -3354,13 +3438,13 @@ private fun VoiceMessagePlayer(
                     CircularProgressIndicator(
                         modifier = Modifier.size(18.dp),
                         strokeWidth = 2.dp,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onPrimary
                     )
                 } else {
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (isPlaying) "Pausa" else "Riproduci",
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -3437,8 +3521,8 @@ private fun PlacesPanel(
                         contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm),
                         modifier = Modifier.testTag("add_place_tab_fab"),
                         colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = Color(0xFF6366F1),
-                            contentColor = Color.White
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
                         )
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
@@ -3499,8 +3583,8 @@ private fun PlaceRow(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),
-        color = Color(0x0A71717A),
-        border = BorderStroke(1.dp, Color(0x1F71717A)),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier
             .fillMaxWidth()
             .testTag("place_card_${place.id}")
@@ -3533,7 +3617,7 @@ private fun PlaceRow(
                     Text(
                         text = place.name,
                         style = MaterialTheme.typography.titleSmall,
-                        color = Color(0xFFF2F2F7),
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
@@ -3542,7 +3626,7 @@ private fun PlaceRow(
                         Icon(
                             Icons.Default.NotificationsOff,
                             contentDescription = stringResource(R.string.content_desc_alerts_disabled),
-                            tint = Color(0xFFA1A1AA),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(Sizes.iconSm)
                         )
                     }
@@ -3704,7 +3788,7 @@ private fun SettingsPanel(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(RadarDark.Bg),
+            .background(MaterialTheme.colorScheme.background),
         contentPadding = PaddingValues(
             start = Spacing.lg,
             end = Spacing.lg,
@@ -3735,7 +3819,7 @@ private fun SettingsPanel(
                         Text(
                             text = currentUser?.displayName ?: stringResource(R.string.label_user_name_fallback),
                             style = MaterialTheme.typography.titleMedium,
-                            color = RadarDark.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -3745,7 +3829,7 @@ private fun SettingsPanel(
                         Text(
                             text = secondary,
                             style = MaterialTheme.typography.bodySmall,
-                            color = RadarDark.TextMuted,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -3754,8 +3838,8 @@ private fun SettingsPanel(
                         onClick = onEditProfileClick,
                         shape = RoundedCornerShape(Radius.sm),
                         colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = RadarDark.Surface,
-                            contentColor = RadarDark.TextPrimary
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            contentColor = MaterialTheme.colorScheme.onSurface
                         ),
                         contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.sm)
                     ) {
@@ -3780,7 +3864,7 @@ private fun SettingsPanel(
                     description = stringResource(R.string.settings_ghost_mode_desc),
                     icon = if (isGlobalGhostMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                     iconTint = if (isGlobalGhostMode) MaterialTheme.colorScheme.error
-                    else RadarDark.AccentLight,
+                    else MaterialTheme.colorScheme.primary,
                     checked = isGlobalGhostMode,
                     onCheckedChange = onToggleGlobalGhostMode,
                     testTag = "global_ghost_mode_switch"
@@ -3828,7 +3912,7 @@ private fun SettingsPanel(
                     description = stringResource(R.string.settings_power_saving_desc),
                     icon = Icons.Default.BatterySaver,
                     iconTint = if (isPowerSavingMode) RadarSemantic.BatteryOk
-                    else RadarDark.AccentLight,
+                    else MaterialTheme.colorScheme.primary,
                     checked = isPowerSavingMode,
                     onCheckedChange = onTogglePowerSaving,
                     testTag = "power_saving_switch"
@@ -3845,12 +3929,12 @@ private fun SettingsPanel(
                 Text(
                     text = stringResource(R.string.settings_update_frequency),
                     style = MaterialTheme.typography.titleSmall,
-                    color = RadarDark.TextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = stringResource(R.string.settings_update_frequency_desc),
                     style = MaterialTheme.typography.bodySmall,
-                    color = RadarDark.TextMuted
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(Spacing.sm))
                 Row(
@@ -3892,13 +3976,13 @@ private fun SettingsPanel(
                 Text(
                     text = stringResource(R.string.settings_effective_interval, formatInterval(effective, context)),
                     style = MaterialTheme.typography.labelMedium,
-                    color = RadarDark.AccentLight
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(Modifier.height(Spacing.xs))
                 Text(
                     text = stringResource(R.string.settings_trip_speed_note),
                     style = MaterialTheme.typography.bodySmall,
-                    color = RadarDark.TextMuted
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -3923,8 +4007,8 @@ private fun SettingsPanel(
                         modifier = Modifier
                             .size(Sizes.avatarMd)
                             .clip(CircleShape)
-                            .background(RadarDark.Surface)
-                            .border(1.dp, RadarDark.SurfaceBorder, CircleShape),
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         if (groupBitmap != null) {
@@ -3938,7 +4022,7 @@ private fun SettingsPanel(
                             Icon(
                                 Icons.Default.Group,
                                 contentDescription = null,
-                                tint = RadarDark.TextPrimary,
+                                tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.size(Sizes.iconMd)
                             )
                         }
@@ -3947,13 +4031,13 @@ private fun SettingsPanel(
                         Text(
                             text = stringResource(R.string.label_active_group),
                             style = MaterialTheme.typography.labelSmall,
-                            color = RadarDark.AccentLight
+                            color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(Modifier.height(Spacing.xxs))
                         Text(
                             text = currentGroup?.name ?: stringResource(R.string.label_no_group),
                             style = MaterialTheme.typography.headlineSmall,
-                            color = RadarDark.TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -3964,7 +4048,7 @@ private fun SettingsPanel(
                             else
                                 stringResource(R.string.label_active_members, activeMemberCount),
                             style = MaterialTheme.typography.bodySmall,
-                            color = RadarDark.TextMuted
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -3982,7 +4066,7 @@ private fun SettingsPanel(
                     Button(
                         onClick = onSwitchGroup,
                         shape = RoundedCornerShape(Radius.sm),
-                        colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = Spacing.sm)
                     ) {
@@ -3994,7 +4078,7 @@ private fun SettingsPanel(
                         Button(
                             onClick = onEditGroupClick,
                             shape = RoundedCornerShape(Radius.sm),
-                            colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                             modifier = Modifier
                                 .weight(1f)
                                 .testTag("edit_group_button"),
@@ -4056,8 +4140,8 @@ private fun SettingsPanel(
 
                 Surface(
                     shape = RoundedCornerShape(Radius.sm),
-                    color = RadarDark.Surface,
-                    border = BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
@@ -4068,12 +4152,12 @@ private fun SettingsPanel(
                             Text(
                                 text = stringResource(R.string.label_invite_code_section),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = RadarDark.TextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = currentGroup?.joinCode ?: "——————",
                                 style = MaterialTheme.typography.headlineSmall,
-                                color = RadarDark.TextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         FilledTonalButton(
@@ -4085,8 +4169,8 @@ private fun SettingsPanel(
                                 Toast.makeText(context, context.getString(R.string.toast_code_copied), Toast.LENGTH_SHORT).show()
                             },
                             colors = ButtonDefaults.filledTonalButtonColors(
-                                containerColor = RadarDark.Accent,
-                                contentColor = Color.White
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
                             ),
                             shape = RoundedCornerShape(Radius.sm)
                         ) {
@@ -4229,12 +4313,12 @@ private fun SettingsPanel(
                     Text(
                         stringResource(R.string.label_version),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = RadarDark.TextMuted
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                         style = MaterialTheme.typography.labelLarge,
-                        color = RadarDark.TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
                 Spacer(Modifier.height(Spacing.sm))
@@ -4254,15 +4338,15 @@ private fun SettingsPanel(
                         }
                     },
                     shape = RoundedCornerShape(Radius.sm),
-                    colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     if (checking) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(Sizes.iconMd),
                             strokeWidth = 2.dp,
-                            color = Color.White,
-                            trackColor = Color(0x33FFFFFF)
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
                         )
                         Spacer(Modifier.width(Spacing.sm))
                     }
@@ -4274,8 +4358,8 @@ private fun SettingsPanel(
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(Spacing.md),
                             shape = RoundedCornerShape(Radius.xl),
-                            border = BorderStroke(1.dp, RadarDark.CardBorder),
-                            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
                         ) {
                             Column(
                                 modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
@@ -4286,22 +4370,22 @@ private fun SettingsPanel(
                                     modifier = Modifier
                                         .size(Sizes.avatarLg)
                                         .clip(CircleShape)
-                                        .background(RadarDark.AccentLight.copy(alpha = 0.15f)),
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(Icons.Default.SystemUpdate, contentDescription = null,
-                                        tint = RadarDark.AccentLight, modifier = Modifier.size(Sizes.iconLg))
+                                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
                                 }
                                 Text(
                                     text = stringResource(R.string.update_available_body, result.info.versionName),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = RadarDark.TextMuted,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
                                 )
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                                    OutlinedButton(onClick = { checkResult = null }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm), border = BorderStroke(1.dp, RadarDark.SurfaceBorder), colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)) { Text(stringResource(R.string.action_later)) }
+                                    OutlinedButton(onClick = { checkResult = null }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) { Text(stringResource(R.string.action_later)) }
                                     Button(onClick = { checkResult = null; AppUpdater.downloadAndInstall(context, result.info.apkUrl) },
-                                        modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm), colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)) { Text(stringResource(R.string.action_update)) }
+                                        modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)) { Text(stringResource(R.string.action_update)) }
                                 }
                             }
                         }
@@ -4310,8 +4394,8 @@ private fun SettingsPanel(
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(Spacing.md),
                             shape = RoundedCornerShape(Radius.xl),
-                            border = BorderStroke(1.dp, RadarDark.CardBorder),
-                            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
                         ) {
                             Column(
                                 modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
@@ -4322,19 +4406,19 @@ private fun SettingsPanel(
                                     modifier = Modifier
                                         .size(Sizes.avatarLg)
                                         .clip(CircleShape)
-                                        .background(RadarDark.AccentLight.copy(alpha = 0.15f)),
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(Icons.Default.CheckCircle, contentDescription = null,
-                                        tint = RadarDark.AccentLight, modifier = Modifier.size(Sizes.iconLg))
+                                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
                                 }
                                 Text(
                                     text = stringResource(R.string.up_to_date_body, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = RadarDark.TextMuted,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
                                 )
-                                Button(onClick = { checkResult = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm), colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)) { Text(stringResource(R.string.action_ok)) }
+                                Button(onClick = { checkResult = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)) { Text(stringResource(R.string.action_ok)) }
                             }
                         }
                     }
@@ -4342,8 +4426,8 @@ private fun SettingsPanel(
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(Spacing.md),
                             shape = RoundedCornerShape(Radius.xl),
-                            border = BorderStroke(1.dp, RadarDark.CardBorder),
-                            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
                         ) {
                             Column(
                                 modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
@@ -4363,10 +4447,10 @@ private fun SettingsPanel(
                                 Text(
                                     text = stringResource(R.string.update_network_error_body),
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = RadarDark.TextMuted,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
                                 )
-                                Button(onClick = { checkResult = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm), colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)) { Text(stringResource(R.string.action_ok)) }
+                                Button(onClick = { checkResult = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)) { Text(stringResource(R.string.action_ok)) }
                             }
                         }
                     }
@@ -4392,15 +4476,15 @@ private fun SettingsPanel(
                     Text(
                         text = stringResource(R.string.feedback_thanks),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = RadarDark.AccentLight,
+                        color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(vertical = Spacing.xs)
                     )
                     Spacer(Modifier.height(Spacing.sm))
                     OutlinedButton(
                         onClick = { feedbackSent = false },
                         modifier = Modifier.fillMaxWidth(),
-                        border = BorderStroke(1.dp, RadarDark.SurfaceBorder),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
                         shape = RoundedCornerShape(Radius.sm)
                     ) { Text(stringResource(R.string.action_send_more_feedback)) }
                 } else {
@@ -4429,15 +4513,15 @@ private fun SettingsPanel(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(Radius.sm),
-                        colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                         enabled = !feedbackSending && feedbackText.isNotBlank()
                     ) {
                         if (feedbackSending) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(Sizes.iconMd),
                                 strokeWidth = 2.dp,
-                                color = Color.White,
-                                trackColor = Color(0x33FFFFFF)
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
                             )
                             Spacer(Modifier.width(Spacing.sm))
                         }
@@ -4518,8 +4602,8 @@ private fun FeedbackDevDialog(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(Radius.xl),
-                border = BorderStroke(1.dp, RadarDark.CardBorder),
-                colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
             ) {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
@@ -4527,18 +4611,18 @@ private fun FeedbackDevDialog(
                 ) {
                     Box(
                         modifier = Modifier.size(Sizes.avatarLg).clip(CircleShape)
-                            .background(RadarDark.AccentLight.copy(alpha = 0.15f)),
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Default.Lock, contentDescription = null,
-                            tint = RadarDark.AccentLight, modifier = Modifier.size(Sizes.iconLg))
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
                     }
                     Spacer(Modifier.height(Spacing.sm))
-                    Text(stringResource(R.string.dev_area_title), style = MaterialTheme.typography.titleLarge, color = RadarDark.TextPrimary, textAlign = TextAlign.Center)
+                    Text(stringResource(R.string.dev_area_title), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(Spacing.xs))
                     Text(stringResource(R.string.dev_area_body),
                         style = MaterialTheme.typography.bodySmall,
-                        color = RadarDark.TextMuted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center)
                     Spacer(Modifier.height(Spacing.lg))
                     OutlinedTextField(
@@ -4555,11 +4639,11 @@ private fun FeedbackDevDialog(
                         keyboardActions = KeyboardActions(onDone = { tryUnlock() })
                     )
                     Spacer(Modifier.height(Spacing.lg))
-                    Button(onClick = { tryUnlock() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm), colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)) {
+                    Button(onClick = { tryUnlock() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)) {
                         Text(stringResource(R.string.action_sign_in))
                     }
                     Spacer(Modifier.height(Spacing.sm))
-                    TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.textButtonColors(contentColor = RadarDark.TextMuted)) { Text(stringResource(R.string.action_cancel)) }
+                    TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) { Text(stringResource(R.string.action_cancel)) }
                 }
             }
         }
@@ -4570,20 +4654,20 @@ private fun FeedbackDevDialog(
             Card(
                 modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f),
                 shape = RoundedCornerShape(Radius.xl),
-                border = BorderStroke(1.dp, RadarDark.CardBorder),
-                colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
             ) {
                 Column(modifier = Modifier.fillMaxSize().padding(Spacing.xl)) {
                     Box(
                         modifier = Modifier.size(Sizes.avatarLg).clip(CircleShape)
-                            .background(RadarDark.AccentLight.copy(alpha = 0.15f)),
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(Icons.Default.AdminPanelSettings, contentDescription = null,
-                            tint = RadarDark.AccentLight, modifier = Modifier.size(Sizes.iconLg))
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
                     }
                     Spacer(Modifier.height(Spacing.sm))
-                    Text(stringResource(R.string.dev_feedback_list_title), style = MaterialTheme.typography.titleLarge, color = RadarDark.TextPrimary)
+                    Text(stringResource(R.string.dev_feedback_list_title), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(Modifier.height(Spacing.md))
                     if (loading) {
                         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -4592,15 +4676,15 @@ private fun FeedbackDevDialog(
                     } else if (list.isEmpty()) {
                         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                             Text(stringResource(R.string.dev_feedback_empty), style = MaterialTheme.typography.bodyMedium,
-                                color = RadarDark.TextMuted, textAlign = TextAlign.Center)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                         }
                     } else {
                         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             items(list, key = { it.id }) { entry ->
                                 Surface(
                                     shape = RoundedCornerShape(Radius.md),
-                                    color = RadarDark.Surface,
-                                    border = BorderStroke(1.dp, RadarDark.SurfaceBorder),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(modifier = Modifier.padding(Spacing.md)) {
@@ -4609,12 +4693,12 @@ private fun FeedbackDevDialog(
                                             verticalAlignment = Alignment.CenterVertically) {
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(entry.userName, style = MaterialTheme.typography.labelMedium,
-                                                    color = RadarDark.AccentLight)
+                                                    color = MaterialTheme.colorScheme.primary)
                                                 Text(dateFormat.format(java.util.Date(entry.timestamp)),
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    color = RadarDark.TextMuted)
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                 Text("v${entry.versionName}", style = MaterialTheme.typography.labelSmall,
-                                                    color = RadarDark.TextMuted)
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                             Row {
                                                 IconButton(onClick = {
@@ -4622,7 +4706,7 @@ private fun FeedbackDevDialog(
                                                     scope.launch { onUpdateFeedbackStatus(entry.id, "done") }
                                                 }) {
                                                     Icon(Icons.Default.CheckCircle, contentDescription = stringResource(R.string.content_desc_mark_done),
-                                                        tint = RadarDark.AccentLight, modifier = Modifier.size(Sizes.iconMd))
+                                                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconMd))
                                                 }
                                                 IconButton(onClick = {
                                                     list = list.filter { it.id != entry.id }
@@ -4635,14 +4719,14 @@ private fun FeedbackDevDialog(
                                         }
                                         Spacer(Modifier.height(Spacing.xs))
                                         Text(entry.text, style = MaterialTheme.typography.bodySmall,
-                                            color = RadarDark.TextPrimary)
+                                            color = MaterialTheme.colorScheme.onSurface)
                                     }
                                 }
                             }
                         }
                     }
                     Spacer(Modifier.height(Spacing.md))
-                    OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm), border = BorderStroke(1.dp, RadarDark.SurfaceBorder), colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)) {
+                    OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.sm), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
                         Text(stringResource(R.string.action_close))
                     }
                 }
@@ -4675,7 +4759,7 @@ private fun SettingsSectionHeader(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = RadarDark.AccentLight,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(Sizes.iconMd)
             )
         }
@@ -4683,7 +4767,7 @@ private fun SettingsSectionHeader(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
-                color = RadarDark.TextPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -4692,7 +4776,7 @@ private fun SettingsSectionHeader(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = RadarDark.TextMuted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -4707,8 +4791,8 @@ private fun SettingsSectionHeader(
 private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Surface(
         shape = RoundedCornerShape(Radius.lg),
-        color = RadarDark.Card,
-        border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -4722,12 +4806,12 @@ private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
 // Material / dynamic color. Usato da tutti gli interruttori delle impostazioni.
 @Composable
 private fun radarSwitchColors() = SwitchDefaults.colors(
-    checkedThumbColor = Color.White,
-    checkedTrackColor = RadarDark.Accent,
-    checkedBorderColor = RadarDark.Accent,
-    uncheckedThumbColor = RadarDark.TextMuted,
-    uncheckedTrackColor = RadarDark.Surface,
-    uncheckedBorderColor = RadarDark.SurfaceBorder
+    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+    checkedTrackColor = MaterialTheme.colorScheme.primary,
+    checkedBorderColor = MaterialTheme.colorScheme.primary,
+    uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    uncheckedTrackColor = MaterialTheme.colorScheme.surface,
+    uncheckedBorderColor = MaterialTheme.colorScheme.outlineVariant
 )
 
 @Composable
@@ -4738,7 +4822,7 @@ private fun SettingsToggleRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    iconTint: Color = RadarDark.AccentLight,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
     testTag: String? = null
 ) {
     Row(
@@ -4761,12 +4845,12 @@ private fun SettingsToggleRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleSmall,
-                color = RadarDark.TextPrimary
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = RadarDark.TextMuted
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Switch(
@@ -4784,7 +4868,7 @@ private fun SettingsClickRow(
     description: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit,
-    iconTint: Color = RadarDark.AccentLight
+    iconTint: Color = MaterialTheme.colorScheme.primary
 ) {
     Surface(
         onClick = onClick,
@@ -4797,10 +4881,10 @@ private fun SettingsClickRow(
         ) {
             Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(Sizes.iconMd))
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-                Text(title, style = MaterialTheme.typography.titleSmall, color = RadarDark.TextPrimary)
-                Text(description, style = MaterialTheme.typography.bodySmall, color = RadarDark.TextMuted)
+                Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = RadarDark.TextMuted, modifier = Modifier.size(Sizes.iconMd))
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(Sizes.iconMd))
         }
     }
 }
@@ -4825,8 +4909,8 @@ private fun ConfirmDialog(
                 .fillMaxWidth()
                 .padding(Spacing.md),
             shape = RoundedCornerShape(Radius.xl),
-            border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder),
-            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
         ) {
             Column(
                 modifier = Modifier
@@ -4847,7 +4931,7 @@ private fun ConfirmDialog(
                 Text(
                     text = message,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = RadarDark.TextMuted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
                 Row(
@@ -4858,8 +4942,8 @@ private fun ConfirmDialog(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(Radius.sm),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
                     ) { Text(stringResource(R.string.action_cancel)) }
                     Button(
                         onClick = onConfirm,
@@ -4875,8 +4959,8 @@ private fun ConfirmDialog(
 
 @Composable
 private fun GroupLoadingOverlay() {
-    val primaryColor = RadarDark.AccentLight
-    val backgroundColor = RadarDark.Bg
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val backgroundColor = MaterialTheme.colorScheme.background
     val infiniteTransition = rememberInfiniteTransition(label = "radar_loading")
     val sweepAngle by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -4957,7 +5041,7 @@ private fun GroupLoadingOverlay() {
                 Text(
                     text = stringResource(R.string.loading_text),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = RadarDark.TextMuted
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -4973,7 +5057,7 @@ private fun SnapshotSourceDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(Radius.xl),
-        containerColor = RadarDark.Bg,
+        containerColor = MaterialTheme.colorScheme.background,
         icon = {
             Box(
                 modifier = Modifier
@@ -4994,7 +5078,7 @@ private fun SnapshotSourceDialog(
             Text(
                 text = stringResource(R.string.snapshot_source_title),
                 style = MaterialTheme.typography.titleLarge,
-                color = RadarDark.TextPrimary
+                color = MaterialTheme.colorScheme.onSurface
             )
         },
         text = {
@@ -5002,14 +5086,14 @@ private fun SnapshotSourceDialog(
                 Text(
                     text = stringResource(R.string.snapshot_source_body),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = RadarDark.TextMuted
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(Spacing.xs))
                 FilledTonalButton(
                     onClick = onCamera,
                     shape = RoundedCornerShape(Radius.sm),
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = RadarDark.Surface, contentColor = RadarDark.TextPrimary)
+                    colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface)
                 ) {
                     Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
                     Spacer(Modifier.width(Spacing.sm))
@@ -5019,8 +5103,8 @@ private fun SnapshotSourceDialog(
                     onClick = onGallery,
                     shape = RoundedCornerShape(Radius.sm),
                     modifier = Modifier.fillMaxWidth(),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
                 ) {
                     Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
                     Spacer(Modifier.width(Spacing.sm))
@@ -5030,7 +5114,7 @@ private fun SnapshotSourceDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = RadarDark.TextMuted)) { Text(stringResource(R.string.action_cancel)) }
+            TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }
@@ -5114,8 +5198,8 @@ private fun TripsPanel(
 
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = Color(0x0A71717A),
-                    border = BorderStroke(1.dp, Color(0xFFF43F5E))
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, RadarSemantic.Sos)
                 ) {
                     Column(
                         modifier = Modifier.padding(Spacing.md),
@@ -5126,13 +5210,13 @@ private fun TripsPanel(
                             horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
                         ) {
                             RadarPulseAnimation(
-                                color = Color(0xFFF43F5E),
+                                color = RadarSemantic.Sos,
                                 modifier = Modifier.size(10.dp)
                             )
                             Text(
                                 stringResource(R.string.trip_recording),
                                 style = MaterialTheme.typography.labelLarge,
-                                color = Color(0xFFF43F5E)
+                                color = RadarSemantic.Sos
                             )
                         }
                         Text(
@@ -5140,11 +5224,11 @@ private fun TripsPanel(
                                 elapsedMin, elapsedSec, km, activeTrip.points.size
                             ),
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFA1A1AA)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Button(
                             onClick = onStopTrip,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF43F5E)),
+                            colors = ButtonDefaults.buttonColors(containerColor = RadarSemantic.Sos),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
@@ -5158,7 +5242,7 @@ private fun TripsPanel(
             item {
                 Button(
                     onClick = onStartTrip,
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1)),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Default.DirectionsCar, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
@@ -5187,10 +5271,10 @@ private fun TripsPanel(
             Surface(
                 onClick = { onTripSelected(trip.id) },
                 shape = RoundedCornerShape(16.dp),
-                color = Color(0x0A71717A),
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 border = BorderStroke(
                     if (isSelected) 1.5.dp else 1.dp,
-                    if (isSelected) Color(0xFF6366F1) else Color(0x1F71717A)
+                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
                 ),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -5203,9 +5287,9 @@ private fun TripsPanel(
                         if (trip.isLive) Icons.Default.DirectionsCar else Icons.Default.Route,
                         contentDescription = null,
                         tint = when {
-                            trip.isLive -> Color(0xFFF43F5E)
-                            isSelected -> Color(0xFF6366F1)
-                            else -> Color(0xFFA1A1AA)
+                            trip.isLive -> RadarSemantic.Sos
+                            isSelected -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
                         },
                         modifier = Modifier.size(Sizes.iconMd)
                     )
@@ -5217,20 +5301,20 @@ private fun TripsPanel(
                             Text(
                                 trip.userName,
                                 style = MaterialTheme.typography.labelMedium,
-                                color = Color(0xFFF2F2F7)
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             TripBadge(
                                 text = if (trip.isLive) stringResource(R.string.trip_badge_live) else trip.source.label(context).uppercase(),
                                 color = when {
-                                    trip.isLive -> Color(0xFFF43F5E)
-                                    trip.source == TripSource.AUTO -> Color(0xFF34D399)
-                                    else -> Color(0xFF6366F1)
+                                    trip.isLive -> RadarSemantic.Sos
+                                    trip.source == TripSource.AUTO -> RadarSemantic.Online
+                                    else -> MaterialTheme.colorScheme.primary
                                 }
                             )
                             if (trip.isPrivate) {
                                 TripBadge(
                                     text = stringResource(R.string.trip_badge_private),
-                                    color = Color(0xFFA1A1AA)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -5239,7 +5323,7 @@ private fun TripsPanel(
                             if (route.size == 2) "${route[0]} → ${route[1]}"
                             else dateFormat.format(java.util.Date(trip.startTime)),
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFA1A1AA),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -5307,8 +5391,8 @@ private fun TripDetailDialog(
                 .fillMaxWidth()
                 .padding(Spacing.lg),
             shape = RoundedCornerShape(Radius.xl),
-            border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder),
-            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg)
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
         ) {
             Column(
                 modifier = Modifier
@@ -5322,14 +5406,14 @@ private fun TripDetailDialog(
                     modifier = Modifier
                         .size(Sizes.avatarLg)
                         .clip(CircleShape)
-                        .background(RadarDark.AccentLight.copy(alpha = 0.15f))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
                         .align(Alignment.CenterHorizontally),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         if (trip.source == TripSource.AUTO) Icons.Default.AutoMode else Icons.Default.Route,
                         contentDescription = null,
-                        tint = RadarDark.AccentLight,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(Sizes.iconLg)
                     )
                 }
@@ -5340,14 +5424,14 @@ private fun TripDetailDialog(
                         .takeIf { it.size == 2 }?.joinToString(" → ")
                         ?: stringResource(R.string.trip_title_of, trip.userName),
                     style = MaterialTheme.typography.titleMedium,
-                    color = RadarDark.TextPrimary,
+                    color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
                     text = dateFormat.format(Date(trip.startTime)),
                     style = MaterialTheme.typography.bodySmall,
-                    color = RadarDark.TextMuted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -5400,16 +5484,16 @@ private fun TripDetailDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = RadarDark.TextMuted)) { Text(stringResource(R.string.action_close)) }
+                    TextButton(onClick = onDismiss, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) { Text(stringResource(R.string.action_close)) }
                     Spacer(Modifier.width(Spacing.xs))
                     if (isOnMap) {
-                        OutlinedButton(onClick = onHideFromMap, border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder), colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)) {
+                        OutlinedButton(onClick = onHideFromMap, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
                             Icon(Icons.Default.LayersClear, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                             Spacer(Modifier.width(Spacing.xs))
                             Text(stringResource(R.string.action_remove_from_map))
                         }
                     } else {
-                        Button(onClick = onShowOnMap, colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)) {
+                        Button(onClick = onShowOnMap, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)) {
                             Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(Sizes.iconSm))
                             Spacer(Modifier.width(Spacing.xs))
                             Text(stringResource(R.string.action_show_on_map))
@@ -5430,8 +5514,8 @@ private fun TripStatTile(
 ) {
     Surface(
         shape = RoundedCornerShape(Radius.md),
-        color = RadarDark.Surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = modifier
     ) {
         Column(
@@ -5441,15 +5525,15 @@ private fun TripStatTile(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
-                color = RadarDark.TextMuted
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(text = value, style = MetricTextStyle, color = RadarDark.TextPrimary)
+                Text(text = value, style = MetricTextStyle, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.width(2.dp))
                 Text(
                     text = unit,
                     style = MaterialTheme.typography.labelSmall,
-                    color = RadarDark.TextMuted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = 2.dp)
                 )
             }
@@ -5466,12 +5550,12 @@ private fun TripDetailRow(label: String, value: String) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall,
-            color = RadarDark.TextMuted
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
-            color = RadarDark.TextPrimary
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }

@@ -43,7 +43,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.model.PlaceCategory
 import com.example.model.SavedPlace
-import com.example.ui.theme.RadarDark
+import com.example.ui.theme.RadarSemantic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -220,8 +220,8 @@ fun AddPlaceDialog(
                 .fillMaxWidth(0.95f)
                 .fillMaxHeight(0.92f),
             shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = RadarDark.Bg),
-            border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
         ) {
             Column(
                 modifier = Modifier
@@ -243,13 +243,13 @@ fun AddPlaceDialog(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(CircleShape)
-                                .background(RadarDark.Surface),
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.AddLocationAlt,
                                 contentDescription = null,
-                                tint = RadarDark.AccentLight,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -257,12 +257,12 @@ fun AddPlaceDialog(
                             Text(
                                 if (isEditing) stringResource(R.string.dialog_place_edit_title) else stringResource(R.string.dialog_place_new_title),
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = RadarDark.TextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 if (isEditing) stringResource(R.string.dialog_place_edit_subtitle)
                                 else stringResource(R.string.dialog_place_new_subtitle),
-                                style = MaterialTheme.typography.bodySmall.copy(color = RadarDark.TextMuted)
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                             )
                         }
                     }
@@ -270,7 +270,7 @@ fun AddPlaceDialog(
                         onClick = onDismiss,
                         modifier = Modifier.size(32.dp)
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_close), tint = RadarDark.TextMuted)
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_close), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
 
@@ -280,7 +280,7 @@ fun AddPlaceDialog(
                     onValueChange = { searchQuery = it },
                     placeholder = { Text(stringResource(R.string.search_place_hint), fontSize = 14.sp) },
                     leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.action_search), tint = RadarDark.AccentLight)
+                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.action_search), tint = MaterialTheme.colorScheme.primary)
                     },
                     trailingIcon = {
                         if (isSearching) {
@@ -305,7 +305,7 @@ fun AddPlaceDialog(
                     Text(
                         text = searchFeedback ?: "",
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (searchSuccess) RadarDark.AccentLight else MaterialTheme.colorScheme.error,
+                        color = if (searchSuccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -395,11 +395,11 @@ fun AddPlaceDialog(
                             imageVector = Icons.Default.LocationOn,
                             contentDescription = "Punto Selezionato",
                             tint = when (selectedCategory) {
-                                PlaceCategory.HOME -> Color(0xFF648AC8)
-                                PlaceCategory.WORK -> Color(0xFF6A948D)
-                                PlaceCategory.SCHOOL -> Color(0xFFD97706)
-                                PlaceCategory.GYM -> Color(0xFFDC2626)
-                                PlaceCategory.OTHER -> Color(0xFF64748B)
+                                PlaceCategory.HOME -> RadarSemantic.PlaceHome
+                                PlaceCategory.WORK -> RadarSemantic.PlaceWork
+                                PlaceCategory.SCHOOL -> RadarSemantic.PlaceSchool
+                                PlaceCategory.GYM -> RadarSemantic.PlaceGym
+                                PlaceCategory.OTHER -> RadarSemantic.PlaceOther
                             },
                             modifier = Modifier
                                 .size(42.dp)
@@ -413,7 +413,7 @@ fun AddPlaceDialog(
                             .align(Alignment.TopCenter)
                             .padding(top = 10.dp),
                         shape = RoundedCornerShape(20.dp),
-                        color = RadarDark.Bg.copy(alpha = 0.92f),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
                         tonalElevation = 4.dp
                     ) {
                         Row(
@@ -425,12 +425,12 @@ fun AddPlaceDialog(
                                 Icons.Default.TouchApp,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
-                                tint = RadarDark.AccentLight
+                                tint = MaterialTheme.colorScheme.primary
                             )
                             Text(
                                 stringResource(R.string.map_pin_hint),
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                color = RadarDark.TextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -442,7 +442,7 @@ fun AddPlaceDialog(
                             .fillMaxWidth()
                             .padding(8.dp),
                         shape = RoundedCornerShape(12.dp),
-                        color = RadarDark.Bg.copy(alpha = 0.94f)
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -457,13 +457,13 @@ fun AddPlaceDialog(
                                 Icon(
                                     Icons.Default.Place,
                                     contentDescription = null,
-                                    tint = RadarDark.AccentLight,
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Text(
                                     text = resolvedAddress,
                                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                                    color = RadarDark.TextPrimary,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
@@ -480,7 +480,7 @@ fun AddPlaceDialog(
                                     Icon(
                                         Icons.Default.MyLocation,
                                         contentDescription = stringResource(R.string.action_current_location),
-                                        tint = RadarDark.AccentLight,
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -505,7 +505,7 @@ fun AddPlaceDialog(
 
                 // Category Chips
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(stringResource(R.string.label_category), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = RadarDark.TextPrimary)
+                    Text(stringResource(R.string.label_category), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.onSurface)
                     // Cinque colonne di uguale larghezza, icona sopra ed etichetta
                     // sotto. Con le FilterChip a icona+testo affiancati la quinta
                     // categoria non ci stava e andava a capo, lasciando una riga
@@ -525,10 +525,10 @@ fun AddPlaceDialog(
                                 PlaceCategory.GYM -> Icons.Default.FitnessCenter
                                 PlaceCategory.OTHER -> Icons.Default.Place
                             }
-                            val container = if (isSelected) RadarDark.Accent
-                                else RadarDark.Surface
-                            val content = if (isSelected) Color.White
-                                else RadarDark.TextMuted
+                            val container = if (isSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            val content = if (isSelected) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
 
                             Column(
                                 modifier = Modifier
@@ -570,12 +570,12 @@ fun AddPlaceDialog(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(stringResource(R.string.label_geofence_radius), style = MaterialTheme.typography.labelMedium, color = RadarDark.TextPrimary)
+                        Text(stringResource(R.string.label_geofence_radius), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
                         Text(
                             "${radiusMeters.roundToInt()} metri",
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = RadarDark.AccentLight
+                                color = MaterialTheme.colorScheme.primary
                             )
                         )
                     }
@@ -601,15 +601,15 @@ fun AddPlaceDialog(
                         imageVector = if (geofenceEnabled) Icons.Default.NotificationsActive
                         else Icons.Default.NotificationsOff,
                         contentDescription = null,
-                        tint = if (geofenceEnabled) RadarDark.AccentLight
-                        else RadarDark.TextMuted,
+                        tint = if (geofenceEnabled) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             stringResource(R.string.place_alerts_toggle_label),
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = RadarDark.TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             if (geofenceEnabled)
@@ -617,7 +617,7 @@ fun AddPlaceDialog(
                             else
                                 stringResource(R.string.place_alerts_off_desc),
                             style = MaterialTheme.typography.bodySmall,
-                            color = RadarDark.TextMuted
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Switch(
@@ -636,8 +636,8 @@ fun AddPlaceDialog(
                         onClick = onDismiss,
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
                     ) {
                         Text(stringResource(R.string.action_cancel))
                     }
@@ -657,7 +657,7 @@ fun AddPlaceDialog(
                             onPlaceAdded(finalPlace)
                         },
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                         modifier = Modifier
                             .weight(1.3f)
                             .testTag("save_place_button")

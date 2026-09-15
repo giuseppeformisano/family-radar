@@ -93,7 +93,7 @@ fun AuthScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         Column(
             modifier = Modifier
@@ -113,7 +113,7 @@ fun AuthScreen(
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                 ),
-                color = Color(0xFFF2F2F7),
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = Spacing.xs, vertical = Spacing.xs)
@@ -124,7 +124,7 @@ fun AuthScreen(
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
                 ),
-                color = Color(0xFFA1A1AA),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = Spacing.xs, end = Spacing.xs, top = Spacing.xxs)
@@ -139,7 +139,7 @@ fun AuthScreen(
             ) {
                 RadarPulseAnimation(
                     modifier = Modifier.size(150.dp),
-                    color = Color(0xFF6366F1)
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Box(
                     modifier = Modifier
@@ -148,8 +148,8 @@ fun AuthScreen(
                         .background(
                             Brush.linearGradient(
                                 listOf(
-                                    Color(0xFF6366F1),
-                                    Color(0xFF4F46E5)
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
                                 )
                             )
                         ),
@@ -158,7 +158,7 @@ fun AuthScreen(
                     Icon(
                         Icons.Default.ShareLocation,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(Sizes.iconXl)
                     )
                 }
@@ -169,8 +169,8 @@ fun AuthScreen(
             // ---- Card dei Contenuti (Login Area) ----
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = Color(0x0A71717A),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x1F71717A)),
+                color = MaterialTheme.colorScheme.surface,
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -210,8 +210,8 @@ fun AuthScreen(
                             CircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 strokeWidth = 2.dp,
-                                color = Color(0xFF4F46E5),
-                                trackColor = Color(0x334F46E5)
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                             )
                             Spacer(Modifier.width(Spacing.md))
                             Text(
@@ -237,8 +237,8 @@ fun AuthScreen(
                     // Selettore metodo di accesso (Phone / Email)
                     Surface(
                         shape = RoundedCornerShape(14.dp),
-                        color = Color(0x0EFFFFFF),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -252,8 +252,8 @@ fun AuthScreen(
                                 onClick = { selectedMethod = AuthMethod.PHONE; clearFeedback() },
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isPhone) Color(0xFF6366F1) else Color.Transparent,
-                                    contentColor = if (isPhone) Color.White else Color(0xFFA1A1AA)
+                                    containerColor = if (isPhone) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    contentColor = if (isPhone) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                 ),
                                 contentPadding = PaddingValues(vertical = Spacing.sm),
                                 modifier = Modifier.weight(1f)
@@ -273,8 +273,8 @@ fun AuthScreen(
                                 onClick = { selectedMethod = AuthMethod.EMAIL; clearFeedback() },
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (!isPhone) Color(0xFF6366F1) else Color.Transparent,
-                                    contentColor = if (!isPhone) Color.White else Color(0xFFA1A1AA)
+                                    containerColor = if (!isPhone) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    contentColor = if (!isPhone) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                 ),
                                 contentPadding = PaddingValues(vertical = Spacing.sm),
                                 modifier = Modifier.weight(1f)
@@ -672,8 +672,8 @@ private fun PrimaryActionButton(
         enabled = !isLoading,
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Color(0xFF4F46E5),
-            contentColor = Color.White
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
         ),
         modifier = modifier
             .fillMaxWidth()
@@ -684,8 +684,8 @@ private fun PrimaryActionButton(
             CircularProgressIndicator(
                 modifier = Modifier.size(20.dp),
                 strokeWidth = 2.dp,
-                color = Color.White,
-                trackColor = Color(0x33FFFFFF)
+                color = MaterialTheme.colorScheme.onPrimary,
+                trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
             )
         } else {
             Icon(icon, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))

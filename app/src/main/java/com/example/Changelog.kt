@@ -10,13 +10,13 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.16.3-beta"
+    const val VERSION = "0.17.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🐞 Alta precisione in movimento: ora manda davvero ogni fix su Firestore — il filtro di distanza non la bloccava piu'.",
-        "🐞 Pallino GPS: eliminato il salto enorme in avanti e il ritorno lento indietro.",
-        "✨ Timestamp ultimo fix preciso al secondo.",
-        "✨ Interpolazione GPS per tutti i membri in movimento."
+        "🐞 Tema chiaro: sistemate tutte le schermate che restavano scure anche con il tema chiaro attivo.",
+        "✨ Foto e snapshot: zoom con le dita anche nel carosello, controlli che spariscono al tocco, scorri verso il basso per chiudere.",
+        "✨ Chat: reazioni con emoji sui messaggi (tieni premuto un messaggio).",
+        "✨ Dialoghi piu' coerenti con lo stile dell'app."
     )
 }

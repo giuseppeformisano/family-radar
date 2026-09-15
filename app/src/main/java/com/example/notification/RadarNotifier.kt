@@ -248,7 +248,9 @@ object RadarNotifier {
         senderId: String?
     ) {
         ensureChannels(context)
-        val id = (System.currentTimeMillis() % 100_000).toInt()
+        // ID deterministico per utente: la notifica successiva rimpiazza la precedente
+        // invece di accumularsi. Se senderId è null usiamo un fallback fisso.
+        val id = ("place_${senderId.orEmpty()}").hashCode()
         val intent = contentIntent(context, "MAP", groupId, senderId, id, latitude, longitude)
 
         val notification = NotificationCompat.Builder(context, CHANNEL_PLACES)
@@ -310,7 +312,8 @@ object RadarNotifier {
         senderId: String?
     ) {
         ensureChannels(context)
-        val id = (System.currentTimeMillis() % 100_000).toInt()
+        // ID deterministico per tipo+utente: rimpiazza la notifica precedente dello stesso evento.
+        val id = ("generic_${destination}_${senderId.orEmpty()}").hashCode()
         val intent = contentIntent(context, destination, groupId, senderId, id)
 
         val notification = NotificationCompat.Builder(context, CHANNEL_PLACES)

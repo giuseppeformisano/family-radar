@@ -6,12 +6,15 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -34,6 +37,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -58,8 +62,7 @@ import kotlin.math.abs
 /**
  * Colore di sfondo intenzionalmente scuro per il visualizzatore foto a schermo intero:
  * è la stessa scelta che fa Google Photos anche in tema chiaro, perché una foto va
- * mostrata su un fondo neutro indipendentemente dal tema dell'app. Gli elementi di
- * "chrome" (bottoni, testo, dialog) restano invece theme-aware tramite MaterialTheme.
+ * mostrata su un fondo neutro indipendentemente dal tema dell'app.
  */
 private val ViewerBackdrop = Color(0xFF06080D)
 
@@ -81,28 +84,33 @@ fun FullScreenMediaViewer(
     var chromeVisible by remember { mutableStateOf(true) }
     var currentZoomScale by remember { mutableFloatStateOf(1f) }
 
-    // Stato di trascinamento verticale per lo swipe-to-dismiss.
     val dragOffsetY = remember { Animatable(0f) }
     val scrimAlpha = remember { Animatable(1f) }
     val dismissThresholdPx = with(density) { 120.dp.toPx() }
     var dragStartTime by remember { mutableStateOf(0L) }
     var totalDrag by remember { mutableStateOf(0f) }
 
-    // Strings captured at composable scope for use inside coroutine lambdas
     val strCloseViewer = stringResource(R.string.action_close_viewer)
-    val strPhotoFallback = stringResource(R.string.label_photo)
     val strPhotoSavedGallery = stringResource(R.string.toast_photo_saved_gallery)
     val strPhotoSaveFailed = stringResource(R.string.toast_photo_save_failed)
     val strSaveToGallery = stringResource(R.string.action_save_to_gallery)
     val strFullscreenImage = stringResource(R.string.content_desc_fullscreen_image)
 
-    // Decode in-memory bitmap if it is a Base64 string for flawless rendering
     val decodedBitmap = remember(imageSource) {
         when (imageSource) {
             is Bitmap -> imageSource
             is String -> ImageUtils.base64ToBitmap(imageSource)
             else -> null
         }
+    }
+
+    // Metadati da mostrare in basso (autore + ora), se disponibili
+    val metaText = remember(authorName, timestamp) {
+        val parts = listOfNotNull(
+            authorName?.takeIf { it.isNotBlank() },
+            timestamp?.let { SimpleDateFormat("HH:mm · dd/MM/yyyy", Locale.getDefault()).format(Date(it)) }
+        )
+        parts.joinToString("  ·  ").takeIf { it.isNotBlank() }
     }
 
     Dialog(
@@ -118,13 +126,10 @@ fun FullScreenMediaViewer(
                 .fillMaxSize()
                 .background(ViewerBackdrop.copy(alpha = scrimAlpha.value))
         ) {
-            // Immagine a tutto schermo, trascinabile verticalmente per chiudere quando non ingrandita.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer {
-                        translationY = dragOffsetY.value
-                    }
+                    .graphicsLayer { translationY = dragOffsetY.value }
                     .pointerInput(currentZoomScale) {
                         if (currentZoomScale <= 1.05f) {
                             detectVerticalDragGestures(
@@ -134,7 +139,7 @@ fun FullScreenMediaViewer(
                                 },
                                 onDragEnd = {
                                     val elapsedMs = (System.currentTimeMillis() - dragStartTime).coerceAtLeast(1L)
-                                    val approxVelocity = totalDrag / elapsedMs * 1000f // px/s stimata
+                                    val approxVelocity = totalDrag / elapsedMs * 1000f
                                     coroutineScope.launch {
                                         if (abs(dragOffsetY.value) > dismissThresholdPx || abs(approxVelocity) > 1200f) {
                                             onDismiss()
@@ -172,7 +177,7 @@ fun FullScreenMediaViewer(
                 )
             }
 
-            // Controlli minimali sovrapposti in alto: chiudi e salva, si nascondono al tap.
+            // Top bar: chiudi + salva
             AnimatedVisibility(
                 visible = chromeVisible,
                 enter = fadeIn(),
@@ -231,23 +236,37 @@ fun FullScreenMediaViewer(
                 }
             }
 
-            // Didascalia (se presente) sovrapposta in basso, discreta, si nasconde con il chrome.
+            // Bottom: metadati (autore + ora) e/o didascalia
+            val hasBottom = !metaText.isNullOrBlank() || !caption.isNullOrBlank()
             AnimatedVisibility(
-                visible = chromeVisible && !caption.isNullOrBlank(),
+                visible = chromeVisible && hasBottom,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier.align(Alignment.BottomStart)
             ) {
-                Text(
-                    text = caption ?: "",
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium,
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0x99000000))
+                        .background(Color(0xCC000000))
                         .navigationBarsPadding()
-                        .padding(16.dp)
-                )
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (!metaText.isNullOrBlank()) {
+                        Text(
+                            text = metaText,
+                            color = Color.White.copy(alpha = 0.75f),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                    if (!caption.isNullOrBlank()) {
+                        Text(
+                            text = caption,
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
             }
         }
     }
@@ -255,14 +274,17 @@ fun FullScreenMediaViewer(
 
 /**
  * Immagine a schermo intero con pinch-to-zoom, pan e doppio-tap per ingrandire.
- * Riutilizzabile: accetta un [bitmap] gia' decodificato (Base64) oppure un
- * [imageSource] qualunque per Coil (URL/data-URL). Lo zoom arriva fino a 5x; il
- * pan e' consentito solo quando si e' ingranditi, e il doppio-tap alterna 1x/2.5x.
- * Il singolo tap (riservato a differenza del doppio-tap) invoca [onTap], usato per
- * alternare la visibilita' dei controlli sovrapposti (chrome).
+ *
+ * Il gesture handler è scritto manualmente con [awaitEachGesture] invece di
+ * [detectTransformGestures] perché quest'ultimo consuma TUTTI i touch event
+ * (anche single-finger) impedendo a [HorizontalPager] di ricevere gli swipe
+ * orizzontali quando la scala è 1. Qui si consuma solo quando:
+ * - multi-touch (pinch): sempre
+ * - single-touch: solo se scale > 1 (pan su immagine ingrandita)
+ * Con scale == 1 e single-finger, il parent (Pager) riceve il gesture.
  */
 @Composable
-private fun ZoomableImage(
+fun ZoomableImage(
     bitmap: Bitmap?,
     imageSource: Any?,
     contentDescription: String?,
@@ -290,10 +312,30 @@ private fun ZoomableImage(
             )
         }
         .pointerInput(Unit) {
-            detectTransformGestures { _, pan, zoom, _ ->
-                scale = (scale * zoom).coerceIn(1f, 5f)
-                offset = if (scale > 1f) offset + pan else Offset.Zero
-                onScaleChanged?.invoke(scale)
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false)
+                do {
+                    val event = awaitPointerEvent()
+                    val activeCount = event.changes.count { it.pressed }
+                    when {
+                        activeCount >= 2 -> {
+                            // Pinch: zoom + pan — consuma sempre
+                            val zoomChange = event.calculateZoom()
+                            val panChange = event.calculatePan()
+                            scale = (scale * zoomChange).coerceIn(1f, 5f)
+                            offset = if (scale > 1f) offset + panChange else Offset.Zero
+                            onScaleChanged?.invoke(scale)
+                            event.changes.forEach { it.consume() }
+                        }
+                        activeCount == 1 && scale > 1.05f -> {
+                            // Single-finger pan su immagine ingrandita — consuma
+                            val panChange = event.calculatePan()
+                            offset = offset + panChange
+                            event.changes.forEach { it.consume() }
+                        }
+                        // Single-finger con scale==1: NON consumare → il Pager riceve lo swipe
+                    }
+                } while (event.changes.any { it.pressed })
             }
         }
         .graphicsLayer {
@@ -324,7 +366,10 @@ private fun ZoomableImage(
 }
 
 /**
- * Enhanced Full-Screen Carousel for Georeferenced Snapshot Clusters
+ * Gallery a schermo intero per cluster di snapshot georeferenziati.
+ * Stesse funzionalità del viewer singolo: pinch-zoom, swipe-to-dismiss,
+ * chrome auto-hide al tap. Navigazione tra snapshot con swipe orizzontale
+ * (funziona perché ZoomableImage non consuma il single-finger a scale=1).
  */
 @Composable
 fun SnapshotClusterGalleryDialog(
@@ -337,6 +382,7 @@ fun SnapshotClusterGalleryDialog(
     if (snapshots.isEmpty()) return
 
     val context = LocalContext.current
+    val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
     val pagerState = rememberPagerState(
         initialPage = initialIndex.coerceIn(0, snapshots.size - 1),
@@ -346,9 +392,16 @@ fun SnapshotClusterGalleryDialog(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var chromeVisible by remember { mutableStateOf(true) }
 
+    // Swipe-to-dismiss verticale (come FullScreenMediaViewer), gated su zoom == 1
+    var currentZoomScale by remember { mutableFloatStateOf(1f) }
+    val dragOffsetY = remember { Animatable(0f) }
+    val scrimAlpha = remember { Animatable(1f) }
+    val dismissThresholdPx = with(density) { 120.dp.toPx() }
+    var dragStartTime by remember { mutableLongStateOf(0L) }
+    var totalDrag by remember { mutableFloatStateOf(0f) }
+
     val currentSnapshot = snapshots.getOrNull(pagerState.currentPage) ?: snapshots.first()
 
-    // Strings captured at composable scope for use inside coroutine/click lambdas
     val strClose = stringResource(R.string.action_close)
     val strGeoTitle = stringResource(R.string.snapshot_geographic_title)
     val strSnapshotSavedGallery = stringResource(R.string.toast_snapshot_saved_gallery)
@@ -371,101 +424,103 @@ fun SnapshotClusterGalleryDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(ViewerBackdrop.copy(alpha = 0.98f))
+                .background(ViewerBackdrop.copy(alpha = scrimAlpha.value))
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Top Bar - si nasconde al tap sull'immagine, come i controlli del viewer singolo.
+            // Contenuto principale con swipe-to-dismiss
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { translationY = dragOffsetY.value }
+                    .pointerInput(currentZoomScale) {
+                        if (currentZoomScale <= 1.05f) {
+                            detectVerticalDragGestures(
+                                onDragStart = { dragStartTime = System.currentTimeMillis(); totalDrag = 0f },
+                                onDragEnd = {
+                                    val elapsedMs = (System.currentTimeMillis() - dragStartTime).coerceAtLeast(1L)
+                                    val velocity = totalDrag / elapsedMs * 1000f
+                                    coroutineScope.launch {
+                                        if (abs(dragOffsetY.value) > dismissThresholdPx || abs(velocity) > 1200f) {
+                                            onDismiss()
+                                        } else {
+                                            launch { dragOffsetY.animateTo(0f, spring()) }
+                                            launch { scrimAlpha.animateTo(1f, spring()) }
+                                        }
+                                    }
+                                },
+                                onDragCancel = {
+                                    coroutineScope.launch {
+                                        launch { dragOffsetY.animateTo(0f, spring()) }
+                                        launch { scrimAlpha.animateTo(1f, spring()) }
+                                    }
+                                },
+                                onVerticalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    totalDrag += dragAmount
+                                    coroutineScope.launch {
+                                        dragOffsetY.snapTo(dragOffsetY.value + dragAmount)
+                                        val progress = (abs(dragOffsetY.value) / dismissThresholdPx).coerceIn(0f, 1f)
+                                        scrimAlpha.snapTo((1f - progress * 0.6f).coerceIn(0.35f, 1f))
+                                    }
+                                }
+                            )
+                        }
+                    }
+            ) {
+                // Top bar con chrome auto-hide
                 AnimatedVisibility(visible = chromeVisible, enter = fadeIn(), exit = fadeOut()) {
-                    Surface(
-                        color = Color.Black.copy(alpha = 0.7f),
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .background(Color(0xCC000000))
                             .statusBarsPadding()
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                IconButton(
-                                    onClick = onDismiss,
-                                    modifier = Modifier.size(44.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Close,
-                                        contentDescription = strClose,
-                                        tint = Color.White
-                                    )
+                                IconButton(onClick = onDismiss) {
+                                    Icon(Icons.Default.Close, contentDescription = strClose, tint = Color.White)
                                 }
 
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(horizontal = 8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        text = strGeoTitle,
-                                        color = Color.White,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
+                                Text(
+                                    text = strGeoTitle,
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.weight(1f),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
 
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
+                                Row {
                                     IconButton(
                                         onClick = {
                                             if (isDownloading) return@IconButton
                                             coroutineScope.launch {
                                                 isDownloading = true
-                                                val success = ImageUtils.saveBase64ToGallery(context, currentSnapshot.photoBase64)
+                                                val ok = ImageUtils.saveBase64ToGallery(context, currentSnapshot.photoBase64)
                                                 isDownloading = false
-                                                if (success) {
-                                                    Toast.makeText(context, strSnapshotSavedGallery, Toast.LENGTH_SHORT).show()
-                                                } else {
-                                                    Toast.makeText(context, strSaveError, Toast.LENGTH_SHORT).show()
-                                                }
+                                                Toast.makeText(context, if (ok) strSnapshotSavedGallery else strSaveError, Toast.LENGTH_SHORT).show()
                                             }
-                                        },
-                                        modifier = Modifier.size(44.dp)
+                                        }
                                     ) {
                                         if (isDownloading) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(20.dp),
-                                                color = Color.White,
-                                                trackColor = Color(0x33FFFFFF),
-                                                strokeWidth = 2.dp
-                                            )
+                                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, trackColor = Color(0x33FFFFFF), strokeWidth = 2.dp)
                                         } else {
-                                            Icon(
-                                                imageVector = Icons.Default.Download,
-                                                contentDescription = strSaveToGallery2,
-                                                tint = Color.White
-                                            )
+                                            Icon(Icons.Default.Download, contentDescription = strSaveToGallery2, tint = Color.White)
                                         }
                                     }
-
                                     if (onDelete != null) {
-                                        IconButton(
-                                            onClick = { showDeleteConfirm = true },
-                                            modifier = Modifier.size(44.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Delete,
-                                                contentDescription = strDeleteSnapshotTitle,
-                                                tint = Color(0xFFFF6B6B)
-                                            )
+                                        IconButton(onClick = { showDeleteConfirm = true }) {
+                                            Icon(Icons.Default.Delete, contentDescription = strDeleteSnapshotTitle, tint = Color(0xFFFF6B6B))
                                         }
                                     }
                                 }
                             }
 
-                            // Indicatore a puntini al posto della pillola "pagina X di Y".
+                            // Indicatori di pagina: pillola per la corrente, punto per le altre
                             if (snapshots.size > 1) {
                                 Row(
                                     modifier = Modifier
@@ -476,13 +531,18 @@ fun SnapshotClusterGalleryDialog(
                                 ) {
                                     snapshots.forEachIndexed { idx, _ ->
                                         val isCurrent = idx == pagerState.currentPage
+                                        val dotWidth by animateDpAsState(
+                                            targetValue = if (isCurrent) 20.dp else 6.dp,
+                                            label = "dot_width_$idx"
+                                        )
                                         Box(
                                             modifier = Modifier
                                                 .padding(horizontal = 3.dp)
-                                                .size(if (isCurrent) 8.dp else 6.dp)
+                                                .height(6.dp)
+                                                .width(dotWidth)
                                                 .clip(CircleShape)
                                                 .background(
-                                                    if (isCurrent) Color.White else Color.White.copy(alpha = 0.4f)
+                                                    if (isCurrent) Color.White else Color.White.copy(alpha = 0.35f)
                                                 )
                                         )
                                     }
@@ -492,20 +552,17 @@ fun SnapshotClusterGalleryDialog(
                     }
                 }
 
-                // Horizontal Pager for gallery browsing - fills central space safely
+                // Pager immagini — occupa tutto lo spazio centrale
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp)
                 ) { page ->
                     val item = snapshots[page]
                     val decoded = remember(item.photoBase64) {
                         ImageUtils.base64ToBitmap(item.photoBase64)
                     }
-                    val pageDescription = stringResource(R.string.snapshot_content_desc_page, page + 1, snapshots.size)
-
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -513,115 +570,96 @@ fun SnapshotClusterGalleryDialog(
                         ZoomableImage(
                             bitmap = decoded,
                             imageSource = "data:image/jpeg;base64,${item.photoBase64}",
-                            contentDescription = pageDescription,
-                            onTap = { chromeVisible = !chromeVisible }
+                            contentDescription = null,
+                            onTap = { chromeVisible = !chromeVisible },
+                            onScaleChanged = { if (page == pagerState.currentPage) currentZoomScale = it }
                         )
                     }
                 }
 
-                // Bottom Information Card - si nasconde con il resto del chrome.
+                // Bottom info card — metadati snapshot
                 AnimatedVisibility(visible = chromeVisible, enter = fadeIn(), exit = fadeOut()) {
-                    Surface(
-                        color = Color.Black.copy(alpha = 0.85f),
-                        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .background(Color(0xCC000000))
                             .navigationBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        // Riga autore + ora
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.weight(1f, fill = false)
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.weight(1f, fill = false)
-                                ) {
-                                    val authorAvatar = remember(currentSnapshot.userPhotoBase64) {
-                                        ImageUtils.base64ToBitmap(currentSnapshot.userPhotoBase64)
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.primary),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (authorAvatar != null) {
-                                            Image(
-                                                bitmap = authorAvatar.asImageBitmap(),
-                                                contentDescription = null,
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentScale = ContentScale.Crop
-                                            )
-                                        } else {
-                                            Icon(
-                                                Icons.Default.Person,
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    }
-                                    Text(
-                                        text = currentSnapshot.userName,
-                                        color = Color.White,
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                val authorAvatar = remember(currentSnapshot.userPhotoBase64) {
+                                    ImageUtils.base64ToBitmap(currentSnapshot.userPhotoBase64)
                                 }
-
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        Icons.Default.Schedule,
-                                        contentDescription = null,
-                                        tint = Color.White.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    val timeStr = remember(currentSnapshot.timestamp) {
-                                        SimpleDateFormat("HH:mm - dd/MM/yyyy", Locale.getDefault()).format(Date(currentSnapshot.timestamp))
+                                    if (authorAvatar != null) {
+                                        Image(
+                                            bitmap = authorAvatar.asImageBitmap(),
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                                     }
-                                    Text(
-                                        text = timeStr,
-                                        color = Color.White.copy(alpha = 0.7f),
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
                                 }
-                            }
-
-                            if (currentSnapshot.caption.isNotBlank()) {
                                 Text(
-                                    text = currentSnapshot.caption,
-                                    color = Color.White.copy(alpha = 0.95f),
-                                    style = MaterialTheme.typography.bodyMedium
+                                    text = currentSnapshot.userName,
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
 
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Icon(
-                                    Icons.Default.LocationOn,
-                                    contentDescription = null,
-                                    tint = Color(0xFFEA580C),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = String.format(Locale.US, strPositionFmt, currentSnapshot.latitude, currentSnapshot.longitude),
-                                    color = Color.White.copy(alpha = 0.6f),
-                                    style = MaterialTheme.typography.labelSmall
-                                )
+                                Icon(Icons.Default.Schedule, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
+                                val timeStr = remember(currentSnapshot.timestamp) {
+                                    SimpleDateFormat("HH:mm · dd/MM/yy", Locale.getDefault()).format(Date(currentSnapshot.timestamp))
+                                }
+                                Text(text = timeStr, color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.labelSmall)
                             }
+                        }
+
+                        // Didascalia (se presente)
+                        if (currentSnapshot.caption.isNotBlank()) {
+                            Text(
+                                text = currentSnapshot.caption,
+                                color = Color.White.copy(alpha = 0.9f),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+
+                        // Coordinate GPS
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFFEA580C), modifier = Modifier.size(14.dp))
+                            Text(
+                                text = String.format(Locale.US, strPositionFmt, currentSnapshot.latitude, currentSnapshot.longitude),
+                                color = Color.White.copy(alpha = 0.5f),
+                                style = MaterialTheme.typography.labelSmall
+                            )
                         }
                     }
                 }
@@ -645,10 +683,6 @@ fun SnapshotClusterGalleryDialog(
     }
 }
 
-/**
- * Dialog di conferma eliminazione, temato con [GlassSurface] anziche' un AlertDialog
- * a tinte fisse: cosi' resta leggibile sia in tema chiaro sia scuro.
- */
 @Composable
 private fun DeleteSnapshotConfirmDialog(
     title: String,
@@ -667,26 +701,11 @@ private fun DeleteSnapshotConfirmDialog(
                 modifier = Modifier.padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = body,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text(cancelLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    TextButton(onClick = onConfirm) {
-                        Text(confirmLabel, color = MaterialTheme.colorScheme.error)
-                    }
+                Text(text = title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text(text = body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text(cancelLabel, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    TextButton(onClick = onConfirm) { Text(confirmLabel, color = MaterialTheme.colorScheme.error) }
                 }
             }
         }

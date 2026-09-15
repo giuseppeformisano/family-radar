@@ -305,7 +305,8 @@ fun MainRadarScreen(
     // Il token forza il ri-centraggio anche quando le coordinate non cambiano.
     var focusToken by remember { mutableIntStateOf(0) }
     var currentMapCenter by remember { mutableStateOf<Pair<Double, Double>?>(null) }
-    var fullScreenImageSource by remember { mutableStateOf<Any?>(null) }
+    data class FullScreenRequest(val source: Any, val sender: String? = null, val timestamp: Long? = null)
+    var fullScreenRequest by remember { mutableStateOf<FullScreenRequest?>(null) }
     var selectedSnapshotClusterForGallery by remember { mutableStateOf<PlaceSnapshotCluster?>(null) }
     var capturedSnapshotUri by remember { mutableStateOf<Uri?>(null) }
     var capturedSnapshotBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -1107,7 +1108,7 @@ fun MainRadarScreen(
                                 currentUserId = currentUserId,
                                 groupId = currentGroup?.id ?: "",
                                 repository = repository,
-                                onImageClick = { fullScreenImageSource = it }
+                                onImageClick = { src, sender, ts -> fullScreenRequest = FullScreenRequest(src, sender, ts) }
                             )
 
                             RadarPanel.PLACES -> PlacesPanel(
@@ -1527,10 +1528,12 @@ fun MainRadarScreen(
         )
     }
 
-    fullScreenImageSource?.let { source ->
+    fullScreenRequest?.let { req ->
         FullScreenMediaViewer(
-            imageSource = source,
-            onDismiss = { fullScreenImageSource = null }
+            imageSource = req.source,
+            authorName = req.sender,
+            timestamp = req.timestamp,
+            onDismiss = { fullScreenRequest = null }
         )
     }
 
@@ -2508,7 +2511,7 @@ private fun ChatPanel(
     currentUserId: String,
     groupId: String,
     repository: FirebaseRepository,
-    onImageClick: (Any) -> Unit
+    onImageClick: (Any, String?, Long?) -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -2925,7 +2928,7 @@ private fun ChatPanel(
 private fun ChatBubble(
     message: ChatMessage,
     isMe: Boolean,
-    onImageClick: (Any) -> Unit,
+    onImageClick: (Any, String?, Long?) -> Unit,
     groupId: String,
     repository: FirebaseRepository,
     myLatitude: Double? = null,
@@ -3131,7 +3134,7 @@ private fun ChatBubble(
                             .fillMaxWidth()
                             .height(190.dp)
                             .clip(RoundedCornerShape(Radius.sm))
-                            .clickable { message.imageBase64?.let(onImageClick) },
+                            .clickable { message.imageBase64?.let { onImageClick(it, message.senderName.takeIf { n -> n.isNotBlank() }, message.timestamp) } },
                         contentScale = ContentScale.Crop
                     )
                     Spacer(Modifier.height(Spacing.xs))
@@ -3143,7 +3146,7 @@ private fun ChatBubble(
                             .fillMaxWidth()
                             .height(190.dp)
                             .clip(RoundedCornerShape(Radius.sm))
-                            .clickable { onImageClick(imageSource) },
+                            .clickable { onImageClick(imageSource, message.senderName.takeIf { it.isNotBlank() }, message.timestamp) },
                         contentScale = ContentScale.Crop
                     )
                     Spacer(Modifier.height(Spacing.xs))

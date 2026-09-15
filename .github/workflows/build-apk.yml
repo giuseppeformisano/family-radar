@@ -35,8 +35,13 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # android-actions/setup-android@v3 fallisce sempre: prova a installare il
+      # pacchetto SDK "tools", rimosso da Google anni fa dai cmdline-tools.
+      # Il runner ubuntu-latest ha gia' l'SDK preinstallato (ANDROID_HOME gia'
+      # impostato) con cmdline-tools recenti: basta accettare le licenze,
+      # Gradle/AGP scarica da solo le piattaforme/build-tools mancanti.
+      - name: Accetta licenze Android SDK
+        run: yes | sdkmanager --licenses >/dev/null || true
 
       # Il build type "debug" e' firmato con ${rootDir}/debug.keystore, che e' gitignored.
       #

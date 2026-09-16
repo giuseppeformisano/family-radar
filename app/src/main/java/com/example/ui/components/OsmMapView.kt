@@ -74,7 +74,15 @@ private const val INTERP_MIN_SPEED_MS = 0.5f      // m/s
 // Cappatura massima del tempo extrapolato: le scritture avvengono di rado a
 // passo d'uomo (ogni ~13s per 18m di spostamento), quindi il cap deve coprire
 // il buco tra un fix e l'altro senza far derivare troppo il marker.
-private const val INTERP_MAX_ELAPSED_SEC = 14.0   // secondi
+private const val INTERP_MAX_ELAPSED_SEC = 8.0   // secondi
+
+// Quanto il pallino mostrato si avvicina al bersaglio a ogni tick quando c'e' una
+// correzione grossa (fix nuovo dopo un buco). 0,25 = colma un quarto della distanza
+// ogni 100ms, quindi scivola sul punto giusto in ~mezzo secondo senza saltare.
+private const val DISPLAY_EASE_FACTOR = 0.25
+// Sotto questa distanza il pallino segue il bersaglio secco (movimento normale a
+// punti fitti): niente easing, cosi' non resta indietro quando i fix sono regolari.
+private const val DISPLAY_SNAP_THRESHOLD_M = 3.0
 
 // Velocita' e direzione stimate dai delta tra gli ultimi due fix reali.
 private data class MotionEstimate(val speedMs: Float, val bearingDeg: Double)
@@ -237,6 +245,11 @@ fun OsmMapView(
     val interpBasePos = remember { mutableMapOf<String, Pair<Double, Double>>() }
     val interpStartTime = remember { mutableMapOf<String, Long>() }
 
+    // Posizione realmente mostrata del pallino, distinta dal bersaglio calcolato.
+    // Quando arriva una correzione (fix nuovo dopo un buco), il pallino non salta
+    // sul bersaglio: ci scivola sopra in qualche tick. Cosi' spariscono i salti.
+    val displayedPos = remember { mutableMapOf<String, Pair<Double, Double>>() }
+
     // Utenti con un viaggio in corso: SOLO per loro si applica il dead reckoning.
     // Fuori da un viaggio il marker resta sul fix reale — anticiparlo mentre uno
     // e' solo "in giro" produceva derive fastidiose senza un percorso a coprirle.
@@ -282,6 +295,7 @@ fun OsmMapView(
         motionEstimate.keys.retainAll(activeIds)
         interpBasePos.keys.retainAll(activeIds)
         interpStartTime.keys.retainAll(activeIds)
+        displayedPos.keys.retainAll(activeIds)
     }
 
     // Stato aggiornato del membro inseguito: catturato dentro al ticker tramite
@@ -300,11 +314,11 @@ fun OsmMapView(
             val tickNow = System.currentTimeMillis()
             var changed = false
             memberMarkerMap.forEach { (userId, marker) ->
-                val motion = motionEstimate[userId] ?: return@forEach
-                if (motion.speedMs < INTERP_MIN_SPEED_MS) return@forEach
+                val motion = motionEstimate[userId] ?: run { displayedPos.remove(userId); return@forEach }
+                if (motion.speedMs < INTERP_MIN_SPEED_MS) { displayedPos.remove(userId); return@forEach }
 
-                val basePair = interpBasePos[userId] ?: return@forEach
-                val startTime = interpStartTime[userId] ?: return@forEach
+                val basePair = interpBasePos[userId] ?: run { displayedPos.remove(userId); return@forEach }
+                val startTime = interpStartTime[userId] ?: run { displayedPos.remove(userId); return@forEach }
                 val baseLat = basePair.first
                 val baseLon = basePair.second
 
@@ -315,7 +329,27 @@ fun OsmMapView(
                 val dLat = deltaMeters * cos(bearingRad) / 111320.0
                 val dLon = deltaMeters * sin(bearingRad) /
                     (111320.0 * cos(Math.toRadians(baseLat)))
-                val newPos = GeoPoint(baseLat + dLat, baseLon + dLon)
+                // Bersaglio calcolato dall'estrapolazione in linea retta.
+                val targetLat = baseLat + dLat
+                val targetLon = baseLon + dLon
+
+                // Posizione mostrata: scivola verso il bersaglio invece di saltarci.
+                val shown = displayedPos[userId]
+                val (showLat, showLon) = if (shown == null) {
+                    targetLat to targetLon
+                } else {
+                    val gap = distanceMeters(shown.first, shown.second, targetLat, targetLon)
+                    if (gap < DISPLAY_SNAP_THRESHOLD_M) {
+                        // Punti fitti e regolari: segue secco, niente ritardo.
+                        targetLat to targetLon
+                    } else {
+                        // Correzione grossa: colma solo una frazione della distanza.
+                        (shown.first + (targetLat - shown.first) * DISPLAY_EASE_FACTOR) to
+                            (shown.second + (targetLon - shown.second) * DISPLAY_EASE_FACTOR)
+                    }
+                }
+                displayedPos[userId] = showLat to showLon
+                val newPos = GeoPoint(showLat, showLon)
                 marker.position = newPos
                 changed = true
 

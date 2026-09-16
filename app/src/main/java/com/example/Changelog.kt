@@ -10,13 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.17.3-beta"
+    const val VERSION = "0.17.4-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Immagini: viewer unificato per chat e snapshot — zoom/pinch, swipe per chiudere, metadati (autore e ora) sempre visibili.",
-        "🐞 Snapshot: lo scorrimento tra foto vicine ora funziona (lo zoom non rubava piu' il gesto).",
-        "✨ Indicatori pagina snapshot animati (pillola per la pagina corrente).",
-        "🐞 Tema scuro: ripristinato look originale nero/indigo."
+        "✨ Movimento sulla mappa piu' fluido: i pallini scivolano dolcemente verso la posizione nuova invece di saltare.",
+        "🐞 Meno derive quando i punti GPS arrivano radi: il pallino non tira dritto troppo a lungo."
     )
 }

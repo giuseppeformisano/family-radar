@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.17.4-beta"
+    const val VERSION = "0.17.5-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Movimento sulla mappa piu' fluido: i pallini scivolano dolcemente verso la posizione nuova invece di saltare.",
-        "🐞 Meno derive quando i punti GPS arrivano radi: il pallino non tira dritto troppo a lungo."
+        "🐞 Basta pallini che ballano da fermi: quando il GPS e' scarso, l'app riconosce il rumore e tiene il pallino fermo invece di mandarlo a spasso.",
+        "✨ La soglia anti-rumore si adatta alla qualita' del segnale: movimento vero in auto fluido, rumore da fermo ignorato."
     )
 }

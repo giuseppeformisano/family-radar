@@ -84,6 +84,18 @@ private const val DISPLAY_EASE_FACTOR = 0.25
 // punti fitti): niente easing, cosi' non resta indietro quando i fix sono regolari.
 private const val DISPLAY_SNAP_THRESHOLD_M = 3.0
 
+// Soglia minima di spostamento reale sotto la quale un fix e' considerato rumore
+// del GPS e non movimento. La soglia si adatta alla qualita' del segnale: e' il
+// massimo fra un minimo fisso e il raggio d'errore del fix moltiplicato (un GPS che
+// si dichiara preciso a 30m puo' "ballare" di ~30m stando fermo). Con GPS buono la
+// soglia resta bassa e il movimento reale in auto passa; con GPS scarso si alza e il
+// rumore da fermo viene ignorato.
+private const val INTERP_NOISE_FLOOR_M = 6.0
+private const val INTERP_NOISE_ACCURACY_FACTOR = 1.5
+// Cappa la velocita' stimata: oltre ~250 km/h e' quasi certamente un salto spurio
+// del GPS, non movimento reale. Evita che un fix sballato lanci il pallino lontano.
+private const val INTERP_MAX_SPEED_MS = 70f
+
 // Velocita' e direzione stimate dai delta tra gli ultimi due fix reali.
 private data class MotionEstimate(val speedMs: Float, val bearingDeg: Double)
 
@@ -269,24 +281,42 @@ fun OsmMapView(
             if (loc.latitude == 0.0 && loc.longitude == 0.0) return@forEach
             val prev = previousFix[loc.userId]
 
-            // Nuovo fix reale: aggiorna base e istante di partenza dell'estrapolazione.
-            // Condizione: timestamp diverso dal precedente (fix davvero nuovo).
-            if (prev == null || prev.timestamp != loc.timestamp) {
-                interpBasePos[loc.userId] = Pair(loc.latitude, loc.longitude)
-                interpStartTime[loc.userId] = now
+            // Nuovo fix (timestamp diverso dall'ancora).
+            // `previousFix` qui e' il PUNTO D'ANCORAGGIO: si sposta solo quando c'e'
+            // movimento vero, non a ogni fix. Cosi' il rumore da fermo (fix che ballano
+            // attorno alla posizione reale) non muove mai il pallino, mentre un movimento
+            // lento viene riconosciuto quando lo scostamento dall'ancora si accumula.
+            val anchor = prev
+            if (anchor == null || anchor.timestamp != loc.timestamp) {
+                if (anchor == null) {
+                    // Primo fix: piazza la base, nessun moto ancora.
+                    interpBasePos[loc.userId] = Pair(loc.latitude, loc.longitude)
+                    interpStartTime[loc.userId] = now
+                    motionEstimate[loc.userId] = MotionEstimate(0f, 0.0)
+                    previousFix[loc.userId] = loc
+                } else {
+                    val dtSec = (loc.timestamp - anchor.timestamp) / 1000.0
+                    val dist = distanceMeters(anchor.latitude, anchor.longitude, loc.latitude, loc.longitude)
 
-                if (prev != null) {
-                    val dtSec = (loc.timestamp - prev.timestamp) / 1000.0
-                    if (dtSec > 0.3) {
-                        val dist = distanceMeters(prev.latitude, prev.longitude, loc.latitude, loc.longitude)
-                        val computedSpeed = (dist / dtSec).toFloat()
+                    // Soglia rumore: lo scostamento dall'ancora deve battere sia il minimo
+                    // fisso sia il raggio d'errore del fix. Sotto, e' rumore del sensore.
+                    val noiseFloor = max(INTERP_NOISE_FLOOR_M, loc.accuracy.toDouble() * INTERP_NOISE_ACCURACY_FACTOR)
+                    val isRealMove = dtSec > 0.3 && dist > noiseFloor
+
+                    if (isRealMove) {
+                        val computedSpeed = (dist / dtSec).toFloat().coerceAtMost(INTERP_MAX_SPEED_MS)
                         val bearing = if (loc.bearing != 0.0f) loc.bearing.toDouble()
-                            else bearingDegrees(prev.latitude, prev.longitude, loc.latitude, loc.longitude)
-                        val effSpeed = max(computedSpeed, loc.speed)
-                        motionEstimate[loc.userId] = MotionEstimate(effSpeed, bearing)
+                            else bearingDegrees(anchor.latitude, anchor.longitude, loc.latitude, loc.longitude)
+                        interpBasePos[loc.userId] = Pair(loc.latitude, loc.longitude)
+                        interpStartTime[loc.userId] = now
+                        motionEstimate[loc.userId] = MotionEstimate(computedSpeed, bearing)
+                        // L'ancora avanza SOLO ora, sul movimento confermato.
+                        previousFix[loc.userId] = loc
+                    } else {
+                        // Rumore o fermo: pallino fermo, ancora e base restano dov'erano.
+                        motionEstimate[loc.userId] = MotionEstimate(0f, motionEstimate[loc.userId]?.bearingDeg ?: 0.0)
                     }
                 }
-                previousFix[loc.userId] = loc
             }
         }
         // Pulisce le stime di utenti non piu' presenti.

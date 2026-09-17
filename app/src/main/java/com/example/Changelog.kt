@@ -10,10 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.29.0-beta"
+    const val VERSION = "0.29.1-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧪 Nuova mappa (beta): aggiunto l'anello del vocale (alone pulsante su chi parla). La migrazione della mappa e' ora completa."
+        "🐞 APK piu' leggero (solo arm64): pubblicazione delle build piu' affidabile.",
+        "🧪 Nuova mappa (beta): migrazione completa, anello del vocale incluso."
     )
 }

@@ -2788,6 +2788,19 @@ class FirebaseRepository private constructor(private val context: Context) {
     private var lastWrittenLocNickname: String? = null
     private var lastWrittenLocPhoto: String? = null
 
+    // Filtro unico che ripulisce il GPS (vedi LocationKalman). Manopola "q" regolabile
+    // in app: alto = segue in fretta (meno liscio), basso = piu' stabile.
+    private val _filterQ = MutableStateFlow(settingsPrefs.getFloat("filter_q", 3.0f))
+    val filterQ = _filterQ.asStateFlow()
+    private val locationFilter = com.example.util.LocationKalman(_filterQ.value.toDouble())
+
+    fun setFilterQ(q: Float) {
+        val clamped = q.coerceIn(0.1f, 30.0f)
+        _filterQ.value = clamped
+        locationFilter.setProcessNoise(clamped.toDouble())
+        settingsPrefs.edit().putFloat("filter_q", clamped).apply()
+    }
+
     // Buffer degli ultimi ~90s di punti raccolti da questo dispositivo. Viene allegato
     // a ogni scrittura cosi' che, dopo un buco di rete, i punti non spediti in tempo
     // reale arrivino comunque agli altri e la scia resti senza buchi.
@@ -2905,6 +2918,14 @@ class FirebaseRepository private constructor(private val context: Context) {
             return
         }
 
+        // FILTRO UNICO: ripulisce la posizione grezza del GPS. Da qui in poi si usa
+        // "loc" (posizione filtrata), cosi' scia, geofence, gate e scrittura lavorano
+        // tutti sullo stesso segnale pulito, senza filtri sparsi che litigano.
+        val (fLat, fLon) = locationFilter.process(
+            location.latitude, location.longitude, location.accuracy, location.timestamp
+        )
+        val loc = location.copy(latitude = fLat, longitude = fLon)
+
         // [TRIP TRACKING DISABILITATO] Registrazione punti del viaggio — commentato.
         // Per riabilitare: decommentare il blocco sotto e ripristinare evaluateAutoTrip.
         // if (_activeTrip.value != null) {
@@ -2917,31 +2938,31 @@ class FirebaseRepository private constructor(private val context: Context) {
         // Bufferizza ogni punto raccolto (anche quelli non trasmessi): e' il
         // materiale con cui, alla prossima scrittura, si ricostruisce la scia
         // senza buchi dopo un'interruzione di rete.
-        bufferRecentPoint(location.latitude, location.longitude, location.timestamp)
+        bufferRecentPoint(loc.latitude, loc.longitude, loc.timestamp)
 
         // Notifica "in movimento" agli altri membri: indipendente dall'auto-trip,
         // gira su ogni fix e si basa su Activity Recognition + spostamento netto.
-        evaluateMovementNotification(location)
+        evaluateMovementNotification(loc)
 
         // La valutazione geofence gira su OGNI fix, anche su quelli che non
         // trasmettiamo: un ingresso o un'uscita da un luogo non va perso solo
         // perché lo spostamento era piccolo.
-        val gate = evaluateLocationGate(location, currentGroup)
+        val gate = evaluateLocationGate(loc, currentGroup)
 
         // Due ricerche distinte, di proposito:
         //  - per gli AVVISI contano solo i luoghi con geofence attivo
         //  - per l'etichetta "dove sei" contano tutti, perché un luogo con gli
         //    avvisi spenti resta comunque un posto che ha un nome
         val allPlaces = _currentGroupPlaces.value
-        val placeForLabel = GeofenceHelper.findCurrentPlace(location, allPlaces)
+        val placeForLabel = GeofenceHelper.findCurrentPlace(loc, allPlaces)
 
         // Gli AVVISI di ingresso/uscita si valutano solo su fix affidabili e con
         // isteresi: un fix impreciso o un salto del GPS mentre si sta fermi dentro
         // un luogo non deve produrre una raffica di "entra"/"esci". La sola etichetta
         // "dove sei" (placeForLabel) resta senza filtro perché non genera notifiche.
-        if (location.accuracy <= GEOFENCE_MAX_ACCURACY_METERS) {
+        if (loc.accuracy <= GEOFENCE_MAX_ACCURACY_METERS) {
             val placeForAlert = resolveGeofencePlaceWithHysteresis(
-                location, allPlaces.filter { it.geofenceEnabled }
+                loc, allPlaces.filter { it.geofenceEnabled }
             )
             checkGeofenceAlert(user.displayName, placeForAlert)
         }
@@ -2952,8 +2973,8 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
         Log.d(TAG, "Fix trasmesso: ${gate.reason}")
 
-        lastSentLatitude = location.latitude
-        lastSentLongitude = location.longitude
+        lastSentLatitude = loc.latitude
+        lastSentLongitude = loc.longitude
         lastSentAtMillis = System.currentTimeMillis()
         lastSentGroupId = currentGroup
 
@@ -2961,11 +2982,11 @@ class FirebaseRepository private constructor(private val context: Context) {
         val matchedPlace = placeForLabel
         // Velocita' implausibile (>~250 km/h) = sensore che sbanda: si azzera, cosi'
         // nessuno vede numeri assurdi tipo 392 km/h da un semplice scossone.
-        val safeSpeed = if (location.speed < 0f || location.speed > MAX_PLAUSIBLE_SPEED_MS) 0f else location.speed
-        val enrichedLocation = location.copy(
+        val safeSpeed = if (loc.speed < 0f || loc.speed > MAX_PLAUSIBLE_SPEED_MS) 0f else loc.speed
+        val enrichedLocation = loc.copy(
             userId = user.uid,
             userName = user.displayName,
-            photoBase64 = user.photoBase64 ?: location.photoBase64,
+            photoBase64 = user.photoBase64 ?: loc.photoBase64,
             currentPlaceName = matchedPlace?.name,
             speed = safeSpeed
         )

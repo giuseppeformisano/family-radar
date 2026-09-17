@@ -194,6 +194,7 @@ fun MainRadarScreen(
     val isAutoTripEnabled by repository.isAutoTripEnabled.collectAsState()
     val isAutoTripShared by repository.isAutoTripShared.collectAsState()
     val isHighPrecisionMovement by repository.isHighPrecisionMovement.collectAsState()
+    val filterQ by repository.filterQ.collectAsState()
     val deepLinkTarget by repository.deepLinkTarget.collectAsState()
 
     // GPS check — mostra dialog se GPS spento e non si è in risparmio batteria
@@ -1203,6 +1204,8 @@ fun MainRadarScreen(
                                 isAutoTripShared = isAutoTripShared,
                                 isHighPrecisionMovement = isHighPrecisionMovement,
                                 onToggleHighPrecisionMovement = { repository.setHighPrecisionMovement(it) },
+                                filterQ = filterQ,
+                                onSetFilterQ = { repository.setFilterQ(it) },
                                 isSimulationRunning = isSimulationRunning,
                                 isVoiceAutoplayEnabled = voiceAutoplay,
                                 onToggleVoiceAutoplay = { repository.setVoiceAutoplayEnabled(it) },
@@ -3763,6 +3766,8 @@ private fun SettingsPanel(
     isAutoTripEnabled: Boolean,
     isAutoTripShared: Boolean,
     isHighPrecisionMovement: Boolean,
+    filterQ: Float = 3.0f,
+    onSetFilterQ: (Float) -> Unit = {},
     isSimulationRunning: Boolean,
     isVoiceAutoplayEnabled: Boolean,
     onToggleVoiceAutoplay: (Boolean) -> Unit,
@@ -3967,6 +3972,36 @@ private fun SettingsPanel(
                     onCheckedChange = onToggleHighPrecisionMovement,
                     testTag = "high_precision_switch"
                 )
+                Spacer(Modifier.height(Spacing.sm))
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Reattività filtro posizione",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = String.format(Locale.US, "%.1f", filterQ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Text(
+                        text = "Basso = pallino piu' stabile e liscio (ma piu' molle). Alto = segue in fretta i movimenti (ma piu' nervoso). Regola e prova dal vivo.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Slider(
+                        value = filterQ,
+                        onValueChange = onSetFilterQ,
+                        valueRange = 0.5f..15f,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
                 BatteryReliabilityCard()
                 Spacer(Modifier.height(Spacing.md))
                 Text(

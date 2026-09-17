@@ -676,6 +676,9 @@ fun MainRadarScreen(
             locations = locations,
             currentUserId = currentUserId,
             dark = RadarTheme.palette.isDark,
+            targetFocusPoint = targetMapFocus,
+            focusToken = focusToken,
+            followedUserId = followedUserId,
             modifier = Modifier.fillMaxSize()
         )
       } else {

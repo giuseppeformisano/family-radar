@@ -26,6 +26,9 @@ fun MapLibreMapView(
     locations: List<UserLocation>,
     currentUserId: String,
     dark: Boolean,
+    targetFocusPoint: Pair<Double, Double>? = null,
+    focusToken: Int = 0,
+    followedUserId: String? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -131,6 +134,18 @@ fun MapLibreMapView(
             }
         }
 
+        // Inseguimento: se stai seguendo un membro, la camera lo tiene al centro.
+        if (followedUserId != null) {
+            val target = valid.find { it.userId == followedUserId }
+            if (target != null) {
+                map.animateCamera(
+                    org.maplibre.android.camera.CameraUpdateFactory.newLatLng(
+                        org.maplibre.android.geometry.LatLng(target.latitude, target.longitude)
+                    )
+                )
+            }
+        }
+
         // Scia agganciata alle strade (in background): sostituisce la scia grezza dove
         // il matching e' affidabile, altrimenti resta il grezzo (regola fuori-strada).
         val withTrails = valid.filter { it.recentPoints.size >= 2 }
@@ -144,6 +159,20 @@ fun MapLibreMapView(
             map.style?.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("trail-src")
                 ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(snappedFeatures))
         }
+    }
+
+    // Centra la mappa quando arriva una richiesta di focus (pulsante "centra qui",
+    // apertura di un membro/luogo). Il token forza la reazione anche a coordinate uguali.
+    LaunchedEffect(focusToken) {
+        if (focusToken == 0) return@LaunchedEffect
+        val map = mapRef ?: return@LaunchedEffect
+        val point = targetFocusPoint ?: return@LaunchedEffect
+        map.animateCamera(
+            org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(
+                org.maplibre.android.geometry.LatLng(point.first, point.second),
+                16.0
+            )
+        )
     }
 
     AndroidView(factory = { mapView }, modifier = modifier)

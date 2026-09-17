@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.24.0-beta"
+    const val VERSION = "0.24.1-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧪 Nuova mappa attivabile: in Impostazioni > Aspetto > \"Usa nuova mappa (beta)\" puoi sostituire la mappa attuale con quella nuova. Per ora mostra pallini e scia (agganciata alle strade); luoghi, snapshot e 'segui' arrivano nei prossimi step."
+        "🧪 Nuova mappa (beta): ora rispondono anche i pulsanti \"centra su di me\" e \"segui\"."
     )
 }

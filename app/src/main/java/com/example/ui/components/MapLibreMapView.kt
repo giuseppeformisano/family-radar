@@ -158,7 +158,12 @@ fun MapLibreMapView(
         }
     }
 
-    // Aggiornamento in tempo reale di pallini e scia (grezza), + centraggio iniziale.
+    // Bersaglio (ultima posizione reale) e posizione mostrata per pallino: il ticker
+    // fa scivolare il mostrato verso il bersaglio per un movimento morbido.
+    val memberTargets = androidx.compose.runtime.remember { mutableMapOf<String, Triple<Double, Double, String>>() }
+    val memberDisplayed = androidx.compose.runtime.remember { mutableMapOf<String, Pair<Double, Double>>() }
+
+    // Aggiornamento in tempo reale di scia + bersagli pallini, + centraggio iniziale.
     LaunchedEffect(locations, styleReady) {
         if (!styleReady) return@LaunchedEffect
         val map = mapRef ?: return@LaunchedEffect
@@ -166,12 +171,10 @@ fun MapLibreMapView(
 
         val valid = locations.filter { it.latitude != 0.0 || it.longitude != 0.0 }
 
-        val pointFeatures = valid.map { m ->
+        valid.forEach { m ->
             val isSelf = m.userId == currentUserId
             val displayName = if (!m.nickname.isNullOrBlank()) "${m.userName} (${m.nickname})" else m.userName
             val speedKmH = (m.speed * 3.6f).toInt()
-            // Stessa icona della vecchia mappa (nome + foto + stato), generata come
-            // immagine e registrata nello style. addImage sovrascrive se gia' presente.
             val iconId = "member-${m.userId}"
             runCatching {
                 val drawable = createMemberMarkerDrawable(
@@ -187,15 +190,11 @@ fun MapLibreMapView(
                 val bmp = (drawable as android.graphics.drawable.BitmapDrawable).bitmap
                 style.addImage(iconId, bmp)
             }
-            org.maplibre.geojson.Feature.fromGeometry(
-                org.maplibre.geojson.Point.fromLngLat(m.longitude, m.latitude)
-            ).apply {
-                addStringProperty("icon-id", iconId)
-                addStringProperty("userId", m.userId)
-            }
+            memberTargets[m.userId] = Triple(m.latitude, m.longitude, iconId)
         }
-        style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("members-src")
-            ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(pointFeatures))
+        val ids = valid.map { it.userId }.toSet()
+        memberTargets.keys.retainAll(ids)
+        memberDisplayed.keys.retainAll(ids)
 
         val rawLineFeatures = valid.filter { it.recentPoints.size >= 2 }.map { m ->
             val pts = m.recentPoints.sortedBy { it.t }
@@ -240,6 +239,37 @@ fun MapLibreMapView(
             }
             map.style?.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("trail-src")
                 ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(snappedFeatures))
+        }
+    }
+
+    // Ticker: ogni 100ms fa scivolare i pallini dalla posizione mostrata verso il
+    // bersaglio (ultima posizione reale), per un movimento morbido tra un fix e l'altro.
+    LaunchedEffect(styleReady) {
+        if (!styleReady) return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(100L)
+            val style = mapRef?.style ?: continue
+            if (memberTargets.isEmpty()) continue
+            val features = memberTargets.map { (userId, target) ->
+                val (tLat, tLon, iconId) = target
+                val shown = memberDisplayed[userId]
+                val (lat, lon) = if (shown == null) {
+                    tLat to tLon
+                } else {
+                    val d = distanceMeters(shown.first, shown.second, tLat, tLon)
+                    if (d < 3.0 || d > 120.0) tLat to tLon
+                    else (shown.first + (tLat - shown.first) * 0.25) to (shown.second + (tLon - shown.second) * 0.25)
+                }
+                memberDisplayed[userId] = lat to lon
+                org.maplibre.geojson.Feature.fromGeometry(
+                    org.maplibre.geojson.Point.fromLngLat(lon, lat)
+                ).apply {
+                    addStringProperty("icon-id", iconId)
+                    addStringProperty("userId", userId)
+                }
+            }
+            style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("members-src")
+                ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(features))
         }
     }
 
@@ -344,4 +374,14 @@ fun MapLibreMapView(
     }
 
     AndroidView(factory = { mapView }, modifier = modifier)
+}
+
+private fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val r = 6371000.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = kotlin.math.sin(dLat / 2) * kotlin.math.sin(dLat / 2) +
+        kotlin.math.cos(Math.toRadians(lat1)) * kotlin.math.cos(Math.toRadians(lat2)) *
+        kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
+    return r * 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
 }

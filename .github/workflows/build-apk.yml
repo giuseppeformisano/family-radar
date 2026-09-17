@@ -102,16 +102,15 @@ jobs:
           echo "{\"versionCode\": $VERSION_CODE, \"versionName\": \"$VERSION_NAME\"}" > version.json
           echo "Version $VERSION_NAME ($VERSION_CODE)"
 
+      # Pubblicazione robusta: l'action aggiorna la release esistente e sovrascrive
+      # gli asset, senza il delete+create manuale che andava in race/404 sull'API.
       - name: Pubblica APK
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BUILD_TYPE: ${{ inputs.build_type || 'debug' }}
-        run: |
-          TAG="latest-${BUILD_TYPE}"
-          gh release delete "$TAG" --yes 2>/dev/null || true
-          gh release create "$TAG" \
-            --prerelease \
-            --title "Latest ${BUILD_TYPE} build" \
-            --notes "Commit: ${{ github.sha }}" \
-            app/build/outputs/apk/**/*.apk \
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-${{ inputs.build_type || 'debug' }}
+          prerelease: true
+          name: Latest ${{ inputs.build_type || 'debug' }} build
+          body: "Commit: ${{ github.sha }}"
+          files: |
+            app/build/outputs/apk/**/*.apk
             version.json

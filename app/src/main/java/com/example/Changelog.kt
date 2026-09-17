@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.21.1-beta"
+    const val VERSION = "0.22.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Colore mappa: in Impostazioni > Aspetto puoi tenere la mappa sempre chiara, sempre scura, o come il tema dell'app."
+        "🧪 Anteprima nuova mappa (beta): in Impostazioni > Aspetto trovi \"Prova nuova mappa\", una mappa vettoriale mondiale con negozi e punti d'interesse. E' solo una prova, non tocca ancora la mappa vera."
     )
 }

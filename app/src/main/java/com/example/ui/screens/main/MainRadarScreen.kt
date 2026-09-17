@@ -3753,6 +3753,14 @@ private fun SettingsPanel(
     val context = LocalContext.current
     val currentThemeMode by ThemePreferences.themeModeFlow.collectAsState()
     val currentMapColorMode by ThemePreferences.mapColorModeFlow.collectAsState()
+    var showMapPreview by remember { mutableStateOf(false) }
+    if (showMapPreview) {
+        com.example.ui.components.MapLibrePreviewDialog(
+            latitude = 41.9028,
+            longitude = 12.4964,
+            onDismiss = { showMapPreview = false }
+        )
+    }
     val currentLanguage by LanguagePreferences.languageFlow.collectAsState()
 
     var intervalUnit by remember {
@@ -4248,6 +4256,14 @@ private fun SettingsPanel(
                         )
                     }
                 }
+
+                Spacer(Modifier.height(Spacing.xs))
+                SettingsClickRow(
+                    title = "Prova nuova mappa (beta)",
+                    description = "Mappa vettoriale mondiale con negozi e POI (MapLibre + OpenFreeMap)",
+                    icon = Icons.Default.Map,
+                    onClick = { showMapPreview = true }
+                )
 
                 Spacer(Modifier.height(Spacing.md))
                 HairlineDivider()

@@ -298,22 +298,30 @@ fun OsmMapView(
                     val dtSec = (loc.timestamp - anchor.timestamp) / 1000.0
                     val dist = distanceMeters(anchor.latitude, anchor.longitude, loc.latitude, loc.longitude)
 
+                    // Velocita' implicita da questo scostamento. Se e' assurda (oltre
+                    // ~250 km/h su un intervallo breve) NON e' movimento vero: e' un
+                    // singolo fix GPS sballato (salto di 100m e ritorno). Va SCARTATO,
+                    // non mostrato: l'ancora resta dov'era e il pallino non si sposta.
+                    val rawSpeed = if (dtSec > 0.0) (dist / dtSec).toFloat() else Float.MAX_VALUE
+                    val isGlitch = rawSpeed > INTERP_MAX_SPEED_MS
+
                     // Soglia rumore: lo scostamento dall'ancora deve battere sia il minimo
                     // fisso sia il raggio d'errore del fix. Sotto, e' rumore del sensore.
                     val noiseFloor = max(INTERP_NOISE_FLOOR_M, loc.accuracy.toDouble() * INTERP_NOISE_ACCURACY_FACTOR)
-                    val isRealMove = dtSec > 0.3 && dist > noiseFloor
+                    val isRealMove = dtSec > 0.3 && dist > noiseFloor && !isGlitch
 
                     if (isRealMove) {
-                        val computedSpeed = (dist / dtSec).toFloat().coerceAtMost(INTERP_MAX_SPEED_MS)
                         val bearing = if (loc.bearing != 0.0f) loc.bearing.toDouble()
                             else bearingDegrees(anchor.latitude, anchor.longitude, loc.latitude, loc.longitude)
                         interpBasePos[loc.userId] = Pair(loc.latitude, loc.longitude)
                         interpStartTime[loc.userId] = now
-                        motionEstimate[loc.userId] = MotionEstimate(computedSpeed, bearing)
+                        motionEstimate[loc.userId] = MotionEstimate(rawSpeed, bearing)
                         // L'ancora avanza SOLO ora, sul movimento confermato.
                         previousFix[loc.userId] = loc
                     } else {
-                        // Rumore o fermo: pallino fermo, ancora e base restano dov'erano.
+                        // Rumore, fermo o fix sballato: pallino fermo, ancora e base
+                        // restano dov'erano. Un salto vero verra' confermato dai fix
+                        // successivi (l'intervallo cresce e la velocita' implicita rientra).
                         motionEstimate[loc.userId] = MotionEstimate(0f, motionEstimate[loc.userId]?.bearingDeg ?: 0.0)
                     }
                 }

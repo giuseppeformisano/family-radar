@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.17.5-beta"
+    const val VERSION = "0.17.6-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🐞 Basta pallini che ballano da fermi: quando il GPS e' scarso, l'app riconosce il rumore e tiene il pallino fermo invece di mandarlo a spasso.",
-        "✨ La soglia anti-rumore si adatta alla qualita' del segnale: movimento vero in auto fluido, rumore da fermo ignorato."
+        "🐞 Basta salti improvvisi di 100 metri: l'app riconosce i singoli punti GPS sballati e li scarta, invece di teletrasportare il pallino e riportarlo indietro.",
+        "🐞 Il punto sballato non viene piu' nemmeno salvato, quindi non lo vedono neanche gli altri del gruppo."
     )
 }

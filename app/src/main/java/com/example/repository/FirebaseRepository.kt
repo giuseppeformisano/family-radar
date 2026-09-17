@@ -2796,6 +2796,24 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
 
         val elapsed = System.currentTimeMillis() - lastSentAtMillis
+
+        // Scarto anti-salto: un fix che implica una velocità impossibile rispetto
+        // all'ultimo trasmesso (~oltre 250 km/h su un intervallo breve) è quasi
+        // certamente un singolo punto sballato del GPS. Non va scritto, altrimenti
+        // tutti vedono il pallino teletrasportarsi a 100m e tornare indietro. Un
+        // movimento vero e veloce viene comunque confermato dai fix successivi,
+        // quando l'intervallo cresce e la velocità implicita rientra nel plausibile.
+        val jumpDistance = GeofenceHelper.calculateDistanceMeters(
+            prevLat, prevLon, location.latitude, location.longitude
+        )
+        val jumpSeconds = elapsed / 1000.0
+        if (jumpSeconds in 0.1..12.0) {
+            val impliedSpeed = jumpDistance / jumpSeconds
+            if (impliedSpeed > MAX_PLAUSIBLE_SPEED_MS) {
+                return LocationGate(false, "salto spurio ${jumpDistance.toInt()}m in ${"%.1f".format(jumpSeconds)}s")
+            }
+        }
+
         val heartbeatThreshold = if (isAppInForeground) 60_000L else HEARTBEAT_INTERVAL_MS
         if (elapsed >= heartbeatThreshold) {
             // Heartbeat: anche da fermi bisogna rinfrescare stato online, orario
@@ -4895,6 +4913,13 @@ class FirebaseRepository private constructor(private val context: Context) {
 
         /** Oltre questa velocità si trasmette sempre: ~5,4 km/h, si è chiaramente in moto. */
         const val MOVING_SPEED_THRESHOLD_MS = 1.5f
+
+        /**
+         * Velocità implicita oltre la quale un fix è considerato un salto spurio del GPS
+         * (~250 km/h): 70 m/s. Un balzo di 100m in un paio di secondi da fermo supera
+         * questa soglia ed è quasi certamente rumore hardware, non movimento reale.
+         */
+        const val MAX_PLAUSIBLE_SPEED_MS = 70f
 
         /** Aggiornamento forzato anche da fermi, per tenere vivi stato online e batteria. */
         const val HEARTBEAT_INTERVAL_MS = 5 * 60_000L

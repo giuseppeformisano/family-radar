@@ -102,15 +102,24 @@ jobs:
           echo "{\"versionCode\": $VERSION_CODE, \"versionName\": \"$VERSION_NAME\"}" > version.json
           echo "Version $VERSION_NAME ($VERSION_CODE)"
 
-      # Pubblicazione robusta: l'action aggiorna la release esistente e sovrascrive
-      # gli asset, senza il delete+create manuale che andava in race/404 sull'API.
+      # Pubblicazione con ritentativi: l'upload dell'APK (grande, per via delle librerie
+      # native di MapLibre a 2 architetture) va in timeout in modo intermittente. Si
+      # assicura che la release esista, poi carica gli asset riprovando fino a 5 volte.
       - name: Pubblica APK
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest-${{ inputs.build_type || 'debug' }}
-          prerelease: true
-          name: Latest ${{ inputs.build_type || 'debug' }} build
-          body: "Commit: ${{ github.sha }}"
-          files: |
-            app/build/outputs/apk/**/*.apk
-            version.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_TYPE: ${{ inputs.build_type || 'debug' }}
+        run: |
+          set -e
+          TAG="latest-${BUILD_TYPE}"
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --prerelease --title "Latest ${BUILD_TYPE} build" --notes "Commit: ${{ github.sha }}"
+          APKS=$(find app/build/outputs/apk -name '*.apk')
+          ok=0
+          for i in 1 2 3 4 5; do
+            if gh release upload "$TAG" $APKS version.json --clobber; then
+              ok=1; echo "Upload riuscito al tentativo $i"; break
+            fi
+            echo "Tentativo $i fallito, riprovo tra 20s..."; sleep 20
+          done
+          if [ "$ok" != "1" ]; then echo "::error::upload asset fallito dopo 5 tentativi"; exit 1; fi

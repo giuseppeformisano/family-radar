@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.29.2-beta"
+    const val VERSION = "0.29.3-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🐞 Ripristinato il supporto ai telefoni piu' vecchi (32-bit).",
-        "🧪 Nuova mappa (beta): migrazione completa, anello del vocale incluso."
+        "🐞 Pubblicazione build con ritentativi automatici (l'upload dell'APK non si blocca piu' per un timeout).",
+        "🧪 Nuova mappa (beta): migrazione completa; supporto anche ai telefoni vecchi."
     )
 }

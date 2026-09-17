@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box

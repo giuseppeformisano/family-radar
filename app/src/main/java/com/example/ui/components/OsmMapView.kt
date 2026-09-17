@@ -100,7 +100,7 @@ private const val INTERP_NOISE_ACCURACY_FACTOR = 1.5
 
 // Scia: linea dietro il pallino con gli ultimi punti percorsi. E' locale — ogni
 // telefono la costruisce con le posizioni che riceve, senza salvare nulla in piu'.
-private const val TRAIL_MAX_AGE_MS = 3 * 60_000L   // tiene gli ultimi ~3 minuti
+private const val TRAIL_MAX_AGE_MS = 90_000L       // tiene gli ultimi 90 secondi
 private const val TRAIL_MAX_POINTS = 240           // tetto di sicurezza
 private const val TRAIL_MIN_POINTS = 2             // sotto 2 punti non c'e' linea
 // Cappa la velocita' stimata: oltre ~250 km/h e' quasi certamente un salto spurio

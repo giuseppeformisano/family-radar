@@ -258,15 +258,30 @@ class FirebaseRepository private constructor(private val context: Context) {
     // Alta precisione in movimento: quando attiva, i fix GPS arrivano ogni 1s
     // invece dell'intervallo scelto dall'utente. Le scritture su Firestore restano
     // filtrate da evaluateLocationGate — quindi la quota non esplode.
+    // Interruttore utente: "consenti l'alta precisione quando mi muovo". Acceso, l'app
+    // passa da sola all'1s appena rileva un movimento (auto/bici/corsa) e torna alla
+    // cadenza normale quando ti fermi. Non e' piu' un "1s sempre acceso".
     private val _isHighPrecisionMovement = MutableStateFlow(
         settingsPrefs.getBoolean("high_precision_movement", false)
     )
     val isHighPrecisionMovement = _isHighPrecisionMovement.asStateFlow()
 
+    // Stato reale del momento: true solo mentre un movimento e' in corso E l'interruttore
+    // e' acceso. E' questo — non l'interruttore — a decidere la cadenza 1s e il bypass del filtro.
+    private var precisionActiveNow = false
+
     fun setHighPrecisionMovement(enabled: Boolean) {
         if (_isHighPrecisionMovement.value == enabled) return
         _isHighPrecisionMovement.value = enabled
         settingsPrefs.edit().putBoolean("high_precision_movement", enabled).apply()
+        precisionActiveNow = if (!enabled) {
+            // Spegnendo l'interruttore si spegne anche un eventuale boost in corso.
+            false
+        } else {
+            // Accendendolo mentre si e' gia' in movimento, si parte subito in alta precisione.
+            val kind = _currentActivityKind
+            kind == ActivityKind.VEHICLE || kind == ActivityKind.BICYCLE || kind == ActivityKind.RUNNING
+        }
         applyEffectiveTrackingInterval()
     }
 
@@ -2826,9 +2841,9 @@ class FirebaseRepository private constructor(private val context: Context) {
         //     return LocationGate(false, "trip throttle: ultimo invio ${elapsed / 1000}s fa")
         // }
 
-        // Con l'alta precisione in movimento l'utente vuole ogni fix su Firestore:
+        // Con l'alta precisione in movimento attiva l'utente vuole ogni fix su Firestore:
         // il filtro displacement/speed non ha senso a 1s di intervallo.
-        if (_isHighPrecisionMovement.value) {
+        if (precisionActiveNow) {
             return LocationGate(true, "alta precisione")
         }
 
@@ -3890,7 +3905,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         // [TRIP TRACKING DISABILITATO] Branche viaggio commentate — ripristinare se si riabilita.
         // _activeTrip.value != null -> TRIP_TRACKING_INTERVAL_MS
         // _isAutoTripEnabled.value -> minOf(_trackingFrequencySeconds.value, AUTO_TRIP_MAX_IDLE_SEC) * 1000L
-        _isHighPrecisionMovement.value -> HIGH_PRECISION_INTERVAL_MS
+        precisionActiveNow -> HIGH_PRECISION_INTERVAL_MS
         else -> _trackingFrequencySeconds.value * 1000L
     }
 
@@ -4565,6 +4580,17 @@ class FirebaseRepository private constructor(private val context: Context) {
                 kind == ActivityKind.RUNNING || kind == ActivityKind.WALKING
             ) {
                 _activeTrip.update { it?.copy(activityKind = kind) }
+            }
+
+            // Alta precisione automatica: se l'utente l'ha consentita, mentre si e' in
+            // movimento (auto/bici/corsa) l'app passa all'1s; da fermo torna normale.
+            if (_isHighPrecisionMovement.value) {
+                val travel = kind == ActivityKind.VEHICLE || kind == ActivityKind.BICYCLE ||
+                    kind == ActivityKind.RUNNING
+                val wasActive = precisionActiveNow
+                if (travel) precisionActiveNow = true
+                else if (kind == ActivityKind.STILL) precisionActiveNow = false
+                if (precisionActiveNow != wasActive) applyEffectiveTrackingInterval()
             }
         }
 

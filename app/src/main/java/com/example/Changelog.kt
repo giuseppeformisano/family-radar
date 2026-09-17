@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.17.6-beta"
+    const val VERSION = "0.18.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🐞 Basta salti improvvisi di 100 metri: l'app riconosce i singoli punti GPS sballati e li scarta, invece di teletrasportare il pallino e riportarlo indietro.",
-        "🐞 Il punto sballato non viene piu' nemmeno salvato, quindi non lo vedono neanche gli altri del gruppo."
+        "✨ Alta precisione automatica: con l'interruttore acceso, l'app rileva da sola quando ti muovi e aggiorna la posizione ogni secondo, poi torna normale da fermo.",
+        "✨ Non serve piu' accendere e spegnere l'alta precisione a mano ogni volta."
     )
 }

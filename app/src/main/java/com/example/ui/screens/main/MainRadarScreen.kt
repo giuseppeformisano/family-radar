@@ -3922,7 +3922,7 @@ private fun SettingsPanel(
                 )
                 SettingsToggleRow(
                     title = "Alta precisione in movimento",
-                    description = "Fix GPS ogni secondo quando ti sposti — più fluido, consuma più batteria",
+                    description = "L'app rileva da sola quando ti muovi e aggiorna la posizione ogni secondo — più fluido, consuma più batteria. Da fermo torna normale.",
                     icon = Icons.Default.Speed,
                     checked = isHighPrecisionMovement,
                     onCheckedChange = onToggleHighPrecisionMovement,

@@ -1479,7 +1479,7 @@ private fun activityGlyphFor(activityType: String): String? = when (activityType
     else -> null
 }
 
-private fun createSnapshotMarkerDrawable(
+internal fun createSnapshotMarkerDrawable(
     ctx: Context,
     cluster: PlaceSnapshotCluster
 ): Drawable {
@@ -1565,7 +1565,7 @@ private fun createSnapshotMarkerDrawable(
     return resultDrawable
 }
 
-private fun createPlaceMarkerDrawable(ctx: Context, place: SavedPlace): Drawable {
+internal fun createPlaceMarkerDrawable(ctx: Context, place: SavedPlace): Drawable {
     val cacheKey = "place_${place.id}_${place.category.name}"
     val cached = markerDrawableCache.get(cacheKey)
     if (cached != null) return cached

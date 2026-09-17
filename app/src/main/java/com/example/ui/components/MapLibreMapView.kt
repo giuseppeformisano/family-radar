@@ -26,19 +26,29 @@ fun MapLibreMapView(
     locations: List<UserLocation>,
     currentUserId: String,
     dark: Boolean,
+    places: List<com.example.model.SavedPlace> = emptyList(),
+    snapshots: List<com.example.model.PlaceSnapshot> = emptyList(),
     targetFocusPoint: Pair<Double, Double>? = null,
     focusToken: Int = 0,
     followedUserId: String? = null,
     onMemberSelected: (UserLocation) -> Unit = {},
+    onPlaceSelected: (com.example.model.SavedPlace) -> Unit = {},
+    onSnapshotClusterSelected: (com.example.model.PlaceSnapshotCluster) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    // Il click listener viene registrato una volta sola: legge le posizioni correnti
-    // tramite questo stato aggiornato invece di catturare la lista al momento.
+    // Cluster snapshot (stessa logica della vecchia mappa).
+    val snapshotClusters = androidx.compose.runtime.remember(snapshots) { clusterSnapshots(snapshots) }
+    // Il click listener viene registrato una volta sola: legge i dati correnti tramite
+    // questi stati aggiornati invece di catturarli al momento.
     val currentLocations by androidx.compose.runtime.rememberUpdatedState(locations)
+    val currentPlaces by androidx.compose.runtime.rememberUpdatedState(places)
+    val currentClusters by androidx.compose.runtime.rememberUpdatedState(snapshotClusters)
     val currentFollowed by androidx.compose.runtime.rememberUpdatedState(followedUserId)
     val onSelected by androidx.compose.runtime.rememberUpdatedState(onMemberSelected)
+    val onPlaceSel by androidx.compose.runtime.rememberUpdatedState(onPlaceSelected)
+    val onClusterSel by androidx.compose.runtime.rememberUpdatedState(onSnapshotClusterSelected)
 
     var mapRef by remember { mutableStateOf<org.maplibre.android.maps.MapLibreMap?>(null) }
     var styleReady by remember { mutableStateOf(false) }
@@ -71,6 +81,42 @@ fun MapLibreMapView(
                                 org.maplibre.android.style.layers.PropertyFactory.lineJoin(org.maplibre.android.style.layers.Property.LINE_JOIN_ROUND)
                             )
                     )
+                    // Anello del raggio dei luoghi (geofence), sotto tutto.
+                    style.addSource(org.maplibre.android.style.sources.GeoJsonSource("place-radius-src"))
+                    style.addLayer(
+                        org.maplibre.android.style.layers.LineLayer("place-radius-layer", "place-radius-src")
+                            .withProperties(
+                                org.maplibre.android.style.layers.PropertyFactory.lineColor(android.graphics.Color.argb(140, 99, 102, 241)),
+                                org.maplibre.android.style.layers.PropertyFactory.lineWidth(2f)
+                            )
+                    )
+
+                    // Luoghi.
+                    style.addSource(org.maplibre.android.style.sources.GeoJsonSource("places-src"))
+                    style.addLayer(
+                        org.maplibre.android.style.layers.SymbolLayer("places-layer", "places-src")
+                            .withProperties(
+                                org.maplibre.android.style.layers.PropertyFactory.iconImage(
+                                    org.maplibre.android.style.expressions.Expression.get("icon-id")
+                                ),
+                                org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap(true),
+                                org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement(true)
+                            )
+                    )
+
+                    // Snapshot (cluster).
+                    style.addSource(org.maplibre.android.style.sources.GeoJsonSource("snapshots-src"))
+                    style.addLayer(
+                        org.maplibre.android.style.layers.SymbolLayer("snapshots-layer", "snapshots-src")
+                            .withProperties(
+                                org.maplibre.android.style.layers.PropertyFactory.iconImage(
+                                    org.maplibre.android.style.expressions.Expression.get("icon-id")
+                                ),
+                                org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap(true),
+                                org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement(true)
+                            )
+                    )
+
                     style.addSource(org.maplibre.android.style.sources.GeoJsonSource("members-src"))
                     // SymbolLayer: ogni membro usa la propria icona (nome + foto + stato),
                     // generata come immagine e registrata nello style con id "icon-id".
@@ -197,6 +243,62 @@ fun MapLibreMapView(
         }
     }
 
+    // Luoghi + snapshot: icone e anelli del raggio, ricostruiti quando cambiano.
+    LaunchedEffect(places, snapshotClusters, styleReady) {
+        if (!styleReady) return@LaunchedEffect
+        val map = mapRef ?: return@LaunchedEffect
+        val style = map.style ?: return@LaunchedEffect
+
+        // Luoghi: icona per luogo.
+        val placeFeatures = places.filter { it.latitude != 0.0 || it.longitude != 0.0 }.map { p ->
+            val iconId = "place-${p.id}"
+            runCatching {
+                val bmp = (createPlaceMarkerDrawable(context, p) as android.graphics.drawable.BitmapDrawable).bitmap
+                style.addImage(iconId, bmp)
+            }
+            org.maplibre.geojson.Feature.fromGeometry(
+                org.maplibre.geojson.Point.fromLngLat(p.longitude, p.latitude)
+            ).apply {
+                addStringProperty("icon-id", iconId)
+                addStringProperty("placeId", p.id)
+            }
+        }
+        style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("places-src")
+            ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(placeFeatures))
+
+        // Anelli del raggio (solo geofence attivi): poligono-cerchio in coordinate.
+        val ringFeatures = places.filter { it.geofenceEnabled && it.radiusMeters > 0 }.map { p ->
+            val ring = ArrayList<org.maplibre.geojson.Point>(37)
+            val cosLat = kotlin.math.cos(Math.toRadians(p.latitude))
+            for (i in 0..36) {
+                val a = Math.toRadians((i * 10).toDouble())
+                val dLat = p.radiusMeters * kotlin.math.cos(a) / 111320.0
+                val dLon = p.radiusMeters * kotlin.math.sin(a) / (111320.0 * cosLat)
+                ring.add(org.maplibre.geojson.Point.fromLngLat(p.longitude + dLon, p.latitude + dLat))
+            }
+            org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.LineString.fromLngLats(ring))
+        }
+        style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("place-radius-src")
+            ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(ringFeatures))
+
+        // Snapshot: icona per cluster.
+        val snapFeatures = snapshotClusters.map { c ->
+            val iconId = "snap-${c.id}"
+            runCatching {
+                val bmp = (createSnapshotMarkerDrawable(context, c) as android.graphics.drawable.BitmapDrawable).bitmap
+                style.addImage(iconId, bmp)
+            }
+            org.maplibre.geojson.Feature.fromGeometry(
+                org.maplibre.geojson.Point.fromLngLat(c.centerLongitude, c.centerLatitude)
+            ).apply {
+                addStringProperty("icon-id", iconId)
+                addStringProperty("clusterId", c.id)
+            }
+        }
+        style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("snapshots-src")
+            ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(snapFeatures))
+    }
+
     // Tap sul pallino: registrato una volta quando lo style e' pronto. Cerca le feature
     // del layer membri sotto il punto toccato e apre il dettaglio del membro.
     LaunchedEffect(styleReady) {
@@ -204,14 +306,26 @@ fun MapLibreMapView(
         val map = mapRef ?: return@LaunchedEffect
         map.addOnMapClickListener { latLng ->
             val screen = map.projection.toScreenLocation(latLng)
-            val hits = map.queryRenderedFeatures(screen, "members-layer")
-            val uid = hits.firstOrNull()?.getStringProperty("userId")
-            if (uid != null) {
-                currentLocations.find { it.userId == uid }?.let { onSelected(it) }
-                true
-            } else {
-                false
+            // Ordine di priorita': membri, poi snapshot, poi luoghi.
+            val member = map.queryRenderedFeatures(screen, "members-layer")
+                .firstOrNull()?.getStringProperty("userId")
+            if (member != null) {
+                currentLocations.find { it.userId == member }?.let { onSelected(it) }
+                return@addOnMapClickListener true
             }
+            val cluster = map.queryRenderedFeatures(screen, "snapshots-layer")
+                .firstOrNull()?.getStringProperty("clusterId")
+            if (cluster != null) {
+                currentClusters.find { it.id == cluster }?.let { onClusterSel(it) }
+                return@addOnMapClickListener true
+            }
+            val place = map.queryRenderedFeatures(screen, "places-layer")
+                .firstOrNull()?.getStringProperty("placeId")
+            if (place != null) {
+                currentPlaces.find { it.id == place }?.let { onPlaceSel(it) }
+                return@addOnMapClickListener true
+            }
+            false
         }
     }
 

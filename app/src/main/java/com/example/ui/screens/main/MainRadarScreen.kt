@@ -676,9 +676,13 @@ fun MainRadarScreen(
             locations = locations,
             currentUserId = currentUserId,
             dark = RadarTheme.palette.isDark,
+            places = places,
+            snapshots = snapshots,
             targetFocusPoint = targetMapFocus,
             focusToken = focusToken,
             followedUserId = followedUserId,
+            onPlaceSelected = { selectedPlaceForSheet = it },
+            onSnapshotClusterSelected = { selectedSnapshotClusterForGallery = it },
             onMemberSelected = { loc ->
                 val ping = repository.latestVoicePing.value
                 if (ping != null && ping.userId == loc.userId &&

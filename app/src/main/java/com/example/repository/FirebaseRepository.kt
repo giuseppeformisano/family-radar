@@ -2842,7 +2842,7 @@ class FirebaseRepository private constructor(private val context: Context) {
             prevLat, prevLon, location.latitude, location.longitude
         )
         val jumpSeconds = elapsed / 1000.0
-        if (jumpSeconds in 0.1..12.0) {
+        if (jumpSeconds in 0.1..30.0) {
             val impliedSpeed = jumpDistance / jumpSeconds
             if (impliedSpeed > MAX_PLAUSIBLE_SPEED_MS) {
                 return LocationGate(false, "salto spurio ${jumpDistance.toInt()}m in ${"%.1f".format(jumpSeconds)}s")
@@ -2867,7 +2867,9 @@ class FirebaseRepository private constructor(private val context: Context) {
             return LocationGate(true, "alta precisione")
         }
 
-        if (location.speed > MOVING_SPEED_THRESHOLD_MS) {
+        // Solo velocita' PLAUSIBILI contano come "in movimento": un valore assurdo
+        // (es. 100+ m/s da uno scossone) non deve far scattare la scrittura.
+        if (location.speed in MOVING_SPEED_THRESHOLD_MS..MAX_PLAUSIBLE_SPEED_MS) {
             return LocationGate(true, "in movimento (${"%.1f".format(location.speed)} m/s)")
         }
 
@@ -2957,11 +2959,15 @@ class FirebaseRepository private constructor(private val context: Context) {
 
         // Compute current place
         val matchedPlace = placeForLabel
+        // Velocita' implausibile (>~250 km/h) = sensore che sbanda: si azzera, cosi'
+        // nessuno vede numeri assurdi tipo 392 km/h da un semplice scossone.
+        val safeSpeed = if (location.speed < 0f || location.speed > MAX_PLAUSIBLE_SPEED_MS) 0f else location.speed
         val enrichedLocation = location.copy(
             userId = user.uid,
             userName = user.displayName,
             photoBase64 = user.photoBase64 ?: location.photoBase64,
-            currentPlaceName = matchedPlace?.name
+            currentPlaceName = matchedPlace?.name,
+            speed = safeSpeed
         )
 
         // Update local list

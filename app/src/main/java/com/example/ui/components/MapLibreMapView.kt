@@ -91,9 +91,7 @@ fun MapLibreMapView(
     val styleUrl = if (dark) "https://tiles.openfreemap.org/styles/dark"
     else "https://tiles.openfreemap.org/styles/bright"
 
-    // Legato a `dark`: cambiando il colore mappa la MapView si ricrea con lo style
-    // giusto (setStyle a caldo cancellerebbe sorgenti/layer; ricrearla e' piu' pulito).
-    val mapView = remember(dark) {
+    val mapView = remember {
         org.maplibre.android.MapLibre.getInstance(context)
         // textureMode(true): senza, la mappa usa una SurfaceView che disegna in un
         // layer separato SOPRA i controlli Compose, nascondendo i pulsanti sovrapposti.
@@ -109,80 +107,27 @@ fun MapLibreMapView(
                 map.uiSettings.isAttributionEnabled = false
                 map.uiSettings.isCompassEnabled = false
                 map.setStyle(styleUrl) { style ->
-                    // Sorgenti vuote + layer: verranno riempite in tempo reale.
-                    style.addSource(org.maplibre.android.style.sources.GeoJsonSource("trail-src"))
-                    style.addLayer(
-                        org.maplibre.android.style.layers.LineLayer("trail-layer", "trail-src")
-                            .withProperties(
-                                org.maplibre.android.style.layers.PropertyFactory.lineColor(android.graphics.Color.rgb(79, 70, 229)),
-                                org.maplibre.android.style.layers.PropertyFactory.lineWidth(4f),
-                                org.maplibre.android.style.layers.PropertyFactory.lineOpacity(0.7f),
-                                org.maplibre.android.style.layers.PropertyFactory.lineCap(org.maplibre.android.style.layers.Property.LINE_CAP_ROUND),
-                                org.maplibre.android.style.layers.PropertyFactory.lineJoin(org.maplibre.android.style.layers.Property.LINE_JOIN_ROUND)
-                            )
-                    )
-                    // Anello del raggio dei luoghi (geofence), sotto tutto.
-                    style.addSource(org.maplibre.android.style.sources.GeoJsonSource("place-radius-src"))
-                    style.addLayer(
-                        org.maplibre.android.style.layers.LineLayer("place-radius-layer", "place-radius-src")
-                            .withProperties(
-                                org.maplibre.android.style.layers.PropertyFactory.lineColor(android.graphics.Color.argb(140, 99, 102, 241)),
-                                org.maplibre.android.style.layers.PropertyFactory.lineWidth(2f)
-                            )
-                    )
-
-                    // Luoghi.
-                    style.addSource(org.maplibre.android.style.sources.GeoJsonSource("places-src"))
-                    style.addLayer(
-                        org.maplibre.android.style.layers.SymbolLayer("places-layer", "places-src")
-                            .withProperties(
-                                org.maplibre.android.style.layers.PropertyFactory.iconImage(
-                                    org.maplibre.android.style.expressions.Expression.get("icon-id")
-                                ),
-                                org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap(true),
-                                org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement(true)
-                            )
-                    )
-
-                    // Snapshot (cluster).
-                    style.addSource(org.maplibre.android.style.sources.GeoJsonSource("snapshots-src"))
-                    style.addLayer(
-                        org.maplibre.android.style.layers.SymbolLayer("snapshots-layer", "snapshots-src")
-                            .withProperties(
-                                org.maplibre.android.style.layers.PropertyFactory.iconImage(
-                                    org.maplibre.android.style.expressions.Expression.get("icon-id")
-                                ),
-                                org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap(true),
-                                org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement(true)
-                            )
-                    )
-
-                    style.addSource(org.maplibre.android.style.sources.GeoJsonSource("members-src"))
-                    // SymbolLayer: ogni membro usa la propria icona (nome + foto + stato),
-                    // generata come immagine e registrata nello style con id "icon-id".
-                    style.addLayer(
-                        org.maplibre.android.style.layers.SymbolLayer("members-layer", "members-src")
-                            .withProperties(
-                                org.maplibre.android.style.layers.PropertyFactory.iconImage(
-                                    org.maplibre.android.style.expressions.Expression.get("icon-id")
-                                ),
-                                org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap(true),
-                                org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement(true)
-                            )
-                    )
+                    addRadarLayers(style)
                     styleReady = true
                 }
             }
         }
     }
 
-    // Quando la MapView si ricrea (cambio colore), azzera lo stato di setup.
-    LaunchedEffect(mapView) {
+    // Cambio colore mappa: ricarica lo style sulla mappa esistente e ri-aggiunge i
+    // layer. Salta la prima esecuzione (lo style e' gia' caricato in getMapAsync).
+    var darkInitialized by remember { mutableStateOf(false) }
+    LaunchedEffect(dark) {
+        if (!darkInitialized) { darkInitialized = true; return@LaunchedEffect }
+        val map = mapRef ?: return@LaunchedEffect
         styleReady = false
-        centeredOnce = false
+        map.setStyle(styleUrl) { style ->
+            addRadarLayers(style)
+            styleReady = true
+        }
     }
 
-    DisposableEffect(mapView, lifecycleOwner) {
+    DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> mapView.onStart()
@@ -537,6 +482,43 @@ private fun CtrlButton(
             Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
         }
     }
+}
+
+private fun addRadarLayers(style: org.maplibre.android.maps.Style) {
+    fun symbol(id: String, srcId: String) = org.maplibre.android.style.layers.SymbolLayer(id, srcId)
+        .withProperties(
+            org.maplibre.android.style.layers.PropertyFactory.iconImage(
+                org.maplibre.android.style.expressions.Expression.get("icon-id")
+            ),
+            org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap(true),
+            org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement(true)
+        )
+
+    style.addSource(org.maplibre.android.style.sources.GeoJsonSource("trail-src"))
+    style.addLayer(
+        org.maplibre.android.style.layers.LineLayer("trail-layer", "trail-src")
+            .withProperties(
+                org.maplibre.android.style.layers.PropertyFactory.lineColor(android.graphics.Color.rgb(79, 70, 229)),
+                org.maplibre.android.style.layers.PropertyFactory.lineWidth(4f),
+                org.maplibre.android.style.layers.PropertyFactory.lineOpacity(0.7f),
+                org.maplibre.android.style.layers.PropertyFactory.lineCap(org.maplibre.android.style.layers.Property.LINE_CAP_ROUND),
+                org.maplibre.android.style.layers.PropertyFactory.lineJoin(org.maplibre.android.style.layers.Property.LINE_JOIN_ROUND)
+            )
+    )
+    style.addSource(org.maplibre.android.style.sources.GeoJsonSource("place-radius-src"))
+    style.addLayer(
+        org.maplibre.android.style.layers.LineLayer("place-radius-layer", "place-radius-src")
+            .withProperties(
+                org.maplibre.android.style.layers.PropertyFactory.lineColor(android.graphics.Color.argb(140, 99, 102, 241)),
+                org.maplibre.android.style.layers.PropertyFactory.lineWidth(2f)
+            )
+    )
+    style.addSource(org.maplibre.android.style.sources.GeoJsonSource("places-src"))
+    style.addLayer(symbol("places-layer", "places-src"))
+    style.addSource(org.maplibre.android.style.sources.GeoJsonSource("snapshots-src"))
+    style.addLayer(symbol("snapshots-layer", "snapshots-src"))
+    style.addSource(org.maplibre.android.style.sources.GeoJsonSource("members-src"))
+    style.addLayer(symbol("members-layer", "members-src"))
 }
 
 private fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {

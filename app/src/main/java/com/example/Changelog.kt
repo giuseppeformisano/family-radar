@@ -10,10 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.30.1-beta"
+    const val VERSION = "0.31.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧪 Nuova mappa (beta): tolti il logo/scritta MapLibre e la bussola in alto che si sovrapponeva alle altre scritte."
+        "🐞 Nuova mappa (beta): il passaggio a scuro non blocca piu' la mappa e la mostra davvero scura.",
+        "🐞 Basta velocita' assurde (tipo 392 km/h da uno scossone): i valori impossibili del sensore vengono ignorati."
     )
 }

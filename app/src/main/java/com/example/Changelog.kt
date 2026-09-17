@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.28.0-beta"
+    const val VERSION = "0.29.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧪 Nuova mappa (beta): tornati i pulsanti zoom, inquadra-gruppo e i filtri (persone/snapshot/luoghi).",
-        "🧪 Nuova mappa (beta): ora ha anche la versione scura, che segue il tema dell'app."
+        "🧪 Nuova mappa (beta): aggiunto l'anello del vocale (alone pulsante su chi parla). La migrazione della mappa e' ora completa."
     )
 }

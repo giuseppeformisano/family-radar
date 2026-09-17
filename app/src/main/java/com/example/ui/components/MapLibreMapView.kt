@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -54,6 +55,7 @@ fun MapLibreMapView(
     targetFocusPoint: Pair<Double, Double>? = null,
     focusToken: Int = 0,
     followedUserId: String? = null,
+    speakingUserId: String? = null,
     onMemberSelected: (UserLocation) -> Unit = {},
     onPlaceSelected: (com.example.model.SavedPlace) -> Unit = {},
     onSnapshotClusterSelected: (com.example.model.PlaceSnapshotCluster) -> Unit = {},
@@ -72,6 +74,9 @@ fun MapLibreMapView(
     val onSelected by androidx.compose.runtime.rememberUpdatedState(onMemberSelected)
     val onPlaceSel by androidx.compose.runtime.rememberUpdatedState(onPlaceSelected)
     val onClusterSel by androidx.compose.runtime.rememberUpdatedState(onSnapshotClusterSelected)
+
+    val currentSpeaking by androidx.compose.runtime.rememberUpdatedState(speakingUserId)
+    var speakingOffset by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
 
     var showMembers by remember { mutableStateOf(true) }
     var showSnapshots by remember { mutableStateOf(true) }
@@ -297,6 +302,15 @@ fun MapLibreMapView(
             }
             style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("members-src")
                 ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(features))
+
+            // Posizione sullo schermo di chi sta mandando un vocale, per l'anello pulsante.
+            val sp = currentSpeaking
+            speakingOffset = if (sp != null) {
+                memberDisplayed[sp]?.let { (lat, lon) ->
+                    val p = mapRef?.projection?.toScreenLocation(org.maplibre.android.geometry.LatLng(lat, lon))
+                    if (p != null) androidx.compose.ui.geometry.Offset(p.x, p.y) else null
+                }
+            } else null
         }
     }
 
@@ -421,6 +435,35 @@ fun MapLibreMapView(
 
     Box(modifier = modifier.fillMaxSize()) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+
+        // Anello del vocale: alone pulsante sulla posizione di chi sta parlando.
+        val so = speakingOffset
+        if (so != null) {
+            val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "voice")
+            val scale by pulse.animateFloat(
+                initialValue = 0.6f, targetValue = 1.6f,
+                animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                    androidx.compose.animation.core.tween(1100), androidx.compose.animation.core.RepeatMode.Restart
+                ), label = "voiceScale"
+            )
+            val alpha by pulse.animateFloat(
+                initialValue = 0.5f, targetValue = 0f,
+                animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                    androidx.compose.animation.core.tween(1100), androidx.compose.animation.core.RepeatMode.Restart
+                ), label = "voiceAlpha"
+            )
+            androidx.compose.foundation.Canvas(
+                modifier = Modifier
+                    .offset { androidx.compose.ui.unit.IntOffset(so.x.toInt(), so.y.toInt()) }
+                    .size(1.dp)
+            ) {
+                drawCircle(
+                    color = Color(0xFFDC2626).copy(alpha = alpha),
+                    radius = 60f * scale,
+                    center = androidx.compose.ui.geometry.Offset(0f, 0f)
+                )
+            }
+        }
 
         // Colonna controlli a destra: toggle layer + fit gruppo + zoom.
         Column(

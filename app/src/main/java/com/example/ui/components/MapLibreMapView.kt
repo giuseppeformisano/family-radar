@@ -1,5 +1,25 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -7,8 +27,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -50,13 +73,17 @@ fun MapLibreMapView(
     val onPlaceSel by androidx.compose.runtime.rememberUpdatedState(onPlaceSelected)
     val onClusterSel by androidx.compose.runtime.rememberUpdatedState(onSnapshotClusterSelected)
 
+    var showMembers by remember { mutableStateOf(true) }
+    var showSnapshots by remember { mutableStateOf(true) }
+    var showPlaces by remember { mutableStateOf(true) }
+    var layerMenuOpen by remember { mutableStateOf(false) }
+
     var mapRef by remember { mutableStateOf<org.maplibre.android.maps.MapLibreMap?>(null) }
     var styleReady by remember { mutableStateOf(false) }
     var centeredOnce by remember { mutableStateOf(false) }
 
-    // Per ora sempre "bright" (POI ricchi). Lo style scuro dedicato arrivera' dopo,
-    // una volta verificato quale style scuro offre OpenFreeMap.
-    val styleUrl = "https://tiles.openfreemap.org/styles/bright"
+    val styleUrl = if (dark) "https://tiles.openfreemap.org/styles/dark"
+    else "https://tiles.openfreemap.org/styles/bright"
 
     val mapView = remember {
         org.maplibre.android.MapLibre.getInstance(context)
@@ -373,7 +400,86 @@ fun MapLibreMapView(
         )
     }
 
-    AndroidView(factory = { mapView }, modifier = modifier)
+    // Mostra/nascondi i layer secondo i toggle.
+    LaunchedEffect(showMembers, showSnapshots, showPlaces, styleReady) {
+        if (!styleReady) return@LaunchedEffect
+        val style = mapRef?.style ?: return@LaunchedEffect
+        fun vis(id: String, on: Boolean) {
+            style.getLayer(id)?.setProperties(
+                org.maplibre.android.style.layers.PropertyFactory.visibility(
+                    if (on) org.maplibre.android.style.layers.Property.VISIBLE
+                    else org.maplibre.android.style.layers.Property.NONE
+                )
+            )
+        }
+        vis("members-layer", showMembers)
+        vis("trail-layer", showMembers)
+        vis("snapshots-layer", showSnapshots)
+        vis("places-layer", showPlaces)
+        vis("place-radius-layer", showPlaces)
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+
+        // Colonna controlli a destra: toggle layer + fit gruppo + zoom.
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 12.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (layerMenuOpen) {
+                    CtrlButton(Icons.Default.People, if (showMembers) Color(0xFF6366F1) else Color(0xCC18181B)) { showMembers = !showMembers }
+                    CtrlButton(Icons.Default.PhotoCamera, if (showSnapshots) Color(0xFFEA580C) else Color(0xCC18181B)) { showSnapshots = !showSnapshots }
+                    CtrlButton(Icons.Default.Place, if (showPlaces) Color(0xFF10B981) else Color(0xCC18181B)) { showPlaces = !showPlaces }
+                }
+                CtrlButton(Icons.Default.Layers, if (layerMenuOpen) Color(0xFF6366F1) else Color(0xCC18181B)) { layerMenuOpen = !layerMenuOpen }
+            }
+
+            CtrlButton(Icons.Default.Group, Color(0xCC18181B)) {
+                val map = mapRef ?: return@CtrlButton
+                val pts = currentLocations.filter { it.latitude != 0.0 || it.longitude != 0.0 }
+                    .map { org.maplibre.android.geometry.LatLng(it.latitude, it.longitude) }
+                if (pts.size == 1) {
+                    map.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(pts[0], 16.0))
+                } else if (pts.size > 1) {
+                    val b = org.maplibre.android.geometry.LatLngBounds.Builder().includes(pts).build()
+                    map.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.newLatLngBounds(b, 120))
+                }
+            }
+            CtrlButton(Icons.Default.Add, Color(0xCC18181B)) {
+                mapRef?.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.zoomIn())
+            }
+            CtrlButton(Icons.Default.Remove, Color(0xCC18181B)) {
+                mapRef?.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.zoomOut())
+            }
+        }
+    }
+}
+
+@Composable
+private fun CtrlButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    color: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = color,
+        border = BorderStroke(1.dp, Color(0x1F71717A)),
+        modifier = Modifier.size(48.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+        }
+    }
 }
 
 private fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {

@@ -669,7 +669,16 @@ fun MainRadarScreen(
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val sheetContentHeight = screenHeight * 0.86f
 
+    val useNewMap by ThemePreferences.useNewMapFlow.collectAsState()
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+      if (useNewMap) {
+        com.example.ui.components.MapLibreMapView(
+            locations = locations,
+            currentUserId = currentUserId,
+            dark = RadarTheme.palette.isDark,
+            modifier = Modifier.fillMaxSize()
+        )
+      } else {
         OsmMapView(
             locations = locations,
             places = places,
@@ -710,6 +719,7 @@ fun MainRadarScreen(
             onMapCenterChanged = { center -> currentMapCenter = center },
             modifier = Modifier.fillMaxSize()
         )
+      }
 
         // Sfumatura in alto
         Box(
@@ -3755,6 +3765,7 @@ private fun SettingsPanel(
     val context = LocalContext.current
     val currentThemeMode by ThemePreferences.themeModeFlow.collectAsState()
     val currentMapColorMode by ThemePreferences.mapColorModeFlow.collectAsState()
+    val currentUseNewMap by ThemePreferences.useNewMapFlow.collectAsState()
     var showMapPreview by remember { mutableStateOf(false) }
     if (showMapPreview) {
         val myLoc = memberLocations.find { it.userId == currentUserId }
@@ -4268,6 +4279,13 @@ private fun SettingsPanel(
                     description = "Mappa vettoriale mondiale con negozi e POI (MapLibre + OpenFreeMap)",
                     icon = Icons.Default.Map,
                     onClick = { showMapPreview = true }
+                )
+                SettingsToggleRow(
+                    title = "Usa nuova mappa (beta)",
+                    description = "Sostituisce la mappa attuale con quella nuova. In migrazione: per ora mostra pallini e scia, mancano ancora luoghi, snapshot e 'segui'.",
+                    icon = Icons.Default.Map,
+                    checked = currentUseNewMap,
+                    onCheckedChange = { ThemePreferences.setUseNewMap(context, it) }
                 )
 
                 Spacer(Modifier.height(Spacing.md))

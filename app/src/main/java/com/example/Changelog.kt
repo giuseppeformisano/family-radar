@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.23.0-beta"
+    const val VERSION = "0.24.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧪 Anteprima nuova mappa: la scia ora si aggancia alle strade reali (map-matching). Se il percorso e' fuori strada, resta com'e', senza forzature."
+        "🧪 Nuova mappa attivabile: in Impostazioni > Aspetto > \"Usa nuova mappa (beta)\" puoi sostituire la mappa attuale con quella nuova. Per ora mostra pallini e scia (agganciata alle strade); luoghi, snapshot e 'segui' arrivano nei prossimi step."
     )
 }

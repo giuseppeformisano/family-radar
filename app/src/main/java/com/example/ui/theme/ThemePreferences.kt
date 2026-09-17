@@ -31,6 +31,15 @@ object ThemePreferences {
     private val _mapColorModeFlow = MutableStateFlow(MapColorMode.THEME)
     val mapColorModeFlow: StateFlow<MapColorMode> = _mapColorModeFlow.asStateFlow()
 
+    private const val KEY_USE_NEW_MAP = "key_use_new_map"
+    private val _useNewMapFlow = MutableStateFlow(false)
+    val useNewMapFlow: StateFlow<Boolean> = _useNewMapFlow.asStateFlow()
+
+    fun setUseNewMap(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_USE_NEW_MAP, enabled).apply()
+        _useNewMapFlow.value = enabled
+    }
+
     fun init(context: Context) {
         val prefs = getPrefs(context)
         val savedName = prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)
@@ -46,6 +55,8 @@ object ThemePreferences {
         } catch (_: Exception) {
             MapColorMode.THEME
         }
+
+        _useNewMapFlow.value = prefs.getBoolean(KEY_USE_NEW_MAP, false)
     }
 
     fun setMapColorMode(context: Context, mode: MapColorMode) {

@@ -44,7 +44,11 @@ fun MapLibreMapView(
 
     val mapView = remember {
         org.maplibre.android.MapLibre.getInstance(context)
-        org.maplibre.android.maps.MapView(context).apply {
+        // textureMode(true): senza, la mappa usa una SurfaceView che disegna in un
+        // layer separato SOPRA i controlli Compose, nascondendo i pulsanti sovrapposti.
+        // In modalita' texture si compone normalmente e i pulsanti restano visibili.
+        val options = org.maplibre.android.maps.MapLibreMapOptions().textureMode(true)
+        org.maplibre.android.maps.MapView(context, options).apply {
             onCreate(null)
             getMapAsync { map ->
                 mapRef = map

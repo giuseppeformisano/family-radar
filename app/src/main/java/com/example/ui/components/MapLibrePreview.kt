@@ -59,7 +59,8 @@ fun MapLibrePreviewDialog(
 
         val mapView = remember {
             org.maplibre.android.MapLibre.getInstance(context)
-            org.maplibre.android.maps.MapView(context).apply {
+            val options = org.maplibre.android.maps.MapLibreMapOptions().textureMode(true)
+            org.maplibre.android.maps.MapView(context, options).apply {
                 onCreate(null)
                 getMapAsync { map ->
                     mapRef = map

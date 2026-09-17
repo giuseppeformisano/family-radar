@@ -679,6 +679,16 @@ fun MainRadarScreen(
             targetFocusPoint = targetMapFocus,
             focusToken = focusToken,
             followedUserId = followedUserId,
+            onMemberSelected = { loc ->
+                val ping = repository.latestVoicePing.value
+                if (ping != null && ping.userId == loc.userId &&
+                    System.currentTimeMillis() - ping.timestamp < 30_000
+                ) {
+                    playVoiceNoteById(currentGroup?.id, ping.messageId)
+                } else {
+                    selectedMemberForSheet = loc
+                }
+            },
             modifier = Modifier.fillMaxSize()
         )
       } else {

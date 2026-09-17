@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.24.2-beta"
+    const val VERSION = "0.25.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🐞 Nuova mappa (beta): i pulsanti non vengono piu' nascosti dalla mappa (passata a modalita' texture)."
+        "🧪 Nuova mappa (beta): i pallini ora mostrano nome e foto come sulla mappa vecchia, e toccandoli si apre il dettaglio del membro."
     )
 }

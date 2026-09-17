@@ -1314,7 +1314,7 @@ private fun formatRelativeTime(ctx: Context, timestamp: Long): String {
 
 // ---------------- Marker Drawing Utilities with Memory Cache ----------------
 
-private fun createMemberMarkerDrawable(
+internal fun createMemberMarkerDrawable(
     ctx: Context,
     name: String,
     battery: Int,

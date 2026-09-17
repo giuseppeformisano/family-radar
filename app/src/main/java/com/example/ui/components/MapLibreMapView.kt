@@ -29,10 +29,16 @@ fun MapLibreMapView(
     targetFocusPoint: Pair<Double, Double>? = null,
     focusToken: Int = 0,
     followedUserId: String? = null,
+    onMemberSelected: (UserLocation) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    // Il click listener viene registrato una volta sola: legge le posizioni correnti
+    // tramite questo stato aggiornato invece di catturare la lista al momento.
+    val currentLocations by androidx.compose.runtime.rememberUpdatedState(locations)
+    val currentFollowed by androidx.compose.runtime.rememberUpdatedState(followedUserId)
+    val onSelected by androidx.compose.runtime.rememberUpdatedState(onMemberSelected)
 
     var mapRef by remember { mutableStateOf<org.maplibre.android.maps.MapLibreMap?>(null) }
     var styleReady by remember { mutableStateOf(false) }
@@ -66,13 +72,16 @@ fun MapLibreMapView(
                             )
                     )
                     style.addSource(org.maplibre.android.style.sources.GeoJsonSource("members-src"))
+                    // SymbolLayer: ogni membro usa la propria icona (nome + foto + stato),
+                    // generata come immagine e registrata nello style con id "icon-id".
                     style.addLayer(
-                        org.maplibre.android.style.layers.CircleLayer("members-layer", "members-src")
+                        org.maplibre.android.style.layers.SymbolLayer("members-layer", "members-src")
                             .withProperties(
-                                org.maplibre.android.style.layers.PropertyFactory.circleRadius(9f),
-                                org.maplibre.android.style.layers.PropertyFactory.circleColor(android.graphics.Color.rgb(79, 70, 229)),
-                                org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth(2.5f),
-                                org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor(android.graphics.Color.WHITE)
+                                org.maplibre.android.style.layers.PropertyFactory.iconImage(
+                                    org.maplibre.android.style.expressions.Expression.get("icon-id")
+                                ),
+                                org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap(true),
+                                org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement(true)
                             )
                     )
                     styleReady = true
@@ -112,9 +121,32 @@ fun MapLibreMapView(
         val valid = locations.filter { it.latitude != 0.0 || it.longitude != 0.0 }
 
         val pointFeatures = valid.map { m ->
+            val isSelf = m.userId == currentUserId
+            val displayName = if (!m.nickname.isNullOrBlank()) "${m.userName} (${m.nickname})" else m.userName
+            val speedKmH = (m.speed * 3.6f).toInt()
+            // Stessa icona della vecchia mappa (nome + foto + stato), generata come
+            // immagine e registrata nello style. addImage sovrascrive se gia' presente.
+            val iconId = "member-${m.userId}"
+            runCatching {
+                val drawable = createMemberMarkerDrawable(
+                    ctx = context,
+                    name = displayName,
+                    battery = m.batteryLevel,
+                    isSelf = isSelf,
+                    speedKmH = speedKmH,
+                    photoBase64 = m.photoBase64,
+                    activityType = m.activityType,
+                    isFollowed = m.userId == currentFollowed
+                )
+                val bmp = (drawable as android.graphics.drawable.BitmapDrawable).bitmap
+                style.addImage(iconId, bmp)
+            }
             org.maplibre.geojson.Feature.fromGeometry(
                 org.maplibre.geojson.Point.fromLngLat(m.longitude, m.latitude)
-            )
+            ).apply {
+                addStringProperty("icon-id", iconId)
+                addStringProperty("userId", m.userId)
+            }
         }
         style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("members-src")
             ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(pointFeatures))
@@ -162,6 +194,24 @@ fun MapLibreMapView(
             }
             map.style?.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("trail-src")
                 ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(snappedFeatures))
+        }
+    }
+
+    // Tap sul pallino: registrato una volta quando lo style e' pronto. Cerca le feature
+    // del layer membri sotto il punto toccato e apre il dettaglio del membro.
+    LaunchedEffect(styleReady) {
+        if (!styleReady) return@LaunchedEffect
+        val map = mapRef ?: return@LaunchedEffect
+        map.addOnMapClickListener { latLng ->
+            val screen = map.projection.toScreenLocation(latLng)
+            val hits = map.queryRenderedFeatures(screen, "members-layer")
+            val uid = hits.firstOrNull()?.getStringProperty("userId")
+            if (uid != null) {
+                currentLocations.find { it.userId == uid }?.let { onSelected(it) }
+                true
+            } else {
+                false
+            }
         }
     }
 

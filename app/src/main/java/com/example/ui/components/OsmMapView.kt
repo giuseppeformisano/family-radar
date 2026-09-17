@@ -211,9 +211,14 @@ fun OsmMapView(
     val currentOnMapTap by rememberUpdatedState(onMapTap)
     val currentOnUserPan by rememberUpdatedState(onUserPan)
     val currentOnMapCenterChanged by rememberUpdatedState(onMapCenterChanged)
-    // La mappa segue il tema dell'app: il filtro di inversione sui tile viene
-    // applicato o rimosso nel blocco update, non solo alla creazione.
-    val isDark = com.example.ui.theme.RadarTheme.palette.isDark
+    // Colore mappa: l'utente puo' forzarla chiara/scura o lasciarla come il tema.
+    // Il filtro di inversione sui tile viene applicato/rimosso nel blocco update.
+    val mapColorMode by com.example.ui.theme.ThemePreferences.mapColorModeFlow.collectAsState()
+    val isDark = when (mapColorMode) {
+        com.example.ui.theme.MapColorMode.LIGHT -> false
+        com.example.ui.theme.MapColorMode.DARK -> true
+        com.example.ui.theme.MapColorMode.THEME -> com.example.ui.theme.RadarTheme.palette.isDark
+    }
     var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
     var isMapInitialized by remember { mutableStateOf(false) }
 

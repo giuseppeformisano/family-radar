@@ -12,12 +12,24 @@ enum class ThemeMode(val title: String, val description: String) {
     DARK("Scuro", "Sfondo scuro ad alto contrasto e riposante")
 }
 
+/** Colore della mappa, indipendente dal tema dell'app. */
+enum class MapColorMode(val title: String) {
+    THEME("Come il tema"),
+    LIGHT("Sempre chiara"),
+    DARK("Sempre scura")
+}
+
 object ThemePreferences {
     private const val PREFS_NAME = "family_radar_theme_prefs"
     private const val KEY_THEME_MODE = "key_theme_mode"
 
+    private const val KEY_MAP_COLOR_MODE = "key_map_color_mode"
+
     private val _themeModeFlow = MutableStateFlow(ThemeMode.SYSTEM)
     val themeModeFlow: StateFlow<ThemeMode> = _themeModeFlow.asStateFlow()
+
+    private val _mapColorModeFlow = MutableStateFlow(MapColorMode.THEME)
+    val mapColorModeFlow: StateFlow<MapColorMode> = _mapColorModeFlow.asStateFlow()
 
     fun init(context: Context) {
         val prefs = getPrefs(context)
@@ -28,6 +40,17 @@ object ThemePreferences {
             ThemeMode.SYSTEM
         }
         _themeModeFlow.value = mode
+
+        _mapColorModeFlow.value = try {
+            MapColorMode.valueOf(prefs.getString(KEY_MAP_COLOR_MODE, MapColorMode.THEME.name) ?: MapColorMode.THEME.name)
+        } catch (_: Exception) {
+            MapColorMode.THEME
+        }
+    }
+
+    fun setMapColorMode(context: Context, mode: MapColorMode) {
+        getPrefs(context).edit().putString(KEY_MAP_COLOR_MODE, mode.name).apply()
+        _mapColorModeFlow.value = mode
     }
 
     fun getThemeMode(context: Context): ThemeMode {

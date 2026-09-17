@@ -3752,6 +3752,7 @@ private fun SettingsPanel(
 ) {
     val context = LocalContext.current
     val currentThemeMode by ThemePreferences.themeModeFlow.collectAsState()
+    val currentMapColorMode by ThemePreferences.mapColorModeFlow.collectAsState()
     val currentLanguage by LanguagePreferences.languageFlow.collectAsState()
 
     var intervalUnit by remember {
@@ -4217,6 +4218,32 @@ private fun SettingsPanel(
                             icon = icon,
                             selected = currentThemeMode == mode,
                             onClick = { ThemePreferences.setThemeMode(context, mode) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(Spacing.md))
+                Text(
+                    text = "Colore mappa",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(Modifier.height(Spacing.xs))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                ) {
+                    listOf(
+                        com.example.ui.theme.MapColorMode.THEME to Icons.Default.BrightnessAuto,
+                        com.example.ui.theme.MapColorMode.LIGHT to Icons.Default.LightMode,
+                        com.example.ui.theme.MapColorMode.DARK to Icons.Default.DarkMode
+                    ).forEach { (mode, icon) ->
+                        PillChip(
+                            label = mode.title,
+                            icon = icon,
+                            selected = currentMapColorMode == mode,
+                            onClick = { ThemePreferences.setMapColorMode(context, mode) },
                             modifier = Modifier.weight(1f)
                         )
                     }

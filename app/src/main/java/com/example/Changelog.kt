@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.30.0-beta"
+    const val VERSION = "0.30.1-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧪 Nuova mappa (beta): ora rispetta l'impostazione colore mappa (chiaro/scuro/come il tema), non solo lo scuro.",
-        "🐞 Scia agganciata alle strade piu' generosa: raggio piu' ampio e soglia piu' bassa, per stare piu' spesso in carreggiata."
+        "🧪 Nuova mappa (beta): tolti il logo/scritta MapLibre e la bussola in alto che si sovrapponeva alle altre scritte."
     )
 }

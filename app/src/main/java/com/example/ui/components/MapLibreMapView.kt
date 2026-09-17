@@ -103,6 +103,11 @@ fun MapLibreMapView(
             onCreate(null)
             getMapAsync { map ->
                 mapRef = map
+                // Via logo MapLibre, attribuzione e bussola (l'indicatore nord in alto
+                // che finiva sotto le altre scritte).
+                map.uiSettings.isLogoEnabled = false
+                map.uiSettings.isAttributionEnabled = false
+                map.uiSettings.isCompassEnabled = false
                 map.setStyle(styleUrl) { style ->
                     // Sorgenti vuote + layer: verranno riempite in tempo reale.
                     style.addSource(org.maplibre.android.style.sources.GeoJsonSource("trail-src"))

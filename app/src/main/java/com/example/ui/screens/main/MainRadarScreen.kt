@@ -2234,16 +2234,6 @@ private fun FloatingDock(
                 }
             }
 
-            IconButton(
-                onClick = { onSelectPanel(RadarPanel.TRIPS) },
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(
-                    Icons.Default.Route,
-                    contentDescription = "Trips",
-                    tint = if (selectedPanel == RadarPanel.TRIPS) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
     }
 }

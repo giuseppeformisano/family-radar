@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.18.0-beta"
+    const val VERSION = "0.18.1-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Alta precisione automatica: con l'interruttore acceso, l'app rileva da sola quando ti muovi e aggiorna la posizione ogni secondo, poi torna normale da fermo.",
-        "✨ Non serve piu' accendere e spegnere l'alta precisione a mano ogni volta."
+        "🧹 Rimossa la sezione Viaggi dal menu in basso: l'app e' piu' semplice e pulita."
     )
 }

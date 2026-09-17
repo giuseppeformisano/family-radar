@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.18.3-beta"
+    const val VERSION = "0.18.4-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Foto e snapshot a qualita' piu' alta (risoluzione e nitidezza maggiori).",
-        "🐞 Snapshot: i dati sotto la foto (autore, ora, posizione) non finiscono piu' troppo in basso."
+        "✨ Snapshot a qualita' molto piu' alta (fino a 2560px): le foto sfruttano lo storage esterno, non piu' il limite del database.",
+        "🐞 Snapshot: i dati sotto la foto non finiscono piu' troppo in basso."
     )
 }

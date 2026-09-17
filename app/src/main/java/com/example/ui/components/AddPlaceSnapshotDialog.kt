@@ -199,9 +199,9 @@ fun AddPlaceSnapshotDialog(
                             coroutineScope.launch {
                                 isPublishing = true
                                 val base64Result = if (imageUri != null) {
-                                    repository.compressImageToBase64(imageUri, maxDimension = 1280, quality = 85)
+                                    repository.compressImageToBase64(imageUri, maxDimension = 2560, quality = 95)
                                 } else if (previewBitmap != null) {
-                                    repository.compressBitmapToBase64(previewBitmap, maxDimension = 1280, quality = 85)
+                                    repository.compressBitmapToBase64(previewBitmap, maxDimension = 2560, quality = 95)
                                 } else {
                                     Result.failure(Exception("no image"))
                                 }

@@ -45,8 +45,8 @@ object ImageUtils {
     suspend fun uriToBase64(
         context: Context,
         uri: Uri,
-        maxDimension: Int = 1600,
-        quality: Int = 92
+        maxDimension: Int = 2048,
+        quality: Int = 95
     ): String? = withContext(Dispatchers.IO) {
         try {
             val contentResolver = context.contentResolver
@@ -184,8 +184,8 @@ object ImageUtils {
      */
     fun bitmapToBase64(
         bitmap: Bitmap,
-        maxDimension: Int = 1600,
-        quality: Int = 92
+        maxDimension: Int = 2048,
+        quality: Int = 95
     ): String? {
         return try {
             val finalBitmap = if (bitmap.width > maxDimension || bitmap.height > maxDimension) {

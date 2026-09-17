@@ -32,8 +32,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
  * (mondiale, gratis, con POI). Vive a parte dalla mappa attuale (osmdroid): serve
  * a valutare resa grafica e prestazioni prima di migrare l'app vera.
  *
- * Stile: uno degli style pronti di OpenFreeMap. "liberty" mostra strade, aree e
- * POI (negozi, bar, ecc.) con icone ed etichette.
+ * Stile: uno degli style pronti di OpenFreeMap. "bright" e' piu' denso di POI
+ * (negozi, bar, ecc.) con icone ed etichette; in migrazione lo style e' del tutto
+ * personalizzabile (quali POI mostrare, a quale zoom, colori).
  */
 @Composable
 fun MapLibrePreviewDialog(
@@ -58,7 +59,7 @@ fun MapLibrePreviewDialog(
                         .target(org.maplibre.android.geometry.LatLng(latitude, longitude))
                         .zoom(15.0)
                         .build()
-                    map.setStyle("https://tiles.openfreemap.org/styles/liberty") { style ->
+                    map.setStyle("https://tiles.openfreemap.org/styles/bright") { style ->
                         // Pallini dei membri: sorgente GeoJSON + layer a cerchi (API core,
                         // niente plugin). Membro = punto; il proprio pallino piu' scuro.
                         if (members.isNotEmpty()) {

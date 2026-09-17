@@ -22,12 +22,15 @@ object RoadMatcher {
 
     private val client = OkHttpClient()
 
-    // Raggio (m) entro cui un punto puo' essere agganciato a una strada. Oltre, il
-    // punto e' considerato fuori strada e OSRM lo scarta dal matching.
-    private const val MATCH_RADIUS_M = 25
+    // Raggio (m) entro cui un punto puo' essere agganciato a una strada. Piu' largo =
+    // aggancia piu' punti (utile col GPS impreciso), ma se troppo largo rischia la
+    // strada sbagliata. 40m e' un buon compromesso per il traffico urbano.
+    private const val MATCH_RADIUS_M = 40
 
     // Sotto questa confidenza il risultato non e' affidabile: si tiene il grezzo.
-    private const val MIN_CONFIDENCE = 0.30
+    // Tenuta bassa perche' meglio una scia sulla strada quasi giusta che il GPS grezzo
+    // sistematicamente fuori carreggiata.
+    private const val MIN_CONFIDENCE = 0.10
 
     // OSRM match accetta un numero limitato di punti per richiesta.
     private const val MAX_POINTS = 100

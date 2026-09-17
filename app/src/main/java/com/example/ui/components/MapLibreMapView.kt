@@ -91,7 +91,9 @@ fun MapLibreMapView(
     val styleUrl = if (dark) "https://tiles.openfreemap.org/styles/dark"
     else "https://tiles.openfreemap.org/styles/bright"
 
-    val mapView = remember {
+    // Legato a `dark`: cambiando il colore mappa la MapView si ricrea con lo style
+    // giusto (setStyle a caldo cancellerebbe sorgenti/layer; ricrearla e' piu' pulito).
+    val mapView = remember(dark) {
         org.maplibre.android.MapLibre.getInstance(context)
         // textureMode(true): senza, la mappa usa una SurfaceView che disegna in un
         // layer separato SOPRA i controlli Compose, nascondendo i pulsanti sovrapposti.
@@ -169,7 +171,13 @@ fun MapLibreMapView(
         }
     }
 
-    DisposableEffect(lifecycleOwner) {
+    // Quando la MapView si ricrea (cambio colore), azzera lo stato di setup.
+    LaunchedEffect(mapView) {
+        styleReady = false
+        centeredOnce = false
+    }
+
+    DisposableEffect(mapView, lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> mapView.onStart()

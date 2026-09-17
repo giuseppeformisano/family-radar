@@ -670,12 +670,18 @@ fun MainRadarScreen(
     val sheetContentHeight = screenHeight * 0.86f
 
     val useNewMap by ThemePreferences.useNewMapFlow.collectAsState()
+    val mapColorMode by ThemePreferences.mapColorModeFlow.collectAsState()
+    val mapDark = when (mapColorMode) {
+        com.example.ui.theme.MapColorMode.LIGHT -> false
+        com.example.ui.theme.MapColorMode.DARK -> true
+        com.example.ui.theme.MapColorMode.THEME -> RadarTheme.palette.isDark
+    }
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
       if (useNewMap) {
         com.example.ui.components.MapLibreMapView(
             locations = locations,
             currentUserId = currentUserId,
-            dark = RadarTheme.palette.isDark,
+            dark = mapDark,
             places = places,
             snapshots = snapshots,
             targetFocusPoint = targetMapFocus,

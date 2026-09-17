@@ -3918,6 +3918,7 @@ private fun SettingsPanel(
                     onCheckedChange = onToggleHighPrecisionMovement,
                     testTag = "high_precision_switch"
                 )
+                BatteryReliabilityCard()
                 Spacer(Modifier.height(Spacing.md))
                 Text(
                     text = stringResource(R.string.settings_update_frequency),
@@ -4851,6 +4852,104 @@ private fun SettingsToggleRow(
             onCheckedChange = onCheckedChange,
             colors = radarSwitchColors(),
             modifier = if (testTag != null) Modifier.testTag(testTag) else Modifier
+        )
+    }
+}
+
+/**
+ * Card di affidabilità: dice se il telefono blocca l'app in background (la causa
+ * numero uno dei buchi nel tracciamento) e porta l'utente all'impostazione giusta.
+ * Autonoma: legge da sola lo stato e si ricontrolla al ritorno sulla schermata.
+ */
+@Composable
+private fun BatteryReliabilityCard() {
+    val context = LocalContext.current
+    var isExempt by remember { mutableStateOf(isIgnoringBatteryOpt(context)) }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                isExempt = isIgnoringBatteryOpt(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.sm)
+            .clip(RoundedCornerShape(Radius.md))
+            .background(
+                if (isExempt) RadarSemantic.BatteryOk.copy(alpha = 0.10f)
+                else RadarSemantic.BatteryLow.copy(alpha = 0.12f)
+            )
+            .padding(Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+        ) {
+            Icon(
+                imageVector = if (isExempt) Icons.Default.CheckCircle else Icons.Default.Warning,
+                contentDescription = null,
+                tint = if (isExempt) RadarSemantic.BatteryOk else RadarSemantic.BatteryLow,
+                modifier = Modifier.size(Sizes.iconMd)
+            )
+            Text(
+                text = if (isExempt) "Tracciamento affidabile" else "Tracciamento a rischio",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        Text(
+            text = if (isExempt)
+                "Il telefono non blocca l'app in background: la tua posizione resta aggiornata anche a schermo spento."
+            else
+                "Il telefono può bloccare l'app a schermo spento e la tua posizione smette di aggiornarsi. Tocca \"Rendi affidabile\" e scegli Consenti / Non ottimizzare. Alcuni telefoni (Xiaomi, Samsung, Huawei) hanno anche un blocco extra: nelle impostazioni batteria del telefono metti questa app su \"Nessuna restrizione\".",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (!isExempt) {
+            Button(
+                onClick = { requestIgnoreBatteryOpt(context) },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Text("Rendi affidabile")
+            }
+        }
+        OutlinedButton(onClick = { openAppDetailsSettings(context) }) {
+            Text("Impostazioni batteria del telefono")
+        }
+    }
+}
+
+private fun isIgnoringBatteryOpt(context: android.content.Context): Boolean {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) return true
+    val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager ?: return true
+    return runCatching { pm.isIgnoringBatteryOptimizations(context.packageName) }.getOrDefault(true)
+}
+
+private fun requestIgnoreBatteryOpt(context: android.content.Context) {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) return
+    runCatching {
+        context.startActivity(
+            android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = android.net.Uri.parse("package:${context.packageName}")
+            }
+        )
+    }
+}
+
+private fun openAppDetailsSettings(context: android.content.Context) {
+    runCatching {
+        context.startActivity(
+            android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = android.net.Uri.parse("package:${context.packageName}")
+            }
         )
     }
 }

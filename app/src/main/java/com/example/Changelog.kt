@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.18.4-beta"
+    const val VERSION = "0.19.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Snapshot a qualita' molto piu' alta (fino a 2560px): le foto sfruttano lo storage esterno, non piu' il limite del database.",
-        "🐞 Snapshot: i dati sotto la foto non finiscono piu' troppo in basso."
+        "✨ Tracciamento affidabile: nelle Impostazioni ora c'e' una scheda che ti dice se il telefono blocca l'app in background e ti porta all'impostazione giusta per risolvere.",
+        "✨ Ti avvisa anche del blocco extra dei produttori (Xiaomi, Samsung, Huawei), la causa principale delle posizioni che non si aggiornano."
     )
 }

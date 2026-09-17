@@ -10,10 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.27.0-beta"
+    const val VERSION = "0.27.1-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧪 Nuova mappa (beta): i pallini ora si muovono in modo morbido tra un aggiornamento e l'altro."
+        "🐞 APK piu' leggero (solo librerie ARM): sblocca la pubblicazione delle build.",
+        "🧪 Nuova mappa (beta): i pallini si muovono in modo morbido."
     )
 }

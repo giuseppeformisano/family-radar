@@ -17,10 +17,17 @@ android {
     applicationId = "com.formisano.familyradar"
     minSdk = 24
     targetSdk = 36
-    versionCode = 198
-    versionName = "0.27.0-beta"
+    versionCode = 199
+    versionName = "0.27.1-beta"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    // MapLibre porta librerie native per 4 architetture: includendo tutte, l'APK si
+    // gonfia e l'upload su GitHub va in timeout. Teniamo solo le ARM (telefoni veri);
+    // le x86/x86_64 servono agli emulatori, non ci servono per la distribuzione.
+    ndk {
+      abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+    }
   }
 
   signingConfigs {

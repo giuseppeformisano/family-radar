@@ -97,6 +97,12 @@ private const val DISPLAY_TELEPORT_THRESHOLD_M = 120.0
 // rumore da fermo viene ignorato.
 private const val INTERP_NOISE_FLOOR_M = 6.0
 private const val INTERP_NOISE_ACCURACY_FACTOR = 1.5
+
+// Scia: linea dietro il pallino con gli ultimi punti percorsi. E' locale — ogni
+// telefono la costruisce con le posizioni che riceve, senza salvare nulla in piu'.
+private const val TRAIL_MAX_AGE_MS = 3 * 60_000L   // tiene gli ultimi ~3 minuti
+private const val TRAIL_MAX_POINTS = 240           // tetto di sicurezza
+private const val TRAIL_MIN_POINTS = 2             // sotto 2 punti non c'e' linea
 // Cappa la velocita' stimata: oltre ~250 km/h e' quasi certamente un salto spurio
 // del GPS, non movimento reale. Evita che un fix sballato lanci il pallino lontano.
 private const val INTERP_MAX_SPEED_MS = 70f
@@ -230,9 +236,13 @@ fun OsmMapView(
 
     // Pre-allocated overlay cache lists
     val memberOverlays = remember { mutableListOf<Overlay>() }
+    val memberTrailOverlays = remember { mutableListOf<Overlay>() }
     val placeOverlays = remember { mutableListOf<Overlay>() }
     val snapshotOverlays = remember { mutableListOf<Overlay>() }
     val tripOverlays = remember { mutableListOf<Overlay>() }
+
+    // Scia locale per utente: coppie (punto, istante). Aggiornata sui fix accettati.
+    val recentTrail = remember { mutableMapOf<String, MutableList<Pair<GeoPoint, Long>>>() }
 
     // Mappa userId → marker osmdroid corrente, per aggiornarne la posizione
     // senza ricostruire l'intero overlay a ogni tick del dead reckoning.
@@ -323,6 +333,12 @@ fun OsmMapView(
                         motionEstimate[loc.userId] = MotionEstimate(rawSpeed, bearing)
                         // L'ancora avanza SOLO ora, sul movimento confermato.
                         previousFix[loc.userId] = loc
+
+                        // Scia: aggiunge il punto e scarta quelli vecchi / in eccesso.
+                        val trail = recentTrail.getOrPut(loc.userId) { mutableListOf() }
+                        trail.add(GeoPoint(loc.latitude, loc.longitude) to now)
+                        trail.removeAll { now - it.second > TRAIL_MAX_AGE_MS }
+                        while (trail.size > TRAIL_MAX_POINTS) trail.removeAt(0)
                     } else {
                         // Rumore, fermo o fix sballato: pallino fermo, ancora e base
                         // restano dov'erano. Un salto vero verra' confermato dai fix
@@ -339,6 +355,7 @@ fun OsmMapView(
         interpBasePos.keys.retainAll(activeIds)
         interpStartTime.keys.retainAll(activeIds)
         displayedPos.keys.retainAll(activeIds)
+        recentTrail.keys.retainAll(activeIds)
     }
 
     // Stato aggiornato del membro inseguito: catturato dentro al ticker tramite
@@ -434,6 +451,8 @@ fun OsmMapView(
                 mapView.overlays.addAll(snapshotOverlays)
             }
             if (showMembers) {
+                // Scia sotto i pallini, cosi' il marker resta sopra la linea.
+                mapView.overlays.addAll(memberTrailOverlays)
                 mapView.overlays.addAll(memberOverlays)
             }
             // Anello pulsante sempre in cima (disegna solo se ha un punto attivo).
@@ -779,6 +798,23 @@ fun OsmMapView(
                         }
                     } catch (me: Throwable) {
                         Log.w("OsmMapView", "Error building member marker: ${me.message}")
+                    }
+                }
+
+                // 3b. Scia: linea con gli ultimi punti percorsi da chi si e' mosso.
+                memberTrailOverlays.clear()
+                if (showMembers) {
+                    recentTrail.forEach { (_, trail) ->
+                        if (trail.size >= TRAIL_MIN_POINTS) {
+                            val pts = trail.map { it.first }
+                            val trailPoly = Polyline(mapView).apply {
+                                setPoints(pts)
+                                outlinePaint.color = AndroidColor.argb(150, 99, 102, 241)
+                                outlinePaint.strokeWidth = 9f
+                                outlinePaint.isAntiAlias = true
+                            }
+                            memberTrailOverlays.add(trailPoly)
+                        }
                     }
                 }
 

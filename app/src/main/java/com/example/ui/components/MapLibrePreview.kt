@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 fun MapLibrePreviewDialog(
     latitude: Double,
     longitude: Double,
+    members: List<Triple<Double, Double, Boolean>> = emptyList(),
     onDismiss: () -> Unit
 ) {
     Dialog(
@@ -53,11 +54,34 @@ fun MapLibrePreviewDialog(
             org.maplibre.android.maps.MapView(context).apply {
                 onCreate(null)
                 getMapAsync { map ->
-                    map.setStyle("https://tiles.openfreemap.org/styles/liberty")
                     map.cameraPosition = org.maplibre.android.camera.CameraPosition.Builder()
                         .target(org.maplibre.android.geometry.LatLng(latitude, longitude))
                         .zoom(15.0)
                         .build()
+                    map.setStyle("https://tiles.openfreemap.org/styles/liberty") { style ->
+                        // Pallini dei membri: sorgente GeoJSON + layer a cerchi (API core,
+                        // niente plugin). Membro = punto; il proprio pallino piu' scuro.
+                        if (members.isNotEmpty()) {
+                            val features = members.map { (lat, lon, isSelf) ->
+                                org.maplibre.geojson.Feature.fromGeometry(
+                                    org.maplibre.geojson.Point.fromLngLat(lon, lat)
+                                ).apply { addBooleanProperty("self", isSelf) }
+                            }
+                            val src = org.maplibre.android.style.sources.GeoJsonSource(
+                                "members-src",
+                                org.maplibre.geojson.FeatureCollection.fromFeatures(features)
+                            )
+                            style.addSource(src)
+                            val layer = org.maplibre.android.style.layers.CircleLayer("members-layer", "members-src")
+                                .withProperties(
+                                    org.maplibre.android.style.layers.PropertyFactory.circleRadius(9f),
+                                    org.maplibre.android.style.layers.PropertyFactory.circleColor(android.graphics.Color.rgb(79, 70, 229)),
+                                    org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth(2.5f),
+                                    org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor(android.graphics.Color.WHITE)
+                                )
+                            style.addLayer(layer)
+                        }
+                    }
                 }
             }
         }

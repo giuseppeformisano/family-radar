@@ -1156,6 +1156,7 @@ fun MainRadarScreen(
                                 currentUser = currentUser,
                                 currentGroup = currentGroup,
                                 currentUserId = currentUserId,
+                                memberLocations = locations,
                                 myMember = members.find { it.userId == currentUserId },
                                 isOwnerOrAdmin = isOwnerOrAdmin,
                                 activeMemberCount = activeMembers.size,
@@ -3716,6 +3717,7 @@ private fun SettingsPanel(
     currentUser: UserData?,
     currentGroup: GroupData?,
     currentUserId: String,
+    memberLocations: List<UserLocation> = emptyList(),
     myMember: GroupMember?,
     isOwnerOrAdmin: Boolean,
     activeMemberCount: Int,
@@ -3755,9 +3757,14 @@ private fun SettingsPanel(
     val currentMapColorMode by ThemePreferences.mapColorModeFlow.collectAsState()
     var showMapPreview by remember { mutableStateOf(false) }
     if (showMapPreview) {
+        val myLoc = memberLocations.find { it.userId == currentUserId }
+        val center = myLoc ?: memberLocations.firstOrNull()
         com.example.ui.components.MapLibrePreviewDialog(
-            latitude = 41.9028,
-            longitude = 12.4964,
+            latitude = center?.latitude ?: 41.9028,
+            longitude = center?.longitude ?: 12.4964,
+            members = memberLocations
+                .filter { it.latitude != 0.0 || it.longitude != 0.0 }
+                .map { Triple(it.latitude, it.longitude, it.userId == currentUserId) },
             onDismiss = { showMapPreview = false }
         )
     }

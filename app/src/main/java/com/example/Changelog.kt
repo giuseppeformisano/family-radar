@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.18.2-beta"
+    const val VERSION = "0.18.3-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🐞 Segui un membro: la mappa ora insegue la sua posizione VERA, non piu' un punto indovinato lontano da dove si trova davvero.",
-        "✨ Movimento sulla mappa ripensato: il pallino scivola verso l'ultima posizione reale invece di provare a predire dove andrai — niente piu' salti nel vuoto."
+        "✨ Foto e snapshot a qualita' piu' alta (risoluzione e nitidezza maggiori).",
+        "🐞 Snapshot: i dati sotto la foto (autore, ora, posizione) non finiscono piu' troppo in basso."
     )
 }

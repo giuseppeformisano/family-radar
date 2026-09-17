@@ -586,7 +586,7 @@ fun SnapshotClusterGalleryDialog(
                             .fillMaxWidth()
                             .background(Color(0xCC000000))
                             .navigationBarsPadding()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                            .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 20.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // Riga autore + ora

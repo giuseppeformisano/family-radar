@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.20.1-beta"
+    const val VERSION = "0.21.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Scia sulla mappa: dietro chi si muove appare una linea con il percorso dell'ultimo minuto e mezzo, cosi' vedi da dove e' passato e non solo dov'e' ora."
+        "✨ Scia senza buchi: ogni aggiornamento porta con se' gli ultimi 90 secondi di punti, cosi' dopo un calo di rete la scia si ricompone e chi apre l'app vede subito il percorso recente."
     )
 }

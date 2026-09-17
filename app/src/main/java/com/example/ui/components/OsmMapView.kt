@@ -294,6 +294,17 @@ fun OsmMapView(
         val now = System.currentTimeMillis()
         locations.forEach { loc ->
             if (loc.latitude == 0.0 && loc.longitude == 0.0) return@forEach
+
+            // Scia recuperabile: se il fix porta con se' gli ultimi 90s di punti del
+            // mittente, sono la scia autorevole (riempiono i buchi dopo cali di rete).
+            if (loc.recentPoints.isNotEmpty()) {
+                recentTrail[loc.userId] = loc.recentPoints
+                    .filter { now - it.t <= TRAIL_MAX_AGE_MS }
+                    .sortedBy { it.t }
+                    .map { GeoPoint(it.lat, it.lon) to it.t }
+                    .toMutableList()
+            }
+
             val prev = previousFix[loc.userId]
 
             // Nuovo fix (timestamp diverso dall'ancora).
@@ -334,11 +345,14 @@ fun OsmMapView(
                         // L'ancora avanza SOLO ora, sul movimento confermato.
                         previousFix[loc.userId] = loc
 
-                        // Scia: aggiunge il punto e scarta quelli vecchi / in eccesso.
-                        val trail = recentTrail.getOrPut(loc.userId) { mutableListOf() }
-                        trail.add(GeoPoint(loc.latitude, loc.longitude) to now)
-                        trail.removeAll { now - it.second > TRAIL_MAX_AGE_MS }
-                        while (trail.size > TRAIL_MAX_POINTS) trail.removeAt(0)
+                        // Scia locale, SOLO se il mittente non allega gia' i suoi punti
+                        // (client vecchio): altrimenti vince la scia autorevole di sopra.
+                        if (loc.recentPoints.isEmpty()) {
+                            val trail = recentTrail.getOrPut(loc.userId) { mutableListOf() }
+                            trail.add(GeoPoint(loc.latitude, loc.longitude) to now)
+                            trail.removeAll { now - it.second > TRAIL_MAX_AGE_MS }
+                            while (trail.size > TRAIL_MAX_POINTS) trail.removeAt(0)
+                        }
                     } else {
                         // Rumore, fermo o fix sballato: pallino fermo, ancora e base
                         // restano dov'erano. Un salto vero verra' confermato dai fix

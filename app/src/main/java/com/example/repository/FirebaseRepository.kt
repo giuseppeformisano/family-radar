@@ -2191,7 +2191,14 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     timestamp = doc.getLong("timestamp") ?: System.currentTimeMillis(),
                                     isOnline = doc.getBoolean("isOnline") ?: true,
                                     currentPlaceName = doc.getString("currentPlaceName"),
-                                    activityType = doc.getString("activityType") ?: ""
+                                    activityType = doc.getString("activityType") ?: "",
+                                    recentPoints = (doc.get("recentPoints") as? List<*>)?.mapNotNull { raw ->
+                                        val m = raw as? Map<*, *> ?: return@mapNotNull null
+                                        val la = (m["la"] as? Number)?.toDouble() ?: return@mapNotNull null
+                                        val lo = (m["lo"] as? Number)?.toDouble() ?: return@mapNotNull null
+                                        val t = (m["t"] as? Number)?.toLong() ?: 0L
+                                        com.example.model.TrailPoint(la, lo, t)
+                                    } ?: emptyList()
                                 )
                             } catch (ex: Exception) {
                                 null
@@ -2781,6 +2788,19 @@ class FirebaseRepository private constructor(private val context: Context) {
     private var lastWrittenLocNickname: String? = null
     private var lastWrittenLocPhoto: String? = null
 
+    // Buffer degli ultimi ~90s di punti raccolti da questo dispositivo. Viene allegato
+    // a ogni scrittura cosi' che, dopo un buco di rete, i punti non spediti in tempo
+    // reale arrivino comunque agli altri e la scia resti senza buchi.
+    private val selfRecentPoints = ArrayDeque<Triple<Double, Double, Long>>()
+
+    private fun bufferRecentPoint(lat: Double, lon: Double, timeMs: Long) {
+        selfRecentPoints.addLast(Triple(lat, lon, timeMs))
+        while (selfRecentPoints.isNotEmpty() &&
+            timeMs - selfRecentPoints.first().third > RECENT_POINTS_MAX_AGE_MS
+        ) selfRecentPoints.removeFirst()
+        while (selfRecentPoints.size > RECENT_POINTS_MAX) selfRecentPoints.removeFirst()
+    }
+
     /**
      * Gruppo in cui e' finita l'ultima scrittura. Senza questo il gate ragiona
      * solo su "quanto mi sono spostato da quando ho trasmesso", ignorando che la
@@ -2892,6 +2912,11 @@ class FirebaseRepository private constructor(private val context: Context) {
         // }
         // evaluateAutoTrip(location)
 
+        // Bufferizza ogni punto raccolto (anche quelli non trasmessi): e' il
+        // materiale con cui, alla prossima scrittura, si ricostruisce la scia
+        // senza buchi dopo un'interruzione di rete.
+        bufferRecentPoint(location.latitude, location.longitude, location.timestamp)
+
         // Notifica "in movimento" agli altri membri: indipendente dall'auto-trip,
         // gira su ogni fix e si basa su Activity Recognition + spostamento netto.
         evaluateMovementNotification(location)
@@ -2968,7 +2993,12 @@ class FirebaseRepository private constructor(private val context: Context) {
                     "timestamp" to enrichedLocation.timestamp,
                     "isOnline" to true,
                     "currentPlaceName" to (enrichedLocation.currentPlaceName ?: ""),
-                    "activityType" to _currentActivityKind
+                    "activityType" to _currentActivityKind,
+                    // Scia recuperabile: ultimi ~90s di punti raccolti, per riempire
+                    // i buchi lato altri membri dopo un'interruzione di rete.
+                    "recentPoints" to selfRecentPoints.map {
+                        hashMapOf("la" to it.first, "lo" to it.second, "t" to it.third)
+                    }
                 )
 
                 if (profileChanged || gate.isHeartbeat) {
@@ -4946,6 +4976,11 @@ class FirebaseRepository private constructor(private val context: Context) {
          * questa soglia ed è quasi certamente rumore hardware, non movimento reale.
          */
         const val MAX_PLAUSIBLE_SPEED_MS = 70f
+
+        /** Finestra della scia allegata a ogni scrittura: ultimi 90 secondi. */
+        const val RECENT_POINTS_MAX_AGE_MS = 90_000L
+        /** Tetto di sicurezza sul numero di punti allegati. */
+        const val RECENT_POINTS_MAX = 120
 
         /** Aggiornamento forzato anche da fermi, per tenere vivi stato online e batteria. */
         const val HEARTBEAT_INTERVAL_MS = 5 * 60_000L

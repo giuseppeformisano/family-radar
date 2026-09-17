@@ -21,7 +21,21 @@ data class UserLocation(
      * di attivita' di Android: uno fra [ActivityKind]. Vuoto quando il permesso
      * manca o non e' ancora arrivata una transizione.
      */
-    val activityType: String = ""
+    val activityType: String = "",
+    /**
+     * Ultimi ~90 secondi di punti raccolti da chi invia, allegati all'aggiornamento.
+     * Servono a ricostruire la scia senza buchi quando la rete e' andata e venuta:
+     * i punti che non erano stati spediti in tempo reale arrivano qui col primo
+     * aggiornamento buono. Vuoto se non ci sono punti recenti.
+     */
+    val recentPoints: List<TrailPoint> = emptyList()
+)
+
+/** Un punto della scia recente: posizione + istante in cui e' stato raccolto. */
+data class TrailPoint(
+    val lat: Double = 0.0,
+    val lon: Double = 0.0,
+    val t: Long = 0L
 )
 
 /**

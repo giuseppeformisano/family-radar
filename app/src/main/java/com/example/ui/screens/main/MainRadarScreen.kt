@@ -3762,9 +3762,7 @@ private fun SettingsPanel(
         com.example.ui.components.MapLibrePreviewDialog(
             latitude = center?.latitude ?: 41.9028,
             longitude = center?.longitude ?: 12.4964,
-            members = memberLocations
-                .filter { it.latitude != 0.0 || it.longitude != 0.0 }
-                .map { Triple(it.latitude, it.longitude, it.userId == currentUserId) },
+            members = memberLocations,
             onDismiss = { showMapPreview = false }
         )
     }

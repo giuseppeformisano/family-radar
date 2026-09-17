@@ -40,7 +40,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 fun MapLibrePreviewDialog(
     latitude: Double,
     longitude: Double,
-    members: List<Triple<Double, Double, Boolean>> = emptyList(),
+    members: List<com.example.model.UserLocation> = emptyList(),
     onDismiss: () -> Unit
 ) {
     Dialog(
@@ -60,27 +60,61 @@ fun MapLibrePreviewDialog(
                         .zoom(15.0)
                         .build()
                     map.setStyle("https://tiles.openfreemap.org/styles/bright") { style ->
-                        // Pallini dei membri: sorgente GeoJSON + layer a cerchi (API core,
-                        // niente plugin). Membro = punto; il proprio pallino piu' scuro.
                         if (members.isNotEmpty()) {
-                            val features = members.map { (lat, lon, isSelf) ->
-                                org.maplibre.geojson.Feature.fromGeometry(
-                                    org.maplibre.geojson.Point.fromLngLat(lon, lat)
-                                ).apply { addBooleanProperty("self", isSelf) }
-                            }
-                            val src = org.maplibre.android.style.sources.GeoJsonSource(
-                                "members-src",
-                                org.maplibre.geojson.FeatureCollection.fromFeatures(features)
-                            )
-                            style.addSource(src)
-                            val layer = org.maplibre.android.style.layers.CircleLayer("members-layer", "members-src")
-                                .withProperties(
-                                    org.maplibre.android.style.layers.PropertyFactory.circleRadius(9f),
-                                    org.maplibre.android.style.layers.PropertyFactory.circleColor(android.graphics.Color.rgb(79, 70, 229)),
-                                    org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth(2.5f),
-                                    org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor(android.graphics.Color.WHITE)
+                            // Scia: una linea per membro, dagli ultimi ~90s di punti che la
+                            // posizione porta con se'. Aggiunta PRIMA dei pallini, cosi' i
+                            // pallini restano sopra la linea.
+                            val lineFeatures = members
+                                .filter { it.recentPoints.size >= 2 }
+                                .map { m ->
+                                    val coords = m.recentPoints.sortedBy { it.t }
+                                        .map { org.maplibre.geojson.Point.fromLngLat(it.lon, it.lat) }
+                                    org.maplibre.geojson.Feature.fromGeometry(
+                                        org.maplibre.geojson.LineString.fromLngLats(coords)
+                                    )
+                                }
+                            if (lineFeatures.isNotEmpty()) {
+                                style.addSource(
+                                    org.maplibre.android.style.sources.GeoJsonSource(
+                                        "trail-src",
+                                        org.maplibre.geojson.FeatureCollection.fromFeatures(lineFeatures)
+                                    )
                                 )
-                            style.addLayer(layer)
+                                style.addLayer(
+                                    org.maplibre.android.style.layers.LineLayer("trail-layer", "trail-src")
+                                        .withProperties(
+                                            org.maplibre.android.style.layers.PropertyFactory.lineColor(android.graphics.Color.rgb(79, 70, 229)),
+                                            org.maplibre.android.style.layers.PropertyFactory.lineWidth(4f),
+                                            org.maplibre.android.style.layers.PropertyFactory.lineOpacity(0.7f),
+                                            org.maplibre.android.style.layers.PropertyFactory.lineCap(org.maplibre.android.style.layers.Property.LINE_CAP_ROUND),
+                                            org.maplibre.android.style.layers.PropertyFactory.lineJoin(org.maplibre.android.style.layers.Property.LINE_JOIN_ROUND)
+                                        )
+                                )
+                            }
+
+                            // Pallini dei membri: punto per la posizione attuale.
+                            val pointFeatures = members
+                                .filter { it.latitude != 0.0 || it.longitude != 0.0 }
+                                .map { m ->
+                                    org.maplibre.geojson.Feature.fromGeometry(
+                                        org.maplibre.geojson.Point.fromLngLat(m.longitude, m.latitude)
+                                    )
+                                }
+                            style.addSource(
+                                org.maplibre.android.style.sources.GeoJsonSource(
+                                    "members-src",
+                                    org.maplibre.geojson.FeatureCollection.fromFeatures(pointFeatures)
+                                )
+                            )
+                            style.addLayer(
+                                org.maplibre.android.style.layers.CircleLayer("members-layer", "members-src")
+                                    .withProperties(
+                                        org.maplibre.android.style.layers.PropertyFactory.circleRadius(9f),
+                                        org.maplibre.android.style.layers.PropertyFactory.circleColor(android.graphics.Color.rgb(79, 70, 229)),
+                                        org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth(2.5f),
+                                        org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor(android.graphics.Color.WHITE)
+                                    )
+                            )
                         }
                     }
                 }

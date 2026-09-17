@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.22.2-beta"
+    const val VERSION = "0.22.3-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧪 Anteprima nuova mappa: stile piu' ricco di negozi e punti d'interesse."
+        "🧪 Anteprima nuova mappa: ora disegna anche la scia (percorso recente) dietro i pallini dei membri."
     )
 }

@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.22.3-beta"
+    const val VERSION = "0.23.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧪 Anteprima nuova mappa: ora disegna anche la scia (percorso recente) dietro i pallini dei membri."
+        "🧪 Anteprima nuova mappa: la scia ora si aggancia alle strade reali (map-matching). Se il percorso e' fuori strada, resta com'e', senza forzature."
     )
 }

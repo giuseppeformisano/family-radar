@@ -13,7 +13,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,11 +54,15 @@ fun MapLibrePreviewDialog(
         val context = LocalContext.current
         val lifecycleOwner = LocalLifecycleOwner.current
 
+        var mapRef by remember { mutableStateOf<org.maplibre.android.maps.MapLibreMap?>(null) }
+        var styleReady by remember { mutableStateOf(false) }
+
         val mapView = remember {
             org.maplibre.android.MapLibre.getInstance(context)
             org.maplibre.android.maps.MapView(context).apply {
                 onCreate(null)
                 getMapAsync { map ->
+                    mapRef = map
                     map.cameraPosition = org.maplibre.android.camera.CameraPosition.Builder()
                         .target(org.maplibre.android.geometry.LatLng(latitude, longitude))
                         .zoom(15.0)
@@ -116,9 +124,30 @@ fun MapLibrePreviewDialog(
                                     )
                             )
                         }
+                        styleReady = true
                     }
                 }
             }
+        }
+
+        // Adattatore strada: aggancia la scia alle strade reali. Se il matching non e'
+        // affidabile (fuori strada) tiene la scia grezza. Aggiorna la linea gia' disegnata.
+        LaunchedEffect(members, styleReady) {
+            if (!styleReady) return@LaunchedEffect
+            val map = mapRef ?: return@LaunchedEffect
+            val withTrails = members.filter { it.recentPoints.size >= 2 }
+            if (withTrails.isEmpty()) return@LaunchedEffect
+            val features = withTrails.map { m ->
+                val raw = m.recentPoints.sortedBy { it.t }.map { it.lat to it.lon }
+                val snapped = com.example.util.RoadMatcher.matchToRoads(raw) ?: raw
+                val pts = snapped.map { org.maplibre.geojson.Point.fromLngLat(it.second, it.first) }
+                org.maplibre.geojson.Feature.fromGeometry(
+                    org.maplibre.geojson.LineString.fromLngLats(pts)
+                )
+            }
+            val fc = org.maplibre.geojson.FeatureCollection.fromFeatures(features)
+            map.style?.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("trail-src")
+                ?.setGeoJson(fc)
         }
 
         DisposableEffect(lifecycleOwner) {

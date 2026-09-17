@@ -17,16 +17,16 @@ android {
     applicationId = "com.formisano.familyradar"
     minSdk = 24
     targetSdk = 36
-    versionCode = 202
-    versionName = "0.29.1-beta"
+    versionCode = 203
+    versionName = "0.29.2-beta"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-    // MapLibre porta librerie native pesanti. Teniamo solo arm64-v8a (tutti i telefoni
-    // moderni): dimezza l'APK rispetto a includere anche armeabi-v7a (32-bit vecchi) e
-    // rende affidabile l'upload dell'APK sulla release GitHub. Le x86 sono da emulatore.
+    // Teniamo le due architetture ARM: arm64-v8a (telefoni moderni) E armeabi-v7a
+    // (telefoni piu' vecchi a 32 bit), cosi' l'app gira anche sui vecchi. Escluse solo
+    // le x86/x86_64 (emulatori), che gonfiavano l'APK inutilmente.
     ndk {
-      abiFilters += listOf("arm64-v8a")
+      abiFilters += listOf("arm64-v8a", "armeabi-v7a")
     }
   }
 

@@ -84,6 +84,11 @@ private const val DISPLAY_EASE_FACTOR = 0.25
 // punti fitti): niente easing, cosi' non resta indietro quando i fix sono regolari.
 private const val DISPLAY_SNAP_THRESHOLD_M = 3.0
 
+// Oltre questa distanza il pallino salta secco al bersaglio invece di scivolarci:
+// primo fix, cambio zona o spostamento reale molto grande non vanno "strisciati"
+// attraverso mezza mappa, altrimenti si vedrebbe il pallino sfrecciare.
+private const val DISPLAY_TELEPORT_THRESHOLD_M = 120.0
+
 // Soglia minima di spostamento reale sotto la quale un fix e' considerato rumore
 // del GPS e non movimento. La soglia si adatta alla qualita' del segnale: e' il
 // massimo fra un minimo fisso e il raggio d'errore del fix moltiplicato (un GPS che
@@ -341,55 +346,47 @@ fun OsmMapView(
     // sola e non vede le ricomposizioni successive.
     val currentFollowedUserId by rememberUpdatedState(followedUserId)
 
-    // Ticker di interpolazione: ogni 100 ms estrapola la posizione di TUTTI i membri
-    // in movimento. Usa interpBasePos/interpStartTime — aggiornati SOLO su fix GPS
-    // realmente nuovi — cosi' elapsedSec non puo' mai esplodere per aggiornamenti
-    // non GPS e il pallino non puo' fare salti enormi in avanti.
+    // Ticker: ogni 100 ms muove ogni pallino di un passo verso l'ULTIMA posizione
+    // vera conosciuta (interpBasePos), senza mai predire in avanti. Il movimento
+    // risulta morbido e il pallino non puo' mai finire dove la persona non e'.
     LaunchedEffect(Unit) {
         while (true) {
             delay(100L)
             val mapView = mapViewInstance ?: continue
-            val tickNow = System.currentTimeMillis()
             var changed = false
             memberMarkerMap.forEach { (userId, marker) ->
-                val motion = motionEstimate[userId] ?: run { displayedPos.remove(userId); return@forEach }
-                if (motion.speedMs < INTERP_MIN_SPEED_MS) { displayedPos.remove(userId); return@forEach }
+                // Bersaglio = ULTIMA posizione vera conosciuta (nessuna predizione in
+                // avanti: il pallino scivola verso dove la persona E' stata, mai verso
+                // dove l'app "indovina" che andra'). interpBasePos e' aggiornato solo sui
+                // fix accettati come reali, quindi rumore e salti spuri sono gia' esclusi.
+                val basePair = interpBasePos[userId] ?: return@forEach
+                val targetLat = basePair.first
+                val targetLon = basePair.second
 
-                val basePair = interpBasePos[userId] ?: run { displayedPos.remove(userId); return@forEach }
-                val startTime = interpStartTime[userId] ?: run { displayedPos.remove(userId); return@forEach }
-                val baseLat = basePair.first
-                val baseLon = basePair.second
-
-                val elapsedSec = ((tickNow - startTime) / 1000.0)
-                    .coerceIn(0.0, INTERP_MAX_ELAPSED_SEC)
-                val deltaMeters = motion.speedMs * elapsedSec
-                val bearingRad = Math.toRadians(motion.bearingDeg)
-                val dLat = deltaMeters * cos(bearingRad) / 111320.0
-                val dLon = deltaMeters * sin(bearingRad) /
-                    (111320.0 * cos(Math.toRadians(baseLat)))
-                // Bersaglio calcolato dall'estrapolazione in linea retta.
-                val targetLat = baseLat + dLat
-                val targetLon = baseLon + dLon
-
-                // Posizione mostrata: scivola verso il bersaglio invece di saltarci.
+                // Posizione mostrata: scivola verso il bersaglio.
                 val shown = displayedPos[userId]
                 val (showLat, showLon) = if (shown == null) {
                     targetLat to targetLon
                 } else {
                     val gap = distanceMeters(shown.first, shown.second, targetLat, targetLon)
-                    if (gap < DISPLAY_SNAP_THRESHOLD_M) {
-                        // Punti fitti e regolari: segue secco, niente ritardo.
+                    if (gap < DISPLAY_SNAP_THRESHOLD_M || gap > DISPLAY_TELEPORT_THRESHOLD_M) {
+                        // Arrivato (o troppo lontano: primo fix/cambio zona): salta secco.
                         targetLat to targetLon
                     } else {
-                        // Correzione grossa: colma solo una frazione della distanza.
+                        // Avvicinamento morbido: colma una frazione della distanza per tick.
                         (shown.first + (targetLat - shown.first) * DISPLAY_EASE_FACTOR) to
                             (shown.second + (targetLon - shown.second) * DISPLAY_EASE_FACTOR)
                     }
                 }
+
+                val moved = shown == null ||
+                    distanceMeters(shown.first, shown.second, showLat, showLon) > 0.05
                 displayedPos[userId] = showLat to showLon
                 val newPos = GeoPoint(showLat, showLon)
-                marker.position = newPos
-                changed = true
+                if (moved) {
+                    marker.position = newPos
+                    changed = true
+                }
 
                 val tag = marker.relatedObject as? UserLocation
                 val isSelfInTrip = tag != null && userId == currentUserId && userId in liveTripUserIds
@@ -407,8 +404,12 @@ fun OsmMapView(
                     }
                 }
 
+                // Insegue la posizione VERA (scivolata), mai una predizione: la mappa
+                // non puo' piu' finire in un punto dove la persona non c'e'. Solo quando
+                // il pallino si e' effettivamente mosso, cosi' da fermi puoi spostare la
+                // mappa a mano senza che ti riporti indietro di continuo.
                 val isFollowTarget = !currentFollowedUserId.isNullOrBlank() && userId == currentFollowedUserId
-                if (isFollowTarget) {
+                if (isFollowTarget && moved) {
                     try { mapView.controller?.animateTo(newPos) } catch (_: Throwable) {}
                 }
             }

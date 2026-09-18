@@ -14,7 +14,6 @@ object Changelog {
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🗺️ Heatmap percorsi: apri il dettaglio di un membro e tocca 'Percorsi' per vedere sulla mappa dove e' stato negli ultimi 30 giorni.",
-        "👆 Tocca la mappa per chiudere la heatmap."
+        "🌐 Cruscotto web: visualizza le posizioni della famiglia in tempo reale dal browser (GitHub Pages)."
     )
 }

@@ -19,6 +19,20 @@ enum class MapColorMode(val title: String) {
     DARK("Sempre scura")
 }
 
+/**
+ * Stile (vestito) della mappa nuova, del tutto indipendente dal tema dell'app.
+ * `slug` e' il nome dello stile su OpenFreeMap.
+ */
+enum class MapStyle(val title: String, val slug: String) {
+    BRIGHT("Colorato", "bright"),
+    LIBERTY("Stradale", "liberty"),
+    POSITRON("Minimale", "positron"),
+    DARK("Scuro", "dark"),
+    FIORD("Fiord", "fiord");
+
+    val url: String get() = "https://tiles.openfreemap.org/styles/$slug"
+}
+
 object ThemePreferences {
     private const val PREFS_NAME = "family_radar_theme_prefs"
     private const val KEY_THEME_MODE = "key_theme_mode"
@@ -40,6 +54,15 @@ object ThemePreferences {
         _useNewMapFlow.value = enabled
     }
 
+    private const val KEY_MAP_STYLE = "key_map_style"
+    private val _mapStyleFlow = MutableStateFlow(MapStyle.BRIGHT)
+    val mapStyleFlow: StateFlow<MapStyle> = _mapStyleFlow.asStateFlow()
+
+    fun setMapStyle(context: Context, style: MapStyle) {
+        getPrefs(context).edit().putString(KEY_MAP_STYLE, style.name).apply()
+        _mapStyleFlow.value = style
+    }
+
     fun init(context: Context) {
         val prefs = getPrefs(context)
         val savedName = prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)
@@ -57,6 +80,12 @@ object ThemePreferences {
         }
 
         _useNewMapFlow.value = prefs.getBoolean(KEY_USE_NEW_MAP, false)
+
+        _mapStyleFlow.value = try {
+            MapStyle.valueOf(prefs.getString(KEY_MAP_STYLE, MapStyle.BRIGHT.name) ?: MapStyle.BRIGHT.name)
+        } catch (_: Exception) {
+            MapStyle.BRIGHT
+        }
     }
 
     fun setMapColorMode(context: Context, mode: MapColorMode) {

@@ -23,7 +23,9 @@
       "PowerShell(Copy-Item \"$env:USERPROFILE\\\\.android\\\\debug2.keystore\" \"C:\\\\Users\\\\giuseppe.a.formisano\\\\Desktop\\\\Progetti\\\\PERSONALI\\\\family-radar\\\\debug.keystore\" -Force)",
       "Bash(git commit *)",
       "PowerShell(Select-String -Path \"C:\\\\Users\\\\giuseppe.a.formisano\\\\Desktop\\\\Progetti\\\\PERSONALI\\\\family-radar\\\\app\\\\src\\\\main\\\\java\\\\com\\\\example\\\\ui\\\\screens\\\\main\\\\MainRadarScreen.kt\" -Pattern \"voice|audio|play|speak|ptt|pulse\" -CaseSensitive:$false)",
-      "PowerShell(Select-String -Path \"C:\\\\Users\\\\giuseppe.a.formisano\\\\Desktop\\\\Progetti\\\\PERSONALI\\\\family-radar\\\\app\\\\src\\\\main\\\\java\\\\com\\\\example\\\\repository\\\\FirebaseRepository.kt\" -Pattern \"getVoiceNotePath|latestVoicePing|VoicePing|voicePing\" -CaseSensitive:$false)"
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\giuseppe.a.formisano\\\\Desktop\\\\Progetti\\\\PERSONALI\\\\family-radar\\\\app\\\\src\\\\main\\\\java\\\\com\\\\example\\\\repository\\\\FirebaseRepository.kt\" -Pattern \"getVoiceNotePath|latestVoicePing|VoicePing|voicePing\" -CaseSensitive:$false)",
+      "Bash(python --version 2>/dev/null || python3 --version 2>/dev/null; ls \"C:/Users/GIUSEP~1.FOR/AppData/Local/Temp/claude\" 2>/dev/null; find \"C:/Users/giuseppe.a.formisano/Desktop/Progetti/PERSONALI\" -iname \"*.m4a\" -o -iname \"*.aac\" 2>/dev/null | head)",
+      "Bash(cd \"C:\\\\Users\\\\giuseppe.a.formisano\\\\Desktop\\\\Progetti\\\\PERSONALI\\\\family-radar\" && grep -rn \"data class ChatMessage\" app/src/main/java/com/example/ && grep -rn \"val timestamp\\\\|val senderId\\\\|val senderName\" app/src/main/java/com/example/model/*.kt | grep -i \"chat\\\\|message\" ; echo \"---\" ; sed -n '/data class ChatMessage/,/\\)/p' app/src/main/java/com/example/model/*.kt 2>/dev/null | head -40)"
     ]
   }
 }

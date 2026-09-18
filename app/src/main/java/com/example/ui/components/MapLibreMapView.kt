@@ -50,7 +50,7 @@ import com.example.model.UserLocation
 fun MapLibreMapView(
     locations: List<UserLocation>,
     currentUserId: String,
-    dark: Boolean,
+    styleUrl: String,
     places: List<com.example.model.SavedPlace> = emptyList(),
     snapshots: List<com.example.model.PlaceSnapshot> = emptyList(),
     targetFocusPoint: Pair<Double, Double>? = null,
@@ -88,9 +88,6 @@ fun MapLibreMapView(
     var styleReady by remember { mutableStateOf(false) }
     var centeredOnce by remember { mutableStateOf(false) }
 
-    val styleUrl = if (dark) "https://tiles.openfreemap.org/styles/dark"
-    else "https://tiles.openfreemap.org/styles/bright"
-
     val mapView = remember {
         org.maplibre.android.MapLibre.getInstance(context)
         // textureMode(true): senza, la mappa usa una SurfaceView che disegna in un
@@ -114,11 +111,11 @@ fun MapLibreMapView(
         }
     }
 
-    // Cambio colore mappa: ricarica lo style sulla mappa esistente e ri-aggiunge i
+    // Cambio stile mappa: ricarica lo style sulla mappa esistente e ri-aggiunge i
     // layer. Salta la prima esecuzione (lo style e' gia' caricato in getMapAsync).
-    var darkInitialized by remember { mutableStateOf(false) }
-    LaunchedEffect(dark) {
-        if (!darkInitialized) { darkInitialized = true; return@LaunchedEffect }
+    var styleInitialized by remember { mutableStateOf(false) }
+    LaunchedEffect(styleUrl) {
+        if (!styleInitialized) { styleInitialized = true; return@LaunchedEffect }
         val map = mapRef ?: return@LaunchedEffect
         styleReady = false
         map.setStyle(styleUrl) { style ->

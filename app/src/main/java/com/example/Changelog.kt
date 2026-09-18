@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.32.0-beta"
+    const val VERSION = "0.33.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Nuovo filtro unico della posizione: pulisce il GPS in modo coerente (in viaggio e da fermo), al posto dei tanti filtri sparsi.",
-        "✨ In Impostazioni c'e' una manopola 'Reattivita' filtro posizione' per tararlo dal vivo, senza aspettare nuove versioni."
+        "✨ Stile mappa dedicato: scegli l'aspetto della mappa nuova (Colorato, Stradale, Minimale, Scuro, Fiord), indipendente dal tema dell'app.",
+        "🧹 Rimossa la vecchia 'prova mappa (beta)'."
     )
 }

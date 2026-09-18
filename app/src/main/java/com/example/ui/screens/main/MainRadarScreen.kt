@@ -56,6 +56,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -671,18 +672,13 @@ fun MainRadarScreen(
     val sheetContentHeight = screenHeight * 0.86f
 
     val useNewMap by ThemePreferences.useNewMapFlow.collectAsState()
-    val mapColorMode by ThemePreferences.mapColorModeFlow.collectAsState()
-    val mapDark = when (mapColorMode) {
-        com.example.ui.theme.MapColorMode.LIGHT -> false
-        com.example.ui.theme.MapColorMode.DARK -> true
-        com.example.ui.theme.MapColorMode.THEME -> RadarTheme.palette.isDark
-    }
+    val mapStyle by ThemePreferences.mapStyleFlow.collectAsState()
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
       if (useNewMap) {
         com.example.ui.components.MapLibreMapView(
             locations = locations,
             currentUserId = currentUserId,
-            dark = mapDark,
+            styleUrl = mapStyle.url,
             places = places,
             snapshots = snapshots,
             targetFocusPoint = targetMapFocus,
@@ -3795,17 +3791,7 @@ private fun SettingsPanel(
     val currentThemeMode by ThemePreferences.themeModeFlow.collectAsState()
     val currentMapColorMode by ThemePreferences.mapColorModeFlow.collectAsState()
     val currentUseNewMap by ThemePreferences.useNewMapFlow.collectAsState()
-    var showMapPreview by remember { mutableStateOf(false) }
-    if (showMapPreview) {
-        val myLoc = memberLocations.find { it.userId == currentUserId }
-        val center = myLoc ?: memberLocations.firstOrNull()
-        com.example.ui.components.MapLibrePreviewDialog(
-            latitude = center?.latitude ?: 41.9028,
-            longitude = center?.longitude ?: 12.4964,
-            members = memberLocations,
-            onDismiss = { showMapPreview = false }
-        )
-    }
+    val currentMapStyle by ThemePreferences.mapStyleFlow.collectAsState()
     val currentLanguage by LanguagePreferences.languageFlow.collectAsState()
 
     var intervalUnit by remember {
@@ -4333,19 +4319,41 @@ private fun SettingsPanel(
                 }
 
                 Spacer(Modifier.height(Spacing.xs))
-                SettingsClickRow(
-                    title = "Prova nuova mappa (beta)",
-                    description = "Mappa vettoriale mondiale con negozi e POI (MapLibre + OpenFreeMap)",
-                    icon = Icons.Default.Map,
-                    onClick = { showMapPreview = true }
-                )
                 SettingsToggleRow(
-                    title = "Usa nuova mappa (beta)",
-                    description = "Sostituisce la mappa attuale con quella nuova. In migrazione: per ora mostra pallini e scia, mancano ancora luoghi, snapshot e 'segui'.",
+                    title = "Usa nuova mappa",
+                    description = "Mappa vettoriale mondiale (MapLibre + OpenFreeMap) con negozi e punti d'interesse, al posto di quella attuale.",
                     icon = Icons.Default.Map,
                     checked = currentUseNewMap,
                     onCheckedChange = { ThemePreferences.setUseNewMap(context, it) }
                 )
+                if (currentUseNewMap) {
+                    Spacer(Modifier.height(Spacing.sm))
+                    Text(
+                        text = "Stile mappa",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "L'aspetto della mappa nuova, indipendente dal tema dell'app.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(Spacing.xs))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                    ) {
+                        com.example.ui.theme.MapStyle.values().forEach { style ->
+                            PillChip(
+                                label = style.title,
+                                selected = currentMapStyle == style,
+                                onClick = { ThemePreferences.setMapStyle(context, style) }
+                            )
+                        }
+                    }
+                }
 
                 Spacer(Modifier.height(Spacing.md))
                 HairlineDivider()

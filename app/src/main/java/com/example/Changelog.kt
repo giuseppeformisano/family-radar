@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.43.0-beta"
+    const val VERSION = "0.44.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🛑 Ci si ferma? La velocita' torna subito a zero per tutti, senza aspettare.",
-        "📍 Pallino e scia agganciati alle strade reali usando i dati gia' caricati in mappa."
+        "📡 Posizioni GPS imprecise non vengono piu' salvate: meno salti sulla mappa.",
+        "🛑 Ci si ferma? La velocita' torna subito a zero per tutti, senza aspettare."
     )
 }

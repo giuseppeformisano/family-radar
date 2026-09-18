@@ -2887,24 +2887,25 @@ class FirebaseRepository private constructor(private val context: Context) {
             return LocationGate(true, "alta precisione")
         }
 
+        val distance = GeofenceHelper.calculateDistanceMeters(
+            prevLat, prevLon, location.latitude, location.longitude
+        )
+
+        // Filtro precisione: se il GPS e' cosi' impreciso che lo spostamento apparente
+        // rientra nel suo stesso margine di errore, e' rumore — non movimento reale.
+        // Viene valutato PRIMA della velocita': un fix impreciso mente anche sulla velocita'.
+        if (location.accuracy > 0f && distance <= location.accuracy) {
+            return LocationGate(false, "fix impreciso: spostamento ${distance.toInt()}m entro errore ${location.accuracy.toInt()}m")
+        }
+
         // Solo velocita' PLAUSIBILI contano come "in movimento": un valore assurdo
         // (es. 100+ m/s da uno scossone) non deve far scattare la scrittura.
         if (location.speed in MOVING_SPEED_THRESHOLD_MS..MAX_PLAUSIBLE_SPEED_MS) {
             return LocationGate(true, "in movimento (${"%.1f".format(location.speed)} m/s)")
         }
 
-        val distance = GeofenceHelper.calculateDistanceMeters(
-            prevLat, prevLon, location.latitude, location.longitude
-        )
-
         if (distance < MIN_DISPLACEMENT_METERS) {
             return LocationGate(false, "spostamento ${distance.toInt()}m sotto soglia")
-        }
-
-        // Se il raggio di incertezza del fix è più ampio dello spostamento stesso,
-        // quello "spostamento" può benissimo essere solo rumore del sensore.
-        if (location.accuracy > 0f && distance <= location.accuracy) {
-            return LocationGate(false, "spostamento ${distance.toInt()}m entro l'errore ${location.accuracy.toInt()}m")
         }
 
         return LocationGate(true, "spostamento ${distance.toInt()}m")

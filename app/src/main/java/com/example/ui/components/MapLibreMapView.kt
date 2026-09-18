@@ -185,13 +185,12 @@ fun MapLibreMapView(
         memberTargets.keys.retainAll(ids)
         memberDisplayed.keys.retainAll(ids)
 
-        // Scia: snap locale ai dati stradali gia' caricati in mappa; fallback GPS grezzo.
+        // Scia: smoothing Chaikin sui punti GPS grezzi (funziona anche off-screen).
         val trailFeatures = valid.filter { it.recentPoints.size >= 2 }.map { m ->
-            val pts = m.recentPoints.sortedBy { it.t }.map { rp ->
-                val (sLat, sLon) = snapToRoad(map, rp.lat, rp.lon)
-                org.maplibre.geojson.Point.fromLngLat(sLon, sLat)
-            }
-            org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.LineString.fromLngLats(pts))
+            val raw = m.recentPoints.sortedBy { it.t }
+                .map { org.maplibre.geojson.Point.fromLngLat(it.lon, it.lat) }
+            val smoothed = chaikinSmooth(raw, passes = 3)
+            org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.LineString.fromLngLats(smoothed))
         }
         style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("trail-src")
             ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(trailFeatures))
@@ -507,6 +506,23 @@ private fun addRadarLayers(style: org.maplibre.android.maps.Style) {
     style.addLayer(symbol("snapshots-layer", "snapshots-src"))
     style.addSource(org.maplibre.android.style.sources.GeoJsonSource("members-src"))
     style.addLayer(symbol("members-layer", "members-src"))
+}
+
+// Ammorbidisce una polilinea GPS con l'algoritmo di Chaikin (nessuna rete stradale richiesta).
+private fun chaikinSmooth(pts: List<org.maplibre.geojson.Point>, passes: Int = 3): List<org.maplibre.geojson.Point> {
+    var c = pts
+    repeat(passes) {
+        val out = mutableListOf(c.first())
+        for (i in 0 until c.size - 1) {
+            val (x0, y0) = c[i].longitude() to c[i].latitude()
+            val (x1, y1) = c[i + 1].longitude() to c[i + 1].latitude()
+            out += org.maplibre.geojson.Point.fromLngLat(x0 * .75 + x1 * .25, y0 * .75 + y1 * .25)
+            out += org.maplibre.geojson.Point.fromLngLat(x0 * .25 + x1 * .75, y0 * .25 + y1 * .75)
+        }
+        out += c.last()
+        c = out
+    }
+    return c
 }
 
 // Snap di un punto GPS alla strada piu' vicina gia' caricata nei tile vettoriali.

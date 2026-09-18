@@ -333,49 +333,37 @@ let focusedUid    = null;
 let firstFit      = false;
 let currentLocs   = [];
 
-// ── MAP MATCHING (OSRM) ───────────────────────────────────────────────────────
-const matchCache = {}; // uid → matched coords (invalidated when points change)
-
-async function matchToRoads(uid, rawCoords) {
-  if (rawCoords.length < 2) return null;
-  const key = uid + ':' + rawCoords.map(c=>c.join(',')).join('|');
-  if (matchCache[uid]?.key === key) return matchCache[uid].coords;
-  try {
-    const pts = rawCoords.length > 100 ? rawCoords.slice(-100) : rawCoords;
-    const coordStr   = pts.map(c => c.join(',')).join(';');
-    const radiusStr  = pts.map(() => '40').join(';');
-    const url = `https://router.project-osrm.org/match/v1/driving/${coordStr}` +
-      `?geometries=geojson&overview=full&tidy=true&radiuses=${radiusStr}`;
-    const res  = await fetch(url, { headers:{'User-Agent':'FamilyRadar/1.0'} });
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (json.code !== 'Ok' || !json.matchings?.length) return null;
-    const m = json.matchings[0];
-    if ((m.confidence || 0) < 0.10) return null;
-    const coords = m.geometry.coordinates; // already [lon,lat]
-    if (coords.length < 2) return null;
-    matchCache[uid] = { key, coords };
-    return coords;
-  } catch { return null; }
+// ── SMOOTHING LOCALE (Chaikin) ────────────────────────────────────────────────
+// Ammorbidisce la scia GPS senza inviare niente a server esterni.
+function chaikin(pts, passes = 3) {
+  let c = pts;
+  for (let p = 0; p < passes; p++) {
+    const out = [c[0]];
+    for (let i = 0; i < c.length - 1; i++) {
+      const [x0,y0] = c[i], [x1,y1] = c[i+1];
+      out.push([x0*.75 + x1*.25, y0*.75 + y1*.25]);
+      out.push([x0*.25 + x1*.75, y0*.25 + y1*.75]);
+    }
+    out.push(c[c.length - 1]);
+    c = out;
+  }
+  return c;
 }
 
 // ── RENDER MEMBRI ─────────────────────────────────────────────────────────────
-async function renderLocs(locs) {
+function renderLocs(locs) {
   currentLocs = locs;
   if (!styleReady) { pendingLocs = locs; return; }
 
-  // Scie: map matching async, fallback grezzo
-  const trailFeatures = await Promise.all(
-    locs.filter(l => (l.recentPoints||[]).length >= 2).map(async l => {
-      const sorted = l.recentPoints.slice().sort((a,b)=>a.t-b.t).map(p=>[p.lo,p.la]);
-      const matched = await matchToRoads(l.userId, sorted);
-      return {
-        type:'Feature',
-        properties:{ color: memberColor(l.userId) },
-        geometry:{ type:'LineString', coordinates: matched || sorted }
-      };
-    })
-  );
+  // Scie con smoothing locale
+  const trailFeatures = locs.filter(l => (l.recentPoints||[]).length >= 2).map(l => {
+    const sorted = l.recentPoints.slice().sort((a,b)=>a.t-b.t).map(p=>[p.lo,p.la]);
+    return {
+      type:'Feature',
+      properties:{ color: memberColor(l.userId) },
+      geometry:{ type:'LineString', coordinates: chaikin(sorted) }
+    };
+  });
   map.getSource('trails')?.setData({ type:'FeatureCollection', features: trailFeatures });
 
   const seen   = new Set();

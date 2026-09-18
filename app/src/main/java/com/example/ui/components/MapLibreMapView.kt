@@ -187,12 +187,14 @@ fun MapLibreMapView(
         memberTargets.keys.retainAll(ids)
         memberDisplayed.keys.retainAll(ids)
 
-        // Scia: smoothing Chaikin sui punti GPS grezzi (funziona anche off-screen).
+        // Scia: snap di ogni punto ai dati stradali gia' caricati nei tile MapLibre.
+        // Per punti fuori schermo queryRenderedFeatures restituisce vuoto → GPS grezzo.
         val trailFeatures = valid.filter { it.recentPoints.size >= 2 }.map { m ->
-            val raw = m.recentPoints.sortedBy { it.t }
-                .map { org.maplibre.geojson.Point.fromLngLat(it.lon, it.lat) }
-            val smoothed = chaikinSmooth(raw, passes = 3)
-            org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.LineString.fromLngLats(smoothed))
+            val pts = m.recentPoints.sortedBy { it.t }.map { rp ->
+                val (sLat, sLon) = snapToRoad(map, rp.lat, rp.lon)
+                org.maplibre.geojson.Point.fromLngLat(sLon, sLat)
+            }
+            org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.LineString.fromLngLats(pts))
         }
         style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("trail-src")
             ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(trailFeatures))

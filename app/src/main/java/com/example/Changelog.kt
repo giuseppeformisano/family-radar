@@ -10,10 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.37.0-beta"
+    const val VERSION = "0.38.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "💬 Menu chat unificato: tieni premuto un messaggio per vedere emoji e azioni nello stesso riquadro."
+        "💬 Chat: la lista scorre automaticamente in fondo quando invii un messaggio.",
+        "✅ Spunte di lettura solo sull'ultimo messaggio inviato: orologio = in invio, spunta = consegnato, doppia blu = letto."
     )
 }

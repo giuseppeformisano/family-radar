@@ -2679,6 +2679,9 @@ private fun ChatPanel(
             )
             inputText = ""
             replyingTo = null
+            coroutineScope.launch {
+                runCatching { listState.animateScrollToItem(Int.MAX_VALUE) }
+            }
         }
     }
 
@@ -2701,13 +2704,13 @@ private fun ChatPanel(
     //   mantieni la posizione compensando i messaggi aggiunti sopra.
     var prevSize by remember { mutableStateOf(0) }
     var prevLastId by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(messages) {
-        if (messages.isEmpty()) { prevSize = 0; prevLastId = null; return@LaunchedEffect }
-        val lastId = messages.last().id
-        val added = messages.size - prevSize
+    LaunchedEffect(visibleMessages) {
+        if (visibleMessages.isEmpty()) { prevSize = 0; prevLastId = null; return@LaunchedEffect }
+        val lastId = visibleMessages.last().id
+        val added = visibleMessages.size - prevSize
         when {
-            prevSize == 0 -> runCatching { listState.scrollToItem(messages.size - 1) }
-            lastId != prevLastId -> runCatching { listState.animateScrollToItem(messages.size - 1) }
+            prevSize == 0 -> runCatching { listState.scrollToItem(visibleMessages.size - 1) }
+            lastId != prevLastId -> runCatching { listState.animateScrollToItem(visibleMessages.size - 1) }
             added > 0 -> runCatching {
                 listState.scrollToItem(
                     listState.firstVisibleItemIndex + added,
@@ -2715,7 +2718,7 @@ private fun ChatPanel(
                 )
             }
         }
-        prevSize = messages.size
+        prevSize = visibleMessages.size
         prevLastId = lastId
     }
 
@@ -3203,9 +3206,10 @@ private fun ChatBubble(
                         color = if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    // Stato di consegna solo sui propri messaggi: orologio (in invio),
-                    // spunta (inviato), doppia spunta blu (letto da qualcuno).
-                    if (isMe) {
+                    // Stato di consegna: solo sull'ultimo mio messaggio per non
+                    // riempire ogni bolla di icone. Orologio = in invio,
+                    // spunta singola = inviato, doppia blu = letto da qualcuno.
+                    if (isMe && showReadReceipt) {
                         val (icon, tint) = when {
                             isPending -> Icons.Default.Schedule to MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
                             readerNames.isNotEmpty() -> Icons.Default.DoneAll to RadarSemantic.Online

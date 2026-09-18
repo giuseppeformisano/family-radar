@@ -260,26 +260,6 @@ fun MemberDetailSheet(
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(stringResource(R.string.action_directions), maxLines = 1)
                     }
-
-                    // Chat with member / group
-                    Button(
-                        onClick = {
-                            onDismiss()
-                            onNavigateToChat()
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("chat_action_button"),
-                        shape = RoundedCornerShape(Radius.md),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    ) {
-                        Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(stringResource(R.string.action_message), maxLines = 1)
-                    }
                 }
 
                 if (isSelf && onEditProfileClick != null) {

@@ -596,45 +596,31 @@ fun MainRadarScreen(
     LaunchedEffect(isSimulationRunning) {
         if (!isSimulationRunning) return@LaunchedEffect
 
-        // Waypoint relativi (lat, lon) in gradi dal punto di partenza.
-        // Formano un percorso a loop con svoltate realistiche (~500m x 300m).
-        val routeOffsets = listOf(
-            Pair(0.000,  0.000),
-            Pair(0.001,  0.000),
-            Pair(0.002,  0.001),
-            Pair(0.003,  0.002),
-            Pair(0.004,  0.003),
-            Pair(0.004,  0.005),
-            Pair(0.003,  0.006),
-            Pair(0.002,  0.007),
-            Pair(0.001,  0.006),
-            Pair(0.000,  0.005),
-            Pair(-0.001, 0.004),
-            Pair(-0.001, 0.003),
-            Pair(-0.001, 0.002),
-            Pair(-0.001, 0.001),
-            Pair(0.000,  0.000),
-        )
-
         val speedMs = 11.0  // ~40 km/h
 
-        // Loop infinito fino a stop simulazione
+        // Loop: da dove si trova ora, sceglie una destinazione casuale a ~1-2 km,
+        // chiede a OSRM il PERCORSO SU STRADA e ci fa camminare sopra il pallino.
         while (isSimulationRunning) {
-            // Legge la posizione ATTUALE del membro al momento di (ri)partenza del loop,
-            // così ogni giro parte da dove si trovava davvero — senza salti.
-            val target = currentLocations.firstOrNull { it.userId != simCurrentUid }
-                ?: break
+            val target = currentLocations.firstOrNull { it.userId != simCurrentUid } ?: break
             val originLat = target.latitude
             val originLon = target.longitude
 
-            val route = routeOffsets.map { (dLat, dLon) ->
-                Pair(originLat + dLat, originLon + dLon)
-            }
+            // Destinazione casuale ~1-2 km in una direzione qualsiasi.
+            val bearingRad = Random.nextDouble(0.0, 2 * Math.PI)
+            val distKm = Random.nextDouble(1.0, 2.0)
+            val dLat = (distKm / 111.0) * Math.cos(bearingRad)
+            val dLon = (distKm / (111.0 * Math.cos(Math.toRadians(originLat)))) * Math.sin(bearingRad)
+            val destLat = originLat + dLat
+            val destLon = originLon + dLon
 
-            for (segIdx in 0 until route.size - 1) {
+            // Percorso su strada (fallback: linea retta se OSRM non risponde).
+            val roadPath = com.example.util.RoadMatcher.route(originLat, originLon, destLat, destLon)
+                ?: listOf(originLat to originLon, destLat to destLon)
+
+            for (segIdx in 0 until roadPath.size - 1) {
                 if (!isSimulationRunning) break
-                val (aLat, aLon) = route[segIdx]
-                val (bLat, bLon) = route[segIdx + 1]
+                val (aLat, aLon) = roadPath[segIdx]
+                val (bLat, bLon) = roadPath[segIdx + 1]
 
                 val results = FloatArray(1)
                 android.location.Location.distanceBetween(aLat, aLon, bLat, bLon, results)
@@ -664,7 +650,7 @@ fun MainRadarScreen(
                     t += speedMs / segLen
                 }
             }
-            // Fine loop: riparte leggendo la posizione aggiornata
+            // Arrivato a destinazione: riparte con un nuovo tragitto su strada.
         }
     }
 

@@ -2788,6 +2788,12 @@ class FirebaseRepository private constructor(private val context: Context) {
     private var lastWrittenLocNickname: String? = null
     private var lastWrittenLocPhoto: String? = null
 
+    // Posizione filtrata precedente, per calcolare la velocita' dal movimento reale
+    // invece di fidarsi del campo "speed" del GPS (spesso 0 anche mentre ci si muove).
+    private var prevFilteredLat: Double? = null
+    private var prevFilteredLon: Double? = null
+    private var prevFilteredTime: Long = 0L
+
     // Filtro unico che ripulisce il GPS (vedi LocationKalman). Manopola "q" regolabile
     // in app: alto = segue in fretta (meno liscio), basso = piu' stabile.
     private val _filterQ = MutableStateFlow(settingsPrefs.getFloat("filter_q", 3.0f))
@@ -2982,7 +2988,25 @@ class FirebaseRepository private constructor(private val context: Context) {
         val matchedPlace = placeForLabel
         // Velocita' implausibile (>~250 km/h) = sensore che sbanda: si azzera, cosi'
         // nessuno vede numeri assurdi tipo 392 km/h da un semplice scossone.
-        val safeSpeed = if (loc.speed < 0f || loc.speed > MAX_PLAUSIBLE_SPEED_MS) 0f else loc.speed
+        // Velocita' calcolata dal movimento reale (posizione filtrata vs precedente):
+        // piu' affidabile del campo GPS che spesso resta 0. Se non calcolabile, ripiega
+        // sul campo grezzo (comunque clampato ai valori plausibili).
+        val rawSafe = if (loc.speed < 0f || loc.speed > MAX_PLAUSIBLE_SPEED_MS) 0f else loc.speed
+        val computedSpeed = run {
+            val pLat = prevFilteredLat
+            val pLon = prevFilteredLon
+            if (pLat != null && pLon != null && prevFilteredTime > 0L) {
+                val dt = (loc.timestamp - prevFilteredTime) / 1000.0
+                if (dt > 0.3) {
+                    val d = GeofenceHelper.calculateDistanceMeters(pLat, pLon, loc.latitude, loc.longitude)
+                    (d / dt).toFloat().coerceIn(0f, MAX_PLAUSIBLE_SPEED_MS)
+                } else null
+            } else null
+        }
+        prevFilteredLat = loc.latitude
+        prevFilteredLon = loc.longitude
+        prevFilteredTime = loc.timestamp
+        val safeSpeed = computedSpeed ?: rawSafe
         val enrichedLocation = loc.copy(
             userId = user.uid,
             userName = user.displayName,

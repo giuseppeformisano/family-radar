@@ -10,11 +10,12 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.33.0-beta"
+    const val VERSION = "0.34.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Stile mappa dedicato: scegli l'aspetto della mappa nuova (Colorato, Stradale, Minimale, Scuro, Fiord), indipendente dal tema dell'app.",
-        "🧹 Rimossa la vecchia 'prova mappa (beta)'."
+        "🐞 Velocita' nel dettaglio persona ora calcolata dal movimento reale: niente piu' 'fermo' mentre ci si muove.",
+        "🧹 Tolto il pulsante 'Messaggia' dal dettaglio persona (la chat e' gia' condivisa).",
+        "✨ Simulazione tragitto che segue le strade vere."
     )
 }

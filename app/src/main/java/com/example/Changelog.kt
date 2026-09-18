@@ -10,12 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.34.0-beta"
+    const val VERSION = "0.35.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🐞 Velocita' nel dettaglio persona ora calcolata dal movimento reale: niente piu' 'fermo' mentre ci si muove.",
-        "🧹 Tolto il pulsante 'Messaggia' dal dettaglio persona (la chat e' gia' condivisa).",
-        "✨ Simulazione tragitto che segue le strade vere."
+        "🧹 Impostazioni riordinate: spaziatura uniforme, nuova sezione 'Mappa', tolto il doppione 'Colore mappa'.",
+        "🧹 Il cursore di taratura del filtro posizione spostato in 'Sviluppatore'."
     )
 }

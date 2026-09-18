@@ -3944,36 +3944,6 @@ private fun SettingsPanel(
                     onCheckedChange = onToggleHighPrecisionMovement,
                     testTag = "high_precision_switch"
                 )
-                Spacer(Modifier.height(Spacing.sm))
-                Column(modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Reattività filtro posizione",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = String.format(Locale.US, "%.1f", filterQ),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Text(
-                        text = "Basso = pallino piu' stabile e liscio (ma piu' molle). Alto = segue in fretta i movimenti (ma piu' nervoso). Regola e prova dal vivo.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Slider(
-                        value = filterQ,
-                        onValueChange = onSetFilterQ,
-                        valueRange = 0.5f..15f,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
                 BatteryReliabilityCard()
                 Spacer(Modifier.height(Spacing.md))
                 Text(
@@ -4258,53 +4228,62 @@ private fun SettingsPanel(
                     subtitle = stringResource(R.string.settings_appearance_subtitle),
                     icon = Icons.Default.Palette
                 )
-                Spacer(Modifier.height(Spacing.xs))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
-                ) {
-                    listOf(
-                        Triple(ThemeMode.SYSTEM, R.string.theme_system, Icons.Default.BrightnessAuto),
-                        Triple(ThemeMode.LIGHT, R.string.theme_light, Icons.Default.LightMode),
-                        Triple(ThemeMode.DARK, R.string.theme_dark, Icons.Default.DarkMode)
-                    ).forEach { (mode, labelRes, icon) ->
-                        PillChip(
-                            label = stringResource(labelRes),
-                            icon = icon,
-                            selected = currentThemeMode == mode,
-                            onClick = { ThemePreferences.setThemeMode(context, mode) },
-                            modifier = Modifier.weight(1f)
-                        )
+                SettingsSelectorGroup(label = "Tema") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                    ) {
+                        listOf(
+                            Triple(ThemeMode.SYSTEM, R.string.theme_system, Icons.Default.BrightnessAuto),
+                            Triple(ThemeMode.LIGHT, R.string.theme_light, Icons.Default.LightMode),
+                            Triple(ThemeMode.DARK, R.string.theme_dark, Icons.Default.DarkMode)
+                        ).forEach { (mode, labelRes, icon) ->
+                            PillChip(
+                                label = stringResource(labelRes),
+                                icon = icon,
+                                selected = currentThemeMode == mode,
+                                onClick = { ThemePreferences.setThemeMode(context, mode) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                 }
 
-                Spacer(Modifier.height(Spacing.md))
-                Text(
-                    text = "Colore mappa",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                SettingsSelectorGroup(label = stringResource(R.string.settings_language)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                    ) {
+                        listOf(
+                            AppLanguage.SYSTEM to R.string.language_system,
+                            AppLanguage.ITALIAN to R.string.language_italian,
+                            AppLanguage.ENGLISH to R.string.language_english
+                        ).forEach { (language, labelRes) ->
+                            PillChip(
+                                label = stringResource(labelRes),
+                                selected = currentLanguage == language,
+                                onClick = {
+                                    if (currentLanguage != language) {
+                                        LanguagePreferences.setLanguage(context, language)
+                                        context.findActivityOrNull()?.recreate()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---- Mappa ----
+        item {
+            SettingsCard {
+                SettingsSectionHeader(
+                    title = "Mappa",
+                    subtitle = "Aspetto e sorgente della mappa",
+                    icon = Icons.Default.Map
                 )
-                Spacer(Modifier.height(Spacing.xs))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
-                ) {
-                    listOf(
-                        com.example.ui.theme.MapColorMode.THEME to Icons.Default.BrightnessAuto,
-                        com.example.ui.theme.MapColorMode.LIGHT to Icons.Default.LightMode,
-                        com.example.ui.theme.MapColorMode.DARK to Icons.Default.DarkMode
-                    ).forEach { (mode, icon) ->
-                        PillChip(
-                            label = mode.title,
-                            icon = icon,
-                            selected = currentMapColorMode == mode,
-                            onClick = { ThemePreferences.setMapColorMode(context, mode) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(Spacing.xs))
                 SettingsToggleRow(
                     title = "Usa nuova mappa",
                     description = "Mappa vettoriale mondiale (MapLibre + OpenFreeMap) con negozi e punti d'interesse, al posto di quella attuale.",
@@ -4313,73 +4292,22 @@ private fun SettingsPanel(
                     onCheckedChange = { ThemePreferences.setUseNewMap(context, it) }
                 )
                 if (currentUseNewMap) {
-                    Spacer(Modifier.height(Spacing.sm))
-                    Text(
-                        text = "Stile mappa",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "L'aspetto della mappa nuova, indipendente dal tema dell'app.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(Spacing.xs))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                    SettingsSelectorGroup(
+                        label = "Stile mappa",
+                        description = "L'aspetto della mappa, indipendente dal tema dell'app."
                     ) {
-                        com.example.ui.theme.MapStyle.values().forEach { style ->
-                            PillChip(
-                                label = style.title,
-                                selected = currentMapStyle == style,
-                                onClick = { ThemePreferences.setMapStyle(context, style) }
-                            )
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
+                        ) {
+                            com.example.ui.theme.MapStyle.values().forEach { style ->
+                                PillChip(
+                                    label = style.title,
+                                    selected = currentMapStyle == style,
+                                    onClick = { ThemePreferences.setMapStyle(context, style) }
+                                )
+                            }
                         }
-                    }
-                }
-
-                Spacer(Modifier.height(Spacing.md))
-                HairlineDivider()
-                Spacer(Modifier.height(Spacing.md))
-
-                SettingsSectionHeader(
-                    title = stringResource(R.string.settings_language),
-                    subtitle = stringResource(R.string.settings_language_subtitle),
-                    icon = Icons.Default.Language
-                )
-                Spacer(Modifier.height(Spacing.xs))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
-                ) {
-                    listOf(
-                        AppLanguage.SYSTEM to R.string.language_system,
-                        AppLanguage.ITALIAN to R.string.language_italian,
-                        AppLanguage.ENGLISH to R.string.language_english
-                    ).forEach { (language, labelRes) ->
-                        PillChip(
-                            label = stringResource(labelRes),
-                            selected = currentLanguage == language,
-                            onClick = {
-                                if (currentLanguage != language) {
-                                    LanguagePreferences.setLanguage(context, language)
-                                    // La locale si applica in attachBaseContext, che
-                                    // gira una volta per istanza di Activity: senza
-                                    // recreate() il cambio si vedrebbe solo al
-                                    // prossimo avvio dell'app.
-                                    //
-                                    // Non basta un cast: LocalContext puo' essere un
-                                    // ContextWrapper (lo e' di sicuro qui, visto che
-                                    // la locale stessa lo avvolge), quindi si risale
-                                    // la catena fino all'Activity.
-                                    context.findActivityOrNull()?.recreate()
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
                     }
                 }
             }
@@ -4664,7 +4592,17 @@ private fun SettingsPanel(
                     testTag = "simulation_toggle_button"
                 )
 
-                Spacer(Modifier.height(Spacing.md))
+                SettingsSelectorGroup(
+                    label = "Reattività filtro posizione — ${String.format(Locale.US, "%.1f", filterQ)}",
+                    description = "Basso = pallino più stabile e liscio (ma più molle). Alto = segue in fretta (ma più nervoso). Per taratura."
+                ) {
+                    Slider(
+                        value = filterQ,
+                        onValueChange = onSetFilterQ,
+                        valueRange = 0.5f..15f,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
                 var showDevFeedbackDialog by remember { mutableStateOf(false) }
                 SettingsClickRow(
@@ -4912,6 +4850,29 @@ private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
             modifier = Modifier.padding(Spacing.lg),
             content = content
         )
+    }
+}
+
+/**
+ * Gruppo "etichetta + controllo" con la stessa spaziatura verticale delle righe
+ * (padding sm sopra/sotto) e un gap interno piccolo e uniforme. Serve a tenere
+ * tutte le voci delle impostazioni allineate, senza Spacer manuali di misure diverse.
+ */
+@Composable
+private fun SettingsSelectorGroup(
+    label: String,
+    description: String? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(Spacing.xs)
+    ) {
+        Text(label, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
+        if (!description.isNullOrBlank()) {
+            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        content()
     }
 }
 

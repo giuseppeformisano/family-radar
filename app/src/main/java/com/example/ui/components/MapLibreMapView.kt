@@ -57,6 +57,8 @@ fun MapLibreMapView(
     focusToken: Int = 0,
     followedUserId: String? = null,
     speakingUserId: String? = null,
+    heatmapPoints: List<Pair<Double, Double>> = emptyList(),
+    heatmapFitToken: Int = 0,
     onMemberSelected: (UserLocation) -> Unit = {},
     onPlaceSelected: (com.example.model.SavedPlace) -> Unit = {},
     onSnapshotClusterSelected: (com.example.model.PlaceSnapshotCluster) -> Unit = {},
@@ -360,6 +362,37 @@ fun MapLibreMapView(
         )
     }
 
+    // Heatmap posizioni storiche: aggiorna sorgente e inquadra la mappa.
+    var lastHeatFitToken by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    LaunchedEffect(heatmapPoints, heatmapFitToken, styleReady) {
+        if (!styleReady) return@LaunchedEffect
+        val style = mapRef?.style ?: return@LaunchedEffect
+        val features = heatmapPoints.map { (lat, lon) ->
+            org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.Point.fromLngLat(lon, lat))
+        }
+        style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("heatmap-src")
+            ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(features))
+        style.getLayer("heatmap-layer")?.setProperties(
+            org.maplibre.android.style.layers.PropertyFactory.visibility(
+                if (heatmapPoints.isEmpty()) org.maplibre.android.style.layers.Property.NONE
+                else org.maplibre.android.style.layers.Property.VISIBLE
+            )
+        )
+        if (heatmapFitToken != 0 && heatmapFitToken != lastHeatFitToken && heatmapPoints.isNotEmpty()) {
+            lastHeatFitToken = heatmapFitToken
+            val map = mapRef ?: return@LaunchedEffect
+            try {
+                val lats = heatmapPoints.map { it.first }
+                val lons = heatmapPoints.map { it.second }
+                val bounds = org.maplibre.android.geometry.LatLngBounds.Builder()
+                    .include(org.maplibre.android.geometry.LatLng(lats.min(), lons.min()))
+                    .include(org.maplibre.android.geometry.LatLng(lats.max(), lons.max()))
+                    .build()
+                map.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.newLatLngBounds(bounds, 80))
+            } catch (_: Exception) {}
+        }
+    }
+
     // Mostra/nascondi i layer secondo i toggle.
     LaunchedEffect(showMembers, showSnapshots, showPlaces, styleReady) {
         if (!styleReady) return@LaunchedEffect
@@ -481,6 +514,26 @@ private fun addRadarLayers(style: org.maplibre.android.maps.Style) {
             org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement(true)
         )
 
+    // Heatmap sotto tutto il resto.
+    style.addSource(org.maplibre.android.style.sources.GeoJsonSource("heatmap-src"))
+    style.addLayer(
+        org.maplibre.android.style.layers.HeatmapLayer("heatmap-layer", "heatmap-src").withProperties(
+            org.maplibre.android.style.layers.PropertyFactory.heatmapRadius(18f),
+            org.maplibre.android.style.layers.PropertyFactory.heatmapOpacity(.72f),
+            org.maplibre.android.style.layers.PropertyFactory.heatmapColor(
+                org.maplibre.android.style.expressions.Expression.interpolate(
+                    org.maplibre.android.style.expressions.Expression.linear(),
+                    org.maplibre.android.style.expressions.Expression.heatmapDensity(),
+                    org.maplibre.android.style.expressions.Expression.literal(0),   org.maplibre.android.style.expressions.Expression.rgba(0,0,255,0),
+                    org.maplibre.android.style.expressions.Expression.literal(0.2), org.maplibre.android.style.expressions.Expression.rgb(0,255,255),
+                    org.maplibre.android.style.expressions.Expression.literal(0.5), org.maplibre.android.style.expressions.Expression.rgb(0,255,0),
+                    org.maplibre.android.style.expressions.Expression.literal(0.8), org.maplibre.android.style.expressions.Expression.rgb(255,255,0),
+                    org.maplibre.android.style.expressions.Expression.literal(1),   org.maplibre.android.style.expressions.Expression.rgb(255,0,0)
+                )
+            ),
+            org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.NONE)
+        )
+    )
     style.addSource(org.maplibre.android.style.sources.GeoJsonSource("trail-src"))
     style.addLayer(
         org.maplibre.android.style.layers.LineLayer("trail-layer", "trail-src")

@@ -675,6 +675,8 @@ fun MainRadarScreen(
             focusToken = focusToken,
             followedUserId = followedUserId,
             speakingUserId = speakingUserId,
+            heatmapPoints = heatmapPoints,
+            heatmapFitToken = heatmapFitToken,
             onPlaceSelected = { selectedPlaceForSheet = it },
             onSnapshotClusterSelected = { selectedSnapshotClusterForGallery = it },
             onMemberSelected = { loc ->

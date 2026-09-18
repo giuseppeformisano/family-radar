@@ -6,78 +6,152 @@
   <title>Family Radar</title>
   <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
   <style>
-    /* ── Token identici a RadarDark / Color.kt ─────────────────────────── */
     :root {
-      --bg:        #000000;
-      --surface:   rgba(113,113,122,.04);
-      --surf-var:  rgba(255,255,255,.055);
-      --border:    rgba(255,255,255,.12);
-      --text:      #F2F2F7;
-      --muted:     #A1A1AA;
-      --accent:    #4F46E5;
-      --accent-lt: #6366F1;
-      --online:    #22C55E;
-      --error:     #F87171;
+      --bg:       #000;
+      --surf:     rgba(113,113,122,.06);
+      --surf2:    rgba(255,255,255,.07);
+      --border:   rgba(255,255,255,.11);
+      --text:     #F2F2F7;
+      --muted:    #A1A1AA;
+      --accent:   #4F46E5;
+      --aclt:     #6366F1;
+      --online:   #22C55E;
+      --idle:     #EAB308;
+      --offline:  #52525B;
+      --error:    #F87171;
+      --panel-w:  320px;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    html, body {
-      height: 100%;
-      background: var(--bg);
-      color: var(--text);
+    html, body { height: 100%; background: var(--bg); color: var(--text);
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      -webkit-font-smoothing: antialiased;
-    }
+      -webkit-font-smoothing: antialiased; }
 
-    /* ── MAP ────────────────────────────────────────────────────────────── */
+    /* ── MAP ─────────────────────────────────────────────────────────── */
     #map { position: absolute; inset: 0; }
-    .maplibregl-ctrl-attrib,
-    .maplibregl-ctrl-logo { display: none !important; }
+    .maplibregl-ctrl-attrib, .maplibregl-ctrl-logo { display: none !important; }
 
-    /* ── TOP BAR ─────────────────────────────────────────────────────────── */
+    /* ── TOP BAR ─────────────────────────────────────────────────────── */
     #topbar {
-      position: absolute; top: 0; left: 0; right: 0; z-index: 5;
-      padding: 16px 16px 48px;
-      background: linear-gradient(to bottom, rgba(0,0,0,.72) 0%, transparent 100%);
-      pointer-events: none;
+      position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+      height: 56px; padding: 0 16px;
+      display: flex; align-items: center; gap: 12px;
+      background: rgba(0,0,0,.72);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
     }
-    #topbar-title { font-size: 17px; font-weight: 700; line-height: 24px; }
-    #topbar-sub   { font-size: 12px; color: var(--muted); margin-top: 2px; }
-
+    #topbar-title { font-size: 16px; font-weight: 700; flex: 1; }
+    #topbar-sub   { font-size: 12px; color: var(--muted); }
     #logout-btn {
-      position: absolute; top: 12px; right: 14px; z-index: 6;
-      pointer-events: all;
-      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-      color: var(--text); font-size: 13px; font-weight: 600;
-      padding: 8px 14px; cursor: pointer; display: none;
+      background: var(--surf); border: 1px solid var(--border); border-radius: 10px;
+      color: var(--muted); font-size: 12px; font-weight: 600; padding: 6px 12px; cursor: pointer;
+      display: none;
     }
-    #logout-btn:hover { background: var(--surf-var); }
+    #logout-btn:hover { color: var(--text); background: var(--surf2); }
 
-    /* ── LOGIN OVERLAY ──────────────────────────────────────────────────── */
+    /* ── SIDE PANEL ──────────────────────────────────────────────────── */
+    #panel {
+      position: absolute; top: 56px; right: 0; bottom: 0;
+      width: var(--panel-w); z-index: 9;
+      background: rgba(0,0,0,.82);
+      backdrop-filter: blur(16px);
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      transform: translateX(0);
+      transition: transform .25s ease;
+    }
+    #panel.hidden { transform: translateX(100%); }
+
+    /* panel toggle button */
+    #panel-toggle {
+      position: absolute; top: 66px; right: 0; z-index: 11;
+      width: 32px; height: 48px;
+      background: rgba(0,0,0,.75);
+      border: 1px solid var(--border); border-right: none;
+      border-radius: 10px 0 0 10px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(8px);
+      transition: right .25s ease;
+    }
+    #panel-toggle svg { width: 16px; height: 16px; fill: var(--muted); transition: transform .25s; }
+    #panel-toggle.open { right: var(--panel-w); }
+    #panel-toggle.open svg { transform: rotate(180deg); }
+
+    /* tab bar */
+    .tab-bar {
+      display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .tab {
+      flex: 1; padding: 12px 0; text-align: center;
+      font-size: 13px; font-weight: 600; color: var(--muted);
+      cursor: pointer; border-bottom: 2px solid transparent;
+      transition: color .15s, border-color .15s;
+    }
+    .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+    /* scrollable content */
+    .tab-content { flex: 1; overflow-y: auto; padding: 12px; display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── MEMBER CARD ─────────────────────────────────────────────────── */
+    .member-card {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px; border-radius: 12px;
+      background: var(--surf); border: 1px solid var(--border);
+      margin-bottom: 8px; cursor: pointer;
+      transition: background .15s;
+    }
+    .member-card:hover { background: var(--surf2); }
+    .member-card.focused { border-color: var(--aclt); background: rgba(99,102,241,.12); }
+
+    .m-dot {
+      width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 700; color: #fff;
+    }
+    .m-info { flex: 1; min-width: 0; }
+    .m-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .m-sub  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .m-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+    .m-presence { width: 8px; height: 8px; border-radius: 50%; }
+    .m-bat {
+      font-size: 10px; font-weight: 600; padding: 1px 5px;
+      border-radius: 6px; background: var(--surf2);
+    }
+
+    /* ── PLACE CARD ──────────────────────────────────────────────────── */
+    .place-card {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px; border-radius: 12px;
+      background: var(--surf); border: 1px solid var(--border);
+      margin-bottom: 8px; cursor: pointer;
+      transition: background .15s;
+    }
+    .place-card:hover { background: var(--surf2); }
+    .place-icon {
+      width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .place-info .p-name { font-size: 14px; font-weight: 600; }
+    .place-info .p-sub  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* ── EMPTY STATE ─────────────────────────────────────────────────── */
+    .empty { text-align: center; padding: 32px 16px; color: var(--muted); font-size: 13px; }
+
+    /* ── LOGIN OVERLAY ───────────────────────────────────────────────── */
     #overlay {
       position: absolute; inset: 0; z-index: 20;
       display: flex; align-items: center; justify-content: center;
-      background: var(--bg);
-      padding: 24px;
+      background: var(--bg); padding: 24px;
     }
+    .auth-root { width: 100%; max-width: 340px; display: flex; flex-direction: column; align-items: center; }
 
-    /* Contenitore centrato, max 340px */
-    .auth-root {
-      width: 100%; max-width: 340px;
-      display: flex; flex-direction: column; align-items: center;
-      gap: 0;
-    }
-
-    /* ── ANIMAZIONE RADAR (replica CSS di RadarPulseAnimation) ────────── */
     .radar-wrap {
       position: relative; width: 180px; height: 180px;
-      display: flex; align-items: center; justify-content: center;
-      margin-bottom: 28px;
+      display: flex; align-items: center; justify-content: center; margin-bottom: 28px;
     }
     .radar-ring {
-      position: absolute; border-radius: 50%;
-      border: 1.5px solid var(--accent);
+      position: absolute; border-radius: 50%; border: 1.5px solid var(--accent);
       animation: rpulse 2.6s ease-out infinite;
     }
     .radar-ring:nth-child(1) { animation-delay: 0s; }
@@ -89,304 +163,455 @@
     }
     .radar-center {
       width: 68px; height: 68px; border-radius: 50%;
-      background: linear-gradient(135deg, var(--accent) 0%, rgba(79,70,229,.82) 100%);
+      background: linear-gradient(135deg, var(--accent), rgba(79,70,229,.82));
       display: flex; align-items: center; justify-content: center;
-      position: relative; z-index: 1;
-      box-shadow: 0 0 0 5px rgba(79,70,229,.18);
+      position: relative; z-index: 1; box-shadow: 0 0 0 5px rgba(79,70,229,.18);
     }
-    .radar-center svg {
-      width: 30px; height: 30px;
-      fill: none; stroke: #fff; stroke-width: 1.8;
-      stroke-linecap: round; stroke-linejoin: round;
-    }
+    .radar-center svg { width: 30px; height: 30px; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
-    /* ── WORDMARK ─────────────────────────────────────────────────────── */
-    .auth-title {
-      font-size: 28px; font-weight: 700; letter-spacing: -.25px;
-      line-height: 34px; text-align: center; margin-bottom: 6px;
-    }
-    .auth-sub {
-      font-size: 14px; color: var(--muted); text-align: center;
-      line-height: 20px; margin-bottom: 32px;
-    }
+    .auth-title { font-size: 28px; font-weight: 700; letter-spacing: -.25px; text-align: center; margin-bottom: 6px; }
+    .auth-sub   { font-size: 14px; color: var(--muted); text-align: center; margin-bottom: 32px; }
 
-    /* ── PULSANTE GOOGLE ─────────────────────────────────────────────── */
     .btn-google {
       display: flex; align-items: center; justify-content: center; gap: 10px;
-      width: 100%; height: 54px;
-      background: #fff; color: #111;
-      border: none; border-radius: 16px;
-      font-size: 15px; font-weight: 600; letter-spacing: .1px;
-      cursor: pointer; transition: opacity .15s;
-      margin-bottom: 20px;
+      width: 100%; height: 54px; background: #fff; color: #111;
+      border: none; border-radius: 16px; font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: opacity .15s; margin-bottom: 12px;
     }
-    .btn-google:hover  { opacity: .92; }
-    .btn-google:active { opacity: .80; }
+    .btn-google:hover { opacity: .92; } .btn-google:active { opacity: .80; }
     .btn-google:disabled { opacity: .5; cursor: default; }
-
     .google-g { width: 20px; height: 20px; flex-shrink: 0; }
-
-    /* Spinner dentro il bottone Google */
-    .g-spinner {
-      width: 20px; height: 20px; flex-shrink: 0;
-      border: 2px solid rgba(79,70,229,.2);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-      display: none;
-    }
+    .g-spinner { width: 20px; height: 20px; flex-shrink: 0; border: 2px solid rgba(79,70,229,.2); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; display: none; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .auth-note { font-size: 11px; color: var(--muted); text-align: center; opacity: .7; }
+    .err-msg   { font-size: 13px; color: var(--error); text-align: center; margin-top: 12px; display: none; }
 
-    /* ── NOTA PRIVACY ────────────────────────────────────────────────── */
-    .auth-note {
-      font-size: 11px; color: var(--muted); text-align: center;
-      line-height: 16px; opacity: .7; margin-top: 4px;
-    }
-
-    /* ── ERRORE ──────────────────────────────────────────────────────── */
-    .err-msg {
-      font-size: 13px; color: var(--error); text-align: center;
-      margin-top: 12px; display: none;
-    }
-
-    /* ── MARKER MEMBRI ───────────────────────────────────────────────── */
+    /* ── MARKER ──────────────────────────────────────────────────────── */
     .marker { display: flex; flex-direction: column; align-items: center; transform: translateY(-4px); pointer-events: none; }
-    .marker .dot {
-      width: 16px; height: 16px; border-radius: 50%;
-      border: 2px solid #fff;
-      box-shadow: 0 0 0 4px rgba(79,70,229,.25);
-      background: var(--accent-lt);
-    }
-    .marker .name {
-      margin-top: 4px; font-size: 11px; font-weight: 600; letter-spacing: .3px;
-      background: rgba(0,0,0,.65); padding: 2px 7px; border-radius: 999px;
-      white-space: nowrap; border: 1px solid rgba(255,255,255,.12);
-    }
+    .marker .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 4px rgba(79,70,229,.25); }
+    .marker .label { margin-top: 4px; font-size: 11px; font-weight: 600; background: rgba(0,0,0,.68); padding: 2px 7px; border-radius: 999px; white-space: nowrap; border: 1px solid rgba(255,255,255,.12); }
     .marker .spd { font-size: 10px; color: var(--muted); margin-top: 1px; }
+    .marker.focused .dot { box-shadow: 0 0 0 5px rgba(99,102,241,.55); }
+
+    /* Mobile: panel becomes bottom sheet */
+    @media (max-width: 640px) {
+      :root { --panel-w: 100%; }
+      #panel { top: auto; bottom: 0; left: 0; right: 0; height: 50vh; border-left: none; border-top: 1px solid var(--border); transform: translateY(0); }
+      #panel.hidden { transform: translateY(100%); }
+      #panel-toggle { top: auto; bottom: 0; right: 12px; border-radius: 10px 10px 0 0; width: 48px; height: 32px; border-right: 1px solid var(--border); }
+      #panel-toggle.open { right: 12px; bottom: 50vh; }
+      #panel-toggle svg { transform: rotate(90deg); }
+      #panel-toggle.open svg { transform: rotate(-90deg); }
+    }
   </style>
 </head>
 <body>
 
-  <div id="map"></div>
+<div id="map"></div>
 
-  <div id="topbar">
-    <div id="topbar-title">Family Radar</div>
-    <div id="topbar-sub">—</div>
-  </div>
+<!-- Top bar -->
+<div id="topbar">
+  <div id="topbar-title">Family Radar</div>
+  <div id="topbar-sub">—</div>
   <button id="logout-btn">Esci</button>
+</div>
 
-  <!-- ── Login ──────────────────────────────────────────────────────────── -->
-  <div id="overlay">
-    <div class="auth-root">
+<!-- Panel toggle arrow -->
+<div id="panel-toggle" class="open" title="Pannello">
+  <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+</div>
 
-      <!-- Animazione radar -->
-      <div class="radar-wrap">
-        <div class="radar-ring"></div>
-        <div class="radar-ring"></div>
-        <div class="radar-ring"></div>
-        <div class="radar-center">
-          <!-- ShareLocation icon -->
-          <svg viewBox="0 0 24 24">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#fff" opacity=".9"/>
-            <circle cx="12" cy="9" r="2.5" fill="#4F46E5"/>
-            <line x1="17" y1="8" x2="21" y2="8" stroke="#fff" stroke-width="1.6"/>
-            <polyline points="19,6 21,8 19,10" stroke="#fff" stroke-width="1.6" fill="none"/>
-          </svg>
-        </div>
-      </div>
-
-      <!-- Wordmark -->
-      <div class="auth-title">Family Radar</div>
-      <div class="auth-sub">Dove sono tutti, in tempo reale.</div>
-
-      <!-- Pulsante Google -->
-      <button class="btn-google" id="loginBtn">
-        <svg class="google-g" id="loginG" viewBox="0 0 24 24" fill="none">
-          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-        </svg>
-        <div class="g-spinner" id="loginSpinner"></div>
-        <span id="loginLabel">Accedi con Google</span>
-      </button>
-
-      <div class="auth-note">Accedi con lo stesso account Google dell'app.</div>
-      <div class="err-msg" id="err"></div>
-
-    </div>
+<!-- Side panel -->
+<div id="panel">
+  <div class="tab-bar">
+    <div class="tab active" data-tab="members">Membri</div>
+    <div class="tab"        data-tab="places">Luoghi</div>
   </div>
+  <div class="tab-content active" id="tab-members">
+    <div class="empty" id="members-empty">Nessun membro attivo</div>
+  </div>
+  <div class="tab-content" id="tab-places">
+    <div class="empty" id="places-empty">Nessun luogo salvato</div>
+  </div>
+</div>
 
-  <!-- Firebase JS SDK -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-  <script src="./config.js"></script>
+<!-- Login overlay -->
+<div id="overlay">
+  <div class="auth-root">
+    <div class="radar-wrap">
+      <div class="radar-ring"></div><div class="radar-ring"></div><div class="radar-ring"></div>
+      <div class="radar-center">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#fff" opacity=".9"/>
+          <circle cx="12" cy="9" r="2.5" fill="#4F46E5"/>
+          <line x1="17" y1="8" x2="21" y2="8" stroke="#fff" stroke-width="1.6"/>
+          <polyline points="19,6 21,8 19,10" stroke="#fff" stroke-width="1.6" fill="none"/>
+        </svg>
+      </div>
+    </div>
+    <div class="auth-title">Family Radar</div>
+    <div class="auth-sub">Dove sono tutti, in tempo reale.</div>
+    <button class="btn-google" id="loginBtn">
+      <svg class="google-g" viewBox="0 0 24 24" fill="none">
+        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+      </svg>
+      <div class="g-spinner" id="loginSpinner"></div>
+      <span id="loginLabel">Accedi con Google</span>
+    </button>
+    <div class="auth-note">Accedi con lo stesso account Google dell\'app.</div>
+    <div class="err-msg" id="err"></div>
+  </div>
+</div>
 
-  <script>
-    const cfg   = window.FIREBASE_CONFIG;
-    const errEl = document.getElementById('err');
-    const subEl = document.getElementById('topbar-sub');
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="./config.js"></script>
+<script>
+// ── INIT ─────────────────────────────────────────────────────────────────────
+const cfg   = window.FIREBASE_CONFIG;
+const errEl = document.getElementById('err');
+const subEl = document.getElementById('topbar-sub');
 
-    if (!cfg?.apiKey) {
-      errEl.style.display = 'block';
-      errEl.textContent   = 'Manca config.js. Aggiungi le chiavi Firebase e ricarica.';
-    } else {
-      firebase.initializeApp(cfg);
+if (!cfg?.apiKey) {
+  errEl.style.display = 'block';
+  errEl.textContent   = 'Manca config.js. Aggiungi le chiavi Firebase.';
+} else {
+  firebase.initializeApp(cfg);
+}
+
+const auth = cfg?.apiKey ? firebase.auth()      : null;
+const db   = cfg?.apiKey ? firebase.firestore() : null;
+
+// ── PALETTE COLORI MEMBRI ────────────────────────────────────────────────────
+const COLORS = ['#4F46E5','#0D9488','#D97706','#DC2626','#7C3AED','#059669','#DB2777','#2563EB'];
+const memberColor = uid => COLORS[Math.abs([...uid].reduce((a,c) => a + c.charCodeAt(0), 0)) % COLORS.length];
+
+// ── MAPPA ─────────────────────────────────────────────────────────────────────
+const map = new maplibregl.Map({
+  container: 'map',
+  style: 'https://tiles.openfreemap.org/styles/bright',
+  center: [12.4964, 41.9028], zoom: 5,
+  attributionControl: false
+});
+map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+
+let styleReady = false;
+map.on('load', () => {
+  styleReady = true;
+  // sorgenti
+  map.addSource('trails',  { type: 'geojson', data: emptyFC() });
+  map.addSource('places',  { type: 'geojson', data: emptyFC() });
+  map.addSource('radiuses',{ type: 'geojson', data: emptyFC() });
+  // layer scie
+  map.addLayer({ id:'trails', type:'line', source:'trails',
+    paint:{ 'line-color':['get','color'], 'line-width':3, 'line-opacity':.6 },
+    layout:{ 'line-cap':'round', 'line-join':'round' } });
+  // layer raggio luogo (fill)
+  map.addLayer({ id:'place-radius', type:'fill', source:'radiuses',
+    paint:{ 'fill-color':['get','color'], 'fill-opacity':.08 } });
+  // layer bordo raggio
+  map.addLayer({ id:'place-radius-border', type:'line', source:'radiuses',
+    paint:{ 'line-color':['get','color'], 'line-width':1.5, 'line-opacity':.4 } });
+
+  if (pendingLocs.length) renderLocs(pendingLocs);
+  if (pendingPlaces.length) renderPlaces(pendingPlaces);
+});
+
+function emptyFC() { return { type:'FeatureCollection', features:[] }; }
+
+// ── STATO ─────────────────────────────────────────────────────────────────────
+const markers   = {}; // uid  → maplibregl.Marker
+const pMarkers  = {}; // id   → maplibregl.Marker
+let pendingLocs   = [];
+let pendingPlaces = [];
+let focusedUid    = null;
+let firstFit      = false;
+let currentLocs   = [];
+
+// ── RENDER MEMBRI ─────────────────────────────────────────────────────────────
+function renderLocs(locs) {
+  currentLocs = locs;
+  if (!styleReady) { pendingLocs = locs; return; }
+
+  // Scie
+  const trails = locs.filter(l => (l.recentPoints||[]).length >= 2).map(l => ({
+    type:'Feature',
+    properties:{ color: memberColor(l.userId) },
+    geometry:{ type:'LineString',
+      coordinates: l.recentPoints.slice().sort((a,b)=>a.t-b.t).map(p=>[p.lo,p.la]) }
+  }));
+  map.getSource('trails')?.setData({ type:'FeatureCollection', features: trails });
+
+  const seen   = new Set();
+  const bounds = new maplibregl.LngLatBounds();
+  let any = false;
+
+  locs.forEach(l => {
+    if (!l.latitude && !l.longitude) return;
+    seen.add(l.userId);
+    const color = memberColor(l.userId);
+    const spdKmh = Math.round((l.speed||0)*3.6);
+    const label  = l.nickname || l.userName || 'Membro';
+
+    if (!markers[l.userId]) {
+      const el = document.createElement('div');
+      el.className = 'marker';
+      el.innerHTML = `<div class="dot"></div><div class="label"></div><div class="spd"></div>`;
+      el.querySelector('.dot').style.background = color;
+      markers[l.userId] = new maplibregl.Marker({ element: el })
+        .setLngLat([l.longitude, l.latitude]).addTo(map);
     }
+    const m  = markers[l.userId];
+    m.setLngLat([l.longitude, l.latitude]);
+    const el = m.getElement();
+    el.querySelector('.dot').style.background = color;
+    el.querySelector('.label').textContent = label;
+    el.querySelector('.spd').textContent   = spdKmh > 2 ? `${spdKmh} km/h` : '';
+    el.classList.toggle('focused', l.userId === focusedUid);
+    bounds.extend([l.longitude, l.latitude]); any = true;
+  });
 
-    const auth = cfg?.apiKey ? firebase.auth()      : null;
-    const db   = cfg?.apiKey ? firebase.firestore() : null;
+  Object.keys(markers).forEach(uid => { if (!seen.has(uid)) { markers[uid].remove(); delete markers[uid]; } });
+  if (any && !firstFit) { firstFit = true; try { map.fitBounds(bounds, { padding:80, maxZoom:16 }); } catch(_){} }
 
-    /* ── MAPPA ──────────────────────────────────────────────────────────── */
-    const map = new maplibregl.Map({
-      container: 'map',
-      style: 'https://tiles.openfreemap.org/styles/bright',
-      center: [12.4964, 41.9028],
-      zoom: 5,
-      attributionControl: false
-    });
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+  buildMemberPanel(locs);
+}
 
-    let styleReady = false;
-    map.on('load', () => {
-      styleReady = true;
-      map.addSource('trails', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-      map.addLayer({
-        id: 'trails', type: 'line', source: 'trails',
-        paint: { 'line-color': '#6366F1', 'line-width': 3, 'line-opacity': 0.65 },
-        layout: { 'line-cap': 'round', 'line-join': 'round' }
+// ── RENDER LUOGHI ─────────────────────────────────────────────────────────────
+const PLACE_ICONS    = { HOME:'🏠', WORK:'🏢', SCHOOL:'🏫', GYM:'🏋️', OTHER:'📍' };
+const PLACE_COLORS   = { HOME:'#6366F1', WORK:'#0D9488', SCHOOL:'#D97706', GYM:'#DC2626', OTHER:'#64748B' };
+
+function renderPlaces(places) {
+  pendingPlaces = places;
+  if (!styleReady) return;
+
+  // Cerchi raggio
+  const radiusFeats = places.map(p => circleFeature(p.lon, p.lat, p.radiusMeters, { color: PLACE_COLORS[p.category]||'#64748B' }));
+  map.getSource('radiuses')?.setData({ type:'FeatureCollection', features: radiusFeats });
+
+  // Rimuovi marker precedenti
+  Object.values(pMarkers).forEach(m => m.remove());
+  Object.keys(pMarkers).forEach(k => delete pMarkers[k]);
+
+  places.forEach(p => {
+    if (!p.lat || !p.lon) return;
+    const el = document.createElement('div');
+    el.style.cssText = `
+      width:32px; height:32px; border-radius:10px; border:2px solid #fff;
+      background:${PLACE_COLORS[p.category]||'#64748B'};
+      display:flex; align-items:center; justify-content:center;
+      font-size:16px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.4);`;
+    el.textContent = PLACE_ICONS[p.category] || '📍';
+    el.title = p.name;
+    el.addEventListener('click', () => map.flyTo({ center:[p.lon,p.lat], zoom:15, duration:800 }));
+    pMarkers[p.id] = new maplibregl.Marker({ element: el, anchor:'center' })
+      .setLngLat([p.lon, p.lat]).addTo(map);
+  });
+
+  buildPlacePanel(places);
+}
+
+// Genera un poligono circolare approssimato
+function circleFeature(cx, cy, radiusM, props) {
+  const pts = 64, coords = [];
+  for (let i = 0; i <= pts; i++) {
+    const a = (i / pts) * 2 * Math.PI;
+    const dx = (radiusM / 111320) / Math.cos(cy * Math.PI / 180);
+    const dy = radiusM / 110540;
+    coords.push([cx + dx * Math.cos(a), cy + dy * Math.sin(a)]);
+  }
+  return { type:'Feature', properties: props, geometry:{ type:'Polygon', coordinates:[coords] } };
+}
+
+// ── PANNELLO MEMBRI ───────────────────────────────────────────────────────────
+function ago(ms) {
+  if (!ms) return '';
+  const s = Math.floor((Date.now() - ms) / 1000);
+  if (s < 60)  return `${s}s fa`;
+  if (s < 3600) return `${Math.floor(s/60)}m fa`;
+  return `${Math.floor(s/3600)}h fa`;
+}
+function batColor(b) { return b == null ? '' : b < 20 ? '#EF4444' : b < 50 ? '#F59E0B' : '#22C55E'; }
+function presenceColor(ts) {
+  if (!ts) return '#52525B';
+  const s = (Date.now() - ts) / 1000;
+  return s < 90 ? '#22C55E' : s < 300 ? '#EAB308' : '#52525B';
+}
+
+function buildMemberPanel(locs) {
+  const container = document.getElementById('tab-members');
+  const empty     = document.getElementById('members-empty');
+  const active    = locs.filter(l => l.latitude || l.longitude);
+  empty.style.display = active.length ? 'none' : 'block';
+
+  // rimuovi card esistenti
+  [...container.querySelectorAll('.member-card')].forEach(el => el.remove());
+
+  active.forEach(l => {
+    const color  = memberColor(l.userId);
+    const label  = l.nickname || l.userName || 'Membro';
+    const initials = label.slice(0,2).toUpperCase();
+    const spdKmh = Math.round((l.speed||0)*3.6);
+    const spdTxt = spdKmh > 2 ? `${spdKmh} km/h` : 'Fermo';
+    const batTxt = l.battery != null ? `${l.battery}%` : '';
+    const ts     = l.lastUpdated?.toMillis?.() || l.lastUpdated || null;
+
+    const card = document.createElement('div');
+    card.className = 'member-card' + (l.userId === focusedUid ? ' focused' : '');
+    card.dataset.uid = l.userId;
+    card.innerHTML = `
+      <div class="m-dot" style="background:${color}">${initials}</div>
+      <div class="m-info">
+        <div class="m-name">${label}</div>
+        <div class="m-sub">${spdTxt}${l.currentPlaceName ? ' · ' + l.currentPlaceName : ''}${ts ? ' · ' + ago(ts) : ''}</div>
+      </div>
+      <div class="m-right">
+        <div class="m-presence" style="background:${presenceColor(ts)}"></div>
+        ${batTxt ? `<div class="m-bat" style="color:${batColor(l.battery)}">${batTxt}</div>` : ''}
+      </div>`;
+    card.addEventListener('click', () => focusMember(l.userId, l.longitude, l.latitude));
+    container.appendChild(card);
+  });
+}
+
+function focusMember(uid, lon, lat) {
+  focusedUid = uid;
+  map.flyTo({ center:[lon,lat], zoom:15, duration:800 });
+  // aggiorna evidenziazione
+  Object.entries(markers).forEach(([id, m]) => m.getElement().classList.toggle('focused', id === uid));
+  [...document.querySelectorAll('.member-card')].forEach(c => c.classList.toggle('focused', c.dataset.uid === uid));
+}
+
+// ── PANNELLO LUOGHI ───────────────────────────────────────────────────────────
+function buildPlacePanel(places) {
+  const container = document.getElementById('tab-places');
+  const empty     = document.getElementById('places-empty');
+  empty.style.display = places.length ? 'none' : 'block';
+  [...container.querySelectorAll('.place-card')].forEach(el => el.remove());
+
+  places.forEach(p => {
+    const color = PLACE_COLORS[p.category] || '#64748B';
+    const icon  = PLACE_ICONS[p.category]  || '📍';
+    const card  = document.createElement('div');
+    card.className = 'place-card';
+    card.innerHTML = `
+      <div class="place-icon" style="background:${color}22">${icon}</div>
+      <div class="place-info">
+        <div class="p-name">${p.name}</div>
+        <div class="p-sub">Raggio ${p.radiusMeters} m${p.alertsEnabled ? '' : ' · avvisi spenti'}</div>
+      </div>`;
+    card.addEventListener('click', () => map.flyTo({ center:[p.lon,p.lat], zoom:15, duration:800 }));
+    container.appendChild(card);
+  });
+}
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+}));
+
+// ── PANEL TOGGLE ──────────────────────────────────────────────────────────────
+const panelEl  = document.getElementById('panel');
+const toggleEl = document.getElementById('panel-toggle');
+toggleEl.addEventListener('click', () => {
+  const hidden = panelEl.classList.toggle('hidden');
+  toggleEl.classList.toggle('open', !hidden);
+});
+
+// ── FIRESTORE LISTENERS ───────────────────────────────────────────────────────
+let unsubUser = null, unsubLoc = null, unsubPlaces = null;
+
+function listenGroup(gid) {
+  if (unsubLoc)    { unsubLoc();    unsubLoc    = null; }
+  if (unsubPlaces) { unsubPlaces(); unsubPlaces = null; }
+  if (!gid) { subEl.textContent = 'Nessun gruppo attivo'; return; }
+
+  // Posizioni
+  unsubLoc = db.collection('groups').doc(gid).collection('locations')
+    .onSnapshot(snap => {
+      const locs = snap.docs.map(d => {
+        const x = d.data();
+        return {
+          userId:       x.userId || d.id,
+          userName:     x.userName, nickname: x.nickname,
+          latitude:     x.latitude||0, longitude: x.longitude||0,
+          speed:        x.speed||0, battery: x.batteryLevel ?? x.battery ?? null,
+          currentPlaceName: x.currentPlaceName || '',
+          lastUpdated:  x.lastUpdated,
+          recentPoints: (x.recentPoints||[]).map(p=>({la:p.la,lo:p.lo,t:p.t||0}))
+        };
       });
-    });
+      const online = locs.filter(l => l.latitude||l.longitude).length;
+      subEl.textContent = `${online} ${online===1?'membro':'membri'} · live`;
+      renderLocs(locs);
+    }, e => { subEl.textContent = 'Errore: ' + e.code; });
 
-    /* ── MARKER ─────────────────────────────────────────────────────────── */
-    const markers = {};
-    let firstFit  = false;
-
-    function render(locs) {
-      if (styleReady) {
-        const feats = locs
-          .filter(l => (l.recentPoints || []).length >= 2)
-          .map(l => ({
-            type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: l.recentPoints.slice().sort((a,b) => a.t - b.t).map(p => [p.lo, p.la])
-            }
-          }));
-        const src = map.getSource('trails');
-        if (src) src.setData({ type: 'FeatureCollection', features: feats });
-      }
-
-      const seen   = new Set();
-      const bounds = new maplibregl.LngLatBounds();
-      let any = false;
-
-      locs.forEach(l => {
-        if (!l.latitude && !l.longitude) return;
-        seen.add(l.userId);
-        const spdKmh = Math.round((l.speed || 0) * 3.6);
-        const label  = l.nickname || l.userName || 'Membro';
-
-        if (!markers[l.userId]) {
-          const el = document.createElement('div');
-          el.className = 'marker';
-          el.innerHTML = '<div class="dot"></div><div class="name"></div><div class="spd"></div>';
-          markers[l.userId] = new maplibregl.Marker({ element: el })
-            .setLngLat([l.longitude, l.latitude]).addTo(map);
-        }
-        const m  = markers[l.userId];
-        m.setLngLat([l.longitude, l.latitude]);
-        const el = m.getElement();
-        el.querySelector('.name').textContent = label;
-        el.querySelector('.spd').textContent  = spdKmh > 2 ? `${spdKmh} km/h` : '';
-        bounds.extend([l.longitude, l.latitude]);
-        any = true;
+  // Luoghi
+  unsubPlaces = db.collection('groups').doc(gid).collection('places')
+    .onSnapshot(snap => {
+      const places = snap.docs.map(d => {
+        const x = d.data();
+        return {
+          id: d.id, name: x.name||'Luogo',
+          lat: x.latitude||x.lat||0, lon: x.longitude||x.lon||0,
+          radiusMeters: x.radiusMeters||100,
+          category: (x.category||'OTHER').toUpperCase(),
+          alertsEnabled: x.alertsEnabled !== false
+        };
       });
+      renderPlaces(places);
+    }, () => {});
+}
 
-      Object.keys(markers).forEach(uid => {
-        if (!seen.has(uid)) { markers[uid].remove(); delete markers[uid]; }
-      });
+// ── AUTH ──────────────────────────────────────────────────────────────────────
+const loginBtn     = document.getElementById('loginBtn');
+const loginLabel   = document.getElementById('loginLabel');
+const loginSpinner = document.getElementById('loginSpinner');
+const loginG       = loginBtn.querySelector('.google-g');
+const logoutBtn    = document.getElementById('logout-btn');
 
-      if (any && !firstFit) {
-        firstFit = true;
-        try { map.fitBounds(bounds, { padding: 80, maxZoom: 16 }); } catch (_) {}
-      }
-    }
-
-    /* ── LISTENER FIRESTORE ─────────────────────────────────────────────── */
-    let unsubUser = null, unsubLoc = null;
-
-    function listenGroup(gid) {
-      if (unsubLoc) { unsubLoc(); unsubLoc = null; }
-      if (!gid) { subEl.textContent = 'Nessun gruppo attivo'; return; }
-      unsubLoc = db.collection('groups').doc(gid).collection('locations')
-        .onSnapshot(snap => {
-          const locs = snap.docs.map(d => {
-            const x = d.data();
-            return {
-              userId:       x.userId || d.id,
-              userName:     x.userName, nickname: x.nickname,
-              latitude:     x.latitude  || 0,
-              longitude:    x.longitude || 0,
-              speed:        x.speed     || 0,
-              recentPoints: (x.recentPoints || []).map(p => ({ la: p.la, lo: p.lo, t: p.t || 0 }))
-            };
-          });
-          subEl.textContent = `${locs.length} ${locs.length === 1 ? 'membro' : 'membri'} · live`;
-          render(locs);
-        }, e => { subEl.textContent = 'Errore: ' + e.code; });
-    }
-
-    /* ── AUTH ────────────────────────────────────────────────────────────── */
-    const loginBtn     = document.getElementById('loginBtn');
-    const loginLabel   = document.getElementById('loginLabel');
-    const loginSpinner = document.getElementById('loginSpinner');
-    const loginG       = document.getElementById('loginG');
-    const logoutBtn    = document.getElementById('logout-btn');
-
-    loginBtn.onclick = () => {
-      if (!auth) return;
-      errEl.style.display = 'none';
-      loginLabel.textContent   = 'Connessione…';
-      loginSpinner.style.display = '';
-      loginG.style.display     = 'none';
-      loginBtn.disabled        = true;
-      auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
-        .catch(e => {
-          errEl.style.display = 'block';
-          errEl.textContent   = 'Accesso fallito: ' + (e.code || e.message);
-        })
-        .finally(() => {
-          loginLabel.textContent   = 'Accedi con Google';
-          loginSpinner.style.display = 'none';
-          loginG.style.display     = '';
-          loginBtn.disabled        = false;
-        });
-    };
-
-    logoutBtn.onclick = () => auth?.signOut();
-
-    auth?.onAuthStateChanged(user => {
-      const overlay = document.getElementById('overlay');
-      if (user) {
-        overlay.style.display = 'none';
-        logoutBtn.style.display = '';
-        if (unsubUser) unsubUser();
-        unsubUser = db.collection('users').doc(user.uid).onSnapshot(doc => {
-          const gid = doc.exists ? (doc.data().currentGroupId || null) : null;
-          listenGroup(gid);
-        }, e => { subEl.textContent = 'Errore: ' + e.code; });
-      } else {
-        overlay.style.display = 'flex';
-        logoutBtn.style.display = 'none';
-        subEl.textContent = '—';
-        if (unsubUser) { unsubUser(); unsubUser = null; }
-        if (unsubLoc)  { unsubLoc();  unsubLoc  = null; }
-        render([]);
-      }
+loginBtn.onclick = () => {
+  if (!auth) return;
+  errEl.style.display = 'none';
+  loginLabel.textContent   = 'Connessione…';
+  loginSpinner.style.display = ''; loginG.style.display = 'none';
+  loginBtn.disabled = true;
+  auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
+    .catch(e => { errEl.style.display = 'block'; errEl.textContent = 'Accesso fallito: ' + (e.code||e.message); })
+    .finally(() => {
+      loginLabel.textContent = 'Accedi con Google';
+      loginSpinner.style.display = 'none'; loginG.style.display = '';
+      loginBtn.disabled = false;
     });
-  </script>
+};
+logoutBtn.onclick = () => auth?.signOut();
+
+auth?.onAuthStateChanged(user => {
+  const overlay = document.getElementById('overlay');
+  if (user) {
+    overlay.style.display = 'none'; logoutBtn.style.display = '';
+    if (unsubUser) unsubUser();
+    unsubUser = db.collection('users').doc(user.uid).onSnapshot(doc => {
+      const gid = doc.exists ? (doc.data().currentGroupId||null) : null;
+      listenGroup(gid);
+    }, e => { subEl.textContent = 'Errore: ' + e.code; });
+  } else {
+    overlay.style.display = 'flex'; logoutBtn.style.display = 'none';
+    subEl.textContent = '—';
+    if (unsubUser)  { unsubUser();  unsubUser  = null; }
+    if (unsubLoc)   { unsubLoc();   unsubLoc   = null; }
+    if (unsubPlaces){ unsubPlaces(); unsubPlaces = null; }
+    renderLocs([]); renderPlaces([]);
+  }
+});
+</script>
 </body>
 </html>

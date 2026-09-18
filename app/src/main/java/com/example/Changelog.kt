@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.39.0-beta"
+    const val VERSION = "0.40.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "📍 Il pallino si aggancia alla strada piu' vicina: posizione piu' precisa mentre cammini o guidi.",
-        "〰️ La scia e' piu' morbida e segue meglio il percorso reale."
+        "🗺️ Heatmap disponibile anche sulla nuova mappa: tocca un membro e premi Heatmap.",
+        "📍 Il pallino si aggancia alla strada piu' vicina: posizione piu' precisa mentre cammini o guidi."
     )
 }

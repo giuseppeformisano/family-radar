@@ -2424,6 +2424,13 @@ private fun MemberRow(
                             contentColor = RadarSemantic.Online
                         )
                     }
+                    if (member.appVersion.isNotBlank()) {
+                        Text(
+                            text = "v${member.appVersion}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                        )
+                    }
                 }
 
                 val subtitle = buildString {

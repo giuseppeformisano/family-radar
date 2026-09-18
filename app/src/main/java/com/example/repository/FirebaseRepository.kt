@@ -3099,7 +3099,10 @@ class FirebaseRepository private constructor(private val context: Context) {
                     lastSentBatteryLevel = enrichedLocation.batteryLevel
                     firestore.collection("groups").document(currentGroup)
                         .collection("members").document(user.uid)
-                        .update("batteryLevel", enrichedLocation.batteryLevel)
+                        .update(
+                            "batteryLevel", enrichedLocation.batteryLevel,
+                            "appVersion", com.example.BuildConfig.VERSION_NAME
+                        )
                 }
             }
         } catch (e: Exception) {

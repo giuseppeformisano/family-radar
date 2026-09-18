@@ -29,7 +29,8 @@ data class GroupMember(
     val isOnline: Boolean = true,
     // Timestamp dell'ultimo messaggio letto in chat da questo membro: alimenta le
     // spunte di lettura ("visto da…"). 0 = non ha ancora aperto la chat.
-    val chatLastReadAt: Long = 0L
+    val chatLastReadAt: Long = 0L,
+    val appVersion: String = ""
 )
 
 data class DeepLinkTarget(

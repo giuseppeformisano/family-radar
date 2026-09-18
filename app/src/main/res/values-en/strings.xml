@@ -18,9 +18,9 @@
     <string name="channel_chat_name">Group messages</string>
     <string name="channel_chat_desc">New messages in your group chats</string>
     <string name="channel_places_name">Arrivals and departures</string>
-    <string name="channel_places_desc">Alerts when a member enters or leaves a saved place</string>
+    <string name="channel_places_desc">Arrivals and departures from saved places</string>
     <string name="channel_sos_name">SOS alerts</string>
-    <string name="channel_sos_desc">Immediate help requests from group members</string>
+    <string name="channel_sos_desc">Help requests from the group</string>
     <string name="channel_location_name">Location service</string>
     <string name="channel_location_desc">Ongoing notification for the family radar</string>
 
@@ -41,7 +41,7 @@
     <string name="notif_place_entry_body">%1$s arrived at %2$s</string>
     <string name="notif_place_exit_body">%1$s left %2$s</string>
     <string name="notif_sos_title">SOS alert</string>
-    <string name="notif_sos_body">Help request sent by %1$s</string>
+    <string name="notif_sos_body">Help request from %1$s</string>
     <string name="notif_low_battery_title">Battery running low</string>
     <string name="notif_low_battery_body">Battery at %1$s%% for %2$s</string>
     <string name="notif_join_request_title">New join request</string>
@@ -75,7 +75,7 @@
     <string name="update_ready_title">Update ready</string>
     <string name="update_ready_body">Tap to install</string>
     <string name="update_download_started">Download started</string>
-    <string name="update_allow_unknown_sources">Allow installing apps from Family Radar, then press Update again</string>
+    <string name="update_allow_unknown_sources">Allow Family Radar to install apps, then press Update</string>
     <string name="update_failed_empty_response">Download failed: empty response</string>
     <string name="update_failed_empty_file">Download failed: empty file</string>
     <string name="update_failed_reason">Download failed: %1$s</string>
@@ -85,15 +85,15 @@
     <string name="err_place_without_id">Place without an identifier</string>
     <string name="err_no_active_trip">No active trip</string>
     <string name="err_firestore_unavailable">Database unreachable</string>
-    <string name="err_invalid_join_code">Invalid invite code, or the group does not exist</string>
-    <string name="err_only_admin_can_delete_group">Only an administrator can delete the group</string>
+    <string name="err_invalid_join_code">Invalid invite code or group not found</string>
+    <string name="err_only_admin_can_delete_group">Only an admin can delete the group</string>
     <string name="err_image_processing">Could not process the photo</string>
     <string name="err_snapshot_processing">Could not process the shot</string>
     <string name="err_google_credential_type">Unrecognised Google credential</string>
     <string name="err_google_cancelled">Google sign-in cancelled</string>
-    <string name="err_google_no_account">No Google account on this device. Add one in the Android settings, or sign in with phone or email</string>
+    <string name="err_google_no_account">No Google account found. Add one in Android settings or sign in with phone/email.</string>
     <string name="err_auth_not_initialized">Authentication service unavailable</string>
-    <string name="notif_sos_immediate_body">Immediate help request sent by %1$s</string>
+    <string name="notif_sos_immediate_body">Immediate help request from %1$s</string>
     <string name="notif_sos_emergency_title">Emergency alert</string>
     <string name="notif_sos_emergency_body">%1$s sent a help request</string>
     <string name="msg_arrived_at">%1$s arrived at %2$s</string>
@@ -114,27 +114,27 @@
     <string name="join_code_preview_title">Group found</string>
     <string name="no_search_results">No groups found</string>
     <string name="group_public_title">Findable by name</string>
-    <string name="group_public_desc">Others can search this group by name and ask to join</string>
+    <string name="group_public_desc">Anyone can find it and ask to join</string>
     <string name="search_error_detail">Search failed: %1$s</string>
 
-    <!-- Selezione gruppo e schermata accesso -->
+    <!-- Group selection and login screen -->
     <string name="greeting_user">Hello, %1$s</string>
     <string name="label_user_fallback">there</string>
     <string name="group_select_subtitle">Choose a group to follow on the radar</string>
     <string name="action_sign_out">Sign out</string>
     <string name="join_code_prompt">Have an invite code?</string>
-    <string name="join_code_hint">Six characters and you are in the group radar</string>
+    <string name="join_code_hint">Six characters and you are in</string>
     <string name="section_your_groups">Your groups</string>
     <string name="group_count_total">%1$d total</string>
     <string name="empty_groups_title">No groups</string>
-    <string name="empty_groups_body">Create a group or enter an invite code to start sharing your location in real time.</string>
+    <string name="empty_groups_body">Create a group or enter an invite code.</string>
     <string name="status_pending">Pending</string>
     <string name="status_active">Active</string>
     <string name="status_pending_desc">Request sent, waiting for approval</string>
     <string name="label_no_description">No description</string>
     <string name="action_new_group">New group</string>
     <string name="dialog_create_group_title">Create a group</string>
-    <string name="dialog_create_group_subtitle">A private space to share location and messages.</string>
+    <string name="dialog_create_group_subtitle">Locations and messages, just for you.</string>
     <string name="action_change_image">Change image</string>
     <string name="action_add_image">Add image</string>
     <string name="label_group_name">Group name</string>
@@ -148,17 +148,17 @@
     <string name="action_create">Create</string>
     <string name="toast_image_load_error">Error loading image</string>
     <string name="dialog_join_title">Join with code</string>
-    <string name="dialog_join_subtitle">Enter the six characters received from the group owner.</string>
+    <string name="dialog_join_subtitle">The six-character code of the group.</string>
     <string name="label_invite_code">Invite code</string>
     <string name="placeholder_invite_code">FAM982</string>
     <string name="action_send_request">Send request</string>
     <string name="dialog_pending_title">Pending request</string>
     <string name="dialog_pending_body">You requested to join \"%1$s\".</string>
-    <string name="dialog_pending_note">Once your request is approved, the radar opens automatically.</string>
+    <string name="dialog_pending_note">The radar opens as soon as you are approved.</string>
     <string name="action_got_it">Got it</string>
     <string name="action_cancel_request">Cancel request</string>
     <string name="auth_tagline">Your family on the map, in real time</string>
-    <string name="auth_privacy_note">Location is shared only with your groups and you can stop it at any time.</string>
+    <string name="auth_privacy_note">Shared only with your group. Stop it any time.</string>
     <string name="auth_connecting">Connecting…</string>
     <string name="auth_google_button">Continue with Google</string>
     <string name="auth_google_failed">Google sign-in failed</string>
@@ -205,7 +205,7 @@
     <string name="toast_request_approved">Request approved</string>
     <string name="toast_request_rejected">Request rejected</string>
     <string name="toast_trip_saved">Trip saved</string>
-    <string name="toast_battery_saver_on">Battery saver on: position from WiFi and mobile data</string>
+    <string name="toast_battery_saver_on">Battery saver on</string>
     <string name="toast_gps_precision_restored">GPS precision restored</string>
     <string name="toast_bg_tracking_on">Background tracking enabled</string>
     <string name="toast_bg_tracking_off">Background tracking disabled</string>
@@ -244,9 +244,9 @@
     <string name="map_topbar_subtitle">%1$d online · %2$d members</string>
     <string name="member_name_self">%1$s (you)</string>
     <string name="status_awaiting_approval">Awaiting approval</string>
-    <string name="pending_members_desc">They entered the invite code and are waiting for your approval</string>
+    <string name="pending_members_desc">Waiting for your approval</string>
     <string name="empty_members_title">No active members</string>
-    <string name="empty_members_body">Share the group invite code to let family and friends join the radar.</string>
+    <string name="empty_members_body">Share the invite code to add someone.</string>
     <string name="role_owner">Owner</string>
     <string name="role_admin">Admin</string>
     <string name="status_moving">Moving</string>
@@ -257,18 +257,18 @@
     <string name="action_approve">Approve</string>
     <string name="action_reject">Reject</string>
     <string name="dialog_gps_title">GPS not active</string>
-    <string name="dialog_gps_body">Family Radar needs GPS to work. Enable GPS in the system settings.</string>
+    <string name="dialog_gps_body">GPS is needed to work. Enable it in settings.</string>
     <string name="action_enable_gps">Enable GPS</string>
     <string name="action_not_now">Not now</string>
     <string name="dialog_sos_title">Send SOS alert</string>
-    <string name="dialog_sos_body">All members of %1$s will receive an emergency notification with your current location.</string>
+    <string name="dialog_sos_body">Members of %1$s will receive your location.</string>
     <string name="dialog_kick_title">Remove member</string>
-    <string name="dialog_kick_body">Do you want to remove %1$s from the group? They will no longer have access to the map, locations, and messages.</string>
+    <string name="dialog_kick_body">Remove %1$s? They will lose access to the group.</string>
     <string name="action_kick">Remove</string>
     <string name="dialog_delete_group_title">Delete group</string>
-    <string name="dialog_delete_group_body">Delete %1$s for all members?\n\nMessages, places, snapshots, and trips will be permanently deleted. This action cannot be undone.</string>
+    <string name="dialog_delete_group_body">Delete %1$s and all its data forever.\nThis cannot be undone.</string>
     <string name="dialog_leave_title">Leave group</string>
-    <string name="dialog_leave_body">Do you want to leave %1$s? Your location will no longer be shared and you will stop receiving notifications.</string>
+    <string name="dialog_leave_body">Leave %1$s. Your location will no longer be shared.</string>
     <string name="action_leave">Leave</string>
     <string name="action_delete">Delete</string>
 
@@ -291,10 +291,10 @@
     <string name="action_view_map">View on Map</string>
     <string name="place_geofence_toggle_label">Arrival and departure alerts</string>
     <string name="place_geofence_on_desc">Active for this place</string>
-    <string name="place_geofence_off_desc">Disabled: no notifications</string>
+    <string name="place_geofence_off_desc">No notifications for this place</string>
     <string name="action_edit">Edit</string>
     <string name="dialog_delete_place_title">Delete this place?</string>
-    <string name="dialog_delete_place_body">Remove %1$s from the group saved places? Members will no longer receive arrival and departure notifications.</string>
+    <string name="dialog_delete_place_body">Delete %1$s? The group will no longer receive alerts.</string>
     <string name="toast_no_navigation_app">No navigation app installed</string>
     <string name="dialog_place_edit_title">Edit Place</string>
     <string name="dialog_place_new_title">New Safe Place</string>
@@ -312,8 +312,8 @@
     <string name="label_category">Category</string>
     <string name="label_geofence_radius">Geofence notification radius</string>
     <string name="place_alerts_toggle_label">Arrival and departure alerts</string>
-    <string name="place_alerts_on_desc">The group receives a notification when someone arrives or leaves</string>
-    <string name="place_alerts_off_desc">The place stays on the map but generates no notifications</string>
+    <string name="place_alerts_on_desc">The group gets notified on arrivals and departures</string>
+    <string name="place_alerts_off_desc">No notifications for this place</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_save_changes">Save Changes</string>
     <string name="action_save_place">Save Place</string>
@@ -356,7 +356,7 @@
     <string name="toast_snapshot_saved_gallery">Photo saved to Gallery!</string>
     <string name="toast_save_error">Error saving</string>
     <string name="dialog_delete_snapshot_title">Delete snapshot</string>
-    <string name="dialog_delete_snapshot_body">This snapshot will be removed from the map and the chat.</string>
+    <string name="dialog_delete_snapshot_body">Removed from the map and the chat.</string>
     <string name="snapshot_content_desc_page">Snapshot %1$d of %2$d</string>
     <string name="snapshot_position">Position: %1$.4f, %2$.4f</string>
     <string name="action_close_viewer">Close viewer</string>
@@ -396,7 +396,7 @@
 
     <!-- Chat -->
     <string name="chat_empty_title">No messages yet</string>
-    <string name="chat_empty_body">Write to the group, share a photo or your location.</string>
+    <string name="chat_empty_body">Write, send a photo or share your location.</string>
     <string name="chat_input_placeholder">Write a message…</string>
     <string name="chat_take_photo_desc">Take photo</string>
     <string name="chat_attach_image_desc">Attach image</string>
@@ -405,10 +405,10 @@
 
     <!-- Places panel -->
     <string name="section_safe_zones">Safe zones</string>
-    <string name="section_safe_zones_desc">Automatic alerts when a member arrives or leaves</string>
+    <string name="section_safe_zones_desc">Arrival and departure notifications</string>
     <string name="action_add">Add</string>
     <string name="empty_places_title">No zones set up</string>
-    <string name="empty_places_body">Add Home, School, Work or Gym to receive alerts when someone arrives or leaves.</string>
+    <string name="empty_places_body">Add Home, School or Work to receive alerts.</string>
     <string name="section_recent_activity">Recent activity</string>
     <string name="content_desc_alerts_disabled">Alerts disabled</string>
     <string name="place_row_subtitle">%1$s · radius %2$d m</string>
@@ -436,9 +436,9 @@
     <string name="settings_bg_tracking_title">Background tracking</string>
     <string name="settings_bg_tracking_desc">Keeps working even when the app is closed</string>
     <string name="settings_power_saving_title">Battery saver</string>
-    <string name="settings_power_saving_desc">Less battery, less precise position (about 100 metres)</string>
+    <string name="settings_power_saving_desc">Less precise, less battery</string>
     <string name="settings_update_frequency">Update frequency</string>
-    <string name="settings_update_frequency_desc">How often your position is detected</string>
+    <string name="settings_update_frequency_desc">GPS update frequency</string>
     <string name="label_value">Value</string>
     <string name="settings_effective_interval">Update every %1$s</string>
     <string name="settings_trip_speed_note">During a trip the interval is always 5 seconds</string>
@@ -450,7 +450,7 @@
     <string name="settings_section_trips">Trips</string>
     <string name="settings_trips_subtitle">Recording your journeys</string>
     <string name="settings_auto_trip_title">Detect trips automatically</string>
-    <string name="settings_auto_trip_desc">Records when you move without pressing anything. Uses more battery</string>
+    <string name="settings_auto_trip_desc">Starts on its own. Uses more battery.</string>
     <string name="settings_auto_trip_shared_title">Share automatic trips</string>
     <string name="settings_auto_trip_shared_desc">Turn off to see them only yourself</string>
 
@@ -466,12 +466,12 @@
     <string name="toast_code_copied">Code copied</string>
     <string name="action_copy">Copy</string>
     <string name="settings_approval_title">New member approval</string>
-    <string name="settings_approval_on_desc">You must approve everyone who joins with the code</string>
+    <string name="settings_approval_on_desc">You approve every new member</string>
     <string name="settings_approval_off_desc">Anyone with the code joins immediately</string>
 
     <!-- Settings: Appearance and Language -->
     <string name="settings_appearance_subtitle">App theme</string>
-    <string name="settings_language_subtitle">App and notifications follow this choice</string>
+    <string name="settings_language_subtitle">App and notifications in this language</string>
 
     <!-- Settings: Account -->
     <string name="settings_section_account">Account</string>
@@ -483,12 +483,12 @@
     <string name="label_version">Version</string>
     <string name="action_check_updates">Check for updates</string>
     <string name="checking_updates">Checking...</string>
-    <string name="update_available_body">Version %1$s is available. Download and install it now.</string>
+    <string name="update_available_body">Version %1$s available. Update now.</string>
     <string name="action_later">Later</string>
     <string name="action_update">Update</string>
-    <string name="up_to_date_body">You are using version %1$s (%2$d): no updates available.</string>
+    <string name="up_to_date_body">All up to date. Version %1$s.</string>
     <string name="action_ok">OK</string>
-    <string name="update_network_error_body">Could not check for updates. Check your connection and try again.</string>
+    <string name="update_network_error_body">Check your connection and try again.</string>
 
     <!-- Settings: Feedback -->
     <string name="settings_section_feedback">Feedback</string>
@@ -517,7 +517,7 @@
     <!-- Map overlays -->
     <string name="loading_text">Loading...</string>
     <string name="snapshot_source_title">New snapshot</string>
-    <string name="snapshot_source_body">The photo will be pinned to your current position on the map.</string>
+    <string name="snapshot_source_body">Added to the map at your current position.</string>
     <string name="action_take_photo_now">Take now</string>
     <string name="action_choose_gallery">Choose from gallery</string>
     <string name="label_you_follow">you</string>
@@ -547,10 +547,8 @@
 
     <!-- Edit group dialog -->
     <string name="dialog_edit_group_title">Edit group</string>
-    <string name="dialog_edit_group_subtitle">Name, description and image visible to all members</string>
+    <string name="dialog_edit_group_subtitle">Visible to all group members</string>
     <string name="edit_group_desc_placeholder">e.g. Home and commute</string>
     <string name="content_desc_group_image">Group image</string>
     <string name="content_desc_change_image_badge">Change image</string>
 </resources>
-
-

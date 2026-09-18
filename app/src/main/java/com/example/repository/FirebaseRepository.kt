@@ -2793,6 +2793,7 @@ class FirebaseRepository private constructor(private val context: Context) {
     private var prevFilteredLat: Double? = null
     private var prevFilteredLon: Double? = null
     private var prevFilteredTime: Long = 0L
+    private var wasSentMoving: Boolean = false
 
     // Filtro unico che ripulisce il GPS (vedi LocationKalman). Manopola "q" regolabile
     // in app: alto = segue in fretta (meno liscio), basso = piu' stabile.
@@ -2973,7 +2974,19 @@ class FirebaseRepository private constructor(private val context: Context) {
             checkGeofenceAlert(user.displayName, placeForAlert)
         }
 
+        // Rilevamento "appena fermo": se il gate scarta il fix perche' non c'e' movimento,
+        // ma l'ultimo fix SCRITTO aveva velocita' > soglia, forziamo speed=0 su Firestore
+        // subito invece di aspettare il prossimo heartbeat (fino a 60s).
         if (!gate.shouldSend) {
+            val rawSpeedNow = if (loc.speed < 0f || loc.speed > MAX_PLAUSIBLE_SPEED_MS) 0f else loc.speed
+            if (wasSentMoving && rawSpeedNow < MOVING_SPEED_THRESHOLD_MS) {
+                wasSentMoving = false
+                try {
+                    firestore?.collection("groups")?.document(currentGroup)
+                        ?.collection("locations")?.document(user.uid)
+                        ?.update("speed", 0f, "lastUpdated", com.google.firebase.Timestamp.now())
+                } catch (_: Exception) {}
+            }
             Log.v(TAG, "Fix ignorato: ${gate.reason}")
             return
         }
@@ -3006,7 +3019,8 @@ class FirebaseRepository private constructor(private val context: Context) {
         prevFilteredLat = loc.latitude
         prevFilteredLon = loc.longitude
         prevFilteredTime = loc.timestamp
-        val safeSpeed = computedSpeed ?: rawSafe
+        val safeSpeed = (computedSpeed ?: rawSafe).let { if (it < MOVING_SPEED_THRESHOLD_MS) 0f else it }
+        wasSentMoving = safeSpeed >= MOVING_SPEED_THRESHOLD_MS
         val enrichedLocation = loc.copy(
             userId = user.uid,
             userName = user.displayName,

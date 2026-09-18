@@ -178,19 +178,23 @@ fun MapLibreMapView(
                 val bmp = (drawable as android.graphics.drawable.BitmapDrawable).bitmap
                 style.addImage(iconId, bmp)
             }
-            memberTargets[m.userId] = Triple(m.latitude, m.longitude, iconId)
+            val (snapLat, snapLon) = snapToRoad(map, m.latitude, m.longitude)
+            memberTargets[m.userId] = Triple(snapLat, snapLon, iconId)
         }
         val ids = valid.map { it.userId }.toSet()
         memberTargets.keys.retainAll(ids)
         memberDisplayed.keys.retainAll(ids)
 
-        val rawLineFeatures = valid.filter { it.recentPoints.size >= 2 }.map { m ->
-            val pts = m.recentPoints.sortedBy { it.t }
-                .map { org.maplibre.geojson.Point.fromLngLat(it.lon, it.lat) }
+        // Scia: snap locale ai dati stradali gia' caricati in mappa; fallback GPS grezzo.
+        val trailFeatures = valid.filter { it.recentPoints.size >= 2 }.map { m ->
+            val pts = m.recentPoints.sortedBy { it.t }.map { rp ->
+                val (sLat, sLon) = snapToRoad(map, rp.lat, rp.lon)
+                org.maplibre.geojson.Point.fromLngLat(sLon, sLat)
+            }
             org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.LineString.fromLngLats(pts))
         }
         style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("trail-src")
-            ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(rawLineFeatures))
+            ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(trailFeatures))
 
         if (!centeredOnce) {
             val me = valid.find { it.userId == currentUserId } ?: valid.firstOrNull()
@@ -215,19 +219,6 @@ fun MapLibreMapView(
             }
         }
 
-        // Scia agganciata alle strade (in background): sostituisce la scia grezza dove
-        // il matching e' affidabile, altrimenti resta il grezzo (regola fuori-strada).
-        val withTrails = valid.filter { it.recentPoints.size >= 2 }
-        if (withTrails.isNotEmpty()) {
-            val snappedFeatures = withTrails.map { m ->
-                val raw = m.recentPoints.sortedBy { it.t }.map { it.lat to it.lon }
-                val snapped = com.example.util.RoadMatcher.matchToRoads(raw) ?: raw
-                val pts = snapped.map { org.maplibre.geojson.Point.fromLngLat(it.second, it.first) }
-                org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.LineString.fromLngLats(pts))
-            }
-            map.style?.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("trail-src")
-                ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(snappedFeatures))
-        }
     }
 
     // Ticker: ogni 100ms fa scivolare i pallini dalla posizione mostrata verso il
@@ -516,6 +507,56 @@ private fun addRadarLayers(style: org.maplibre.android.maps.Style) {
     style.addLayer(symbol("snapshots-layer", "snapshots-src"))
     style.addSource(org.maplibre.android.style.sources.GeoJsonSource("members-src"))
     style.addLayer(symbol("members-layer", "members-src"))
+}
+
+// Snap di un punto GPS alla strada piu' vicina gia' caricata nei tile vettoriali.
+// Se nessuna strada e' entro maxDistM metri, restituisce il punto originale (off-road).
+// Deve essere chiamata sul main thread (queryRenderedFeatures e' una API UI).
+private fun snapToRoad(
+    map: org.maplibre.android.maps.MapLibreMap,
+    lat: Double,
+    lon: Double,
+    maxDistM: Double = 40.0
+): Pair<Double, Double> = try {
+    val screen = map.projection.toScreenLocation(org.maplibre.android.geometry.LatLng(lat, lon))
+    val r = 80f
+    val box = android.graphics.RectF(screen.x - r, screen.y - r, screen.x + r, screen.y + r)
+    val features = map.queryRenderedFeatures(box)
+    var bestLat = lat; var bestLon = lon; var bestDist = maxDistM
+    for (feat in features) {
+        val geom = feat.geometry() ?: continue
+        val lines: List<List<org.maplibre.geojson.Point>> = when (geom) {
+            is org.maplibre.geojson.LineString      -> listOf(geom.coordinates())
+            is org.maplibre.geojson.MultiLineString -> geom.coordinates()
+            else -> emptyList()
+        }
+        for (line in lines) {
+            for (i in 0 until line.size - 1) {
+                val (sLat, sLon) = nearestOnSegment(
+                    lat, lon,
+                    line[i].latitude(), line[i].longitude(),
+                    line[i + 1].latitude(), line[i + 1].longitude()
+                )
+                val d = distanceMeters(lat, lon, sLat, sLon)
+                if (d < bestDist) { bestDist = d; bestLat = sLat; bestLon = sLon }
+            }
+        }
+    }
+    bestLat to bestLon
+} catch (_: Exception) { lat to lon }
+
+// Punto piu' vicino sul segmento A-B al punto P (coordinate geografiche).
+private fun nearestOnSegment(
+    pLat: Double, pLon: Double,
+    aLat: Double, aLon: Double,
+    bLat: Double, bLon: Double
+): Pair<Double, Double> {
+    val dx = bLon - aLon; val dy = bLat - aLat
+    val lenSq = dx * dx + dy * dy
+    if (lenSq == 0.0) return aLat to aLon
+    val t = ((pLon - aLon) * dx + (pLat - aLat) * dy) / lenSq
+    val tc = t.coerceIn(0.0, 1.0)
+    return (aLat + tc * dy) to (aLon + tc * dx)
 }
 
 private fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {

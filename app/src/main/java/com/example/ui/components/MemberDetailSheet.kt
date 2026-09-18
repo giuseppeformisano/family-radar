@@ -41,6 +41,7 @@ fun MemberDetailSheet(
     onDismiss: () -> Unit,
     onNavigateToChat: () -> Unit,
     onEditProfileClick: (() -> Unit)? = null,
+    onShowHeatmap: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -259,6 +260,22 @@ fun MemberDetailSheet(
                         Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(stringResource(R.string.action_directions), maxLines = 1)
+                    }
+
+                    if (onShowHeatmap != null) {
+                        OutlinedButton(
+                            onClick = { onShowHeatmap() },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("heatmap_button"),
+                            shape = RoundedCornerShape(Radius.md),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+                        ) {
+                            Icon(Icons.Default.Thermostat, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Percorsi", maxLines = 1)
+                        }
                     }
                 }
 

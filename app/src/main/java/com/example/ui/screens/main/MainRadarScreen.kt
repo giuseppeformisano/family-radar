@@ -339,6 +339,10 @@ fun MainRadarScreen(
     // quindi da soli non farebbero riscattare l'effetto sulla mappa.
     var fitTripToken by remember { mutableIntStateOf(0) }
 
+    // Heatmap posizioni storiche del membro selezionato.
+    var heatmapPoints by remember { mutableStateOf<List<Pair<Double, Double>>>(emptyList()) }
+    var heatmapFitToken by remember { mutableIntStateOf(0) }
+
     /** Centra la mappa su un punto e, di norma, chiude il pannello per lasciarla in vista. */
     fun focusMapOn(latitude: Double, longitude: Double, collapse: Boolean = true) {
         targetMapFocus = Pair(latitude, longitude)
@@ -705,7 +709,10 @@ fun MainRadarScreen(
             targetFocusPoint = targetMapFocus,
             focusToken = focusToken,
             followPoint = followPoint,
-            onMapTap = { activeFullPanel = null },
+            onMapTap = {
+                activeFullPanel = null
+                if (heatmapPoints.isNotEmpty()) heatmapPoints = emptyList()
+            },
             onUserPan = {
                 if (followedUserId != null) followedUserId = null
             },
@@ -724,6 +731,8 @@ fun MainRadarScreen(
             onPlaceSelected = { selectedPlaceForSheet = it },
             onSnapshotClusterSelected = { selectedSnapshotClusterForGallery = it },
             onMapCenterChanged = { center -> currentMapCenter = center },
+            heatmapPoints = heatmapPoints,
+            heatmapFitToken = heatmapFitToken,
             modifier = Modifier.fillMaxSize()
         )
       }
@@ -1274,6 +1283,16 @@ fun MainRadarScreen(
             onEditProfileClick = {
                 selectedMemberForSheet = null
                 showEditProfileDialog = true
+            },
+            onShowHeatmap = {
+                val gid = currentGroup?.id ?: return@MemberDetailSheet
+                val targetUserId = loc.userId
+                selectedMemberForSheet = null
+                coroutineScope.launch {
+                    heatmapPoints = repository.fetchLocationHistory(gid, targetUserId)
+                    heatmapFitToken++
+                    collapseSheet()
+                }
             }
         )
     }

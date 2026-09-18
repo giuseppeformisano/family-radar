@@ -132,6 +132,38 @@ private fun bearingDegrees(lat1: Double, lon1: Double, lat2: Double, lon2: Doubl
 }
 
 /**
+ * Overlay che disegna la heatmap delle posizioni storiche di un membro.
+ * Ogni punto e' rappresentato da due cerchi sovrapposti (alone + nucleo);
+ * nelle zone frequentate l'alpha si accumula dando l'effetto di calore.
+ */
+private class HeatmapOverlay(var points: List<GeoPoint> = emptyList()) : Overlay() {
+    private val outerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = AndroidColor.argb(28, 255, 120, 0)
+    }
+    private val innerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = AndroidColor.argb(75, 255, 55, 0)
+    }
+
+    override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
+        if (shadow || points.isEmpty()) return
+        val density = mapView.resources.displayMetrics.density
+        val outerRadius = 22f * density
+        val innerRadius = 9f * density
+        val proj = mapView.projection
+        val screenPt = android.graphics.Point()
+        for (geoPoint in points) {
+            proj.toPixels(geoPoint, screenPt)
+            val x = screenPt.x.toFloat()
+            val y = screenPt.y.toFloat()
+            canvas.drawCircle(x, y, outerRadius, outerPaint)
+            canvas.drawCircle(x, y, innerRadius, innerPaint)
+        }
+    }
+}
+
+/**
  * Overlay che disegna un anello che pulsa attorno a un punto (marker di chi ha
  * appena inviato un vocale). Due onde sfalsate che si espandono e sfumano.
  * Quando [point] e' null non disegna nulla.
@@ -203,6 +235,14 @@ fun OsmMapView(
     onSnapshotClusterSelected: (PlaceSnapshotCluster) -> Unit = {},
     /** Callback opzionale che riceve il centro mappa corrente (lat, lon). */
     onMapCenterChanged: (Pair<Double, Double>) -> Unit = {},
+    /** Punti storici da visualizzare come heatmap. Lista vuota = nessuna heatmap. */
+    heatmapPoints: List<Pair<Double, Double>> = emptyList(),
+    /**
+     * Incrementa per ri-inquadrare la heatmap sugli stessi punti.
+     * Serve un token come per [focusToken]: la stessa lista non farebbe
+     * riscattare l'effetto.
+     */
+    heatmapFitToken: Int = 0,
     modifier: Modifier = Modifier
 ) {
     // I lambda vengono catturati dentro il blocco `factory`, che gira una sola
@@ -245,6 +285,7 @@ fun OsmMapView(
     val placeOverlays = remember { mutableListOf<Overlay>() }
     val snapshotOverlays = remember { mutableListOf<Overlay>() }
     val tripOverlays = remember { mutableListOf<Overlay>() }
+    val heatmapOverlay = remember { HeatmapOverlay() }
 
     // Scia locale per utente: coppie (punto, istante). Aggiornata sui fix accettati.
     val recentTrail = remember { mutableMapOf<String, MutableList<Pair<GeoPoint, Long>>>() }
@@ -469,6 +510,10 @@ fun OsmMapView(
             if (showSnapshots) {
                 mapView.overlays.addAll(snapshotOverlays)
             }
+            // Heatmap sotto i marker dei membri.
+            if (heatmapOverlay.points.isNotEmpty()) {
+                mapView.overlays.add(heatmapOverlay)
+            }
             if (showMembers) {
                 // Scia sotto i pallini, cosi' il marker resta sopra la linea.
                 mapView.overlays.addAll(memberTrailOverlays)
@@ -582,6 +627,36 @@ fun OsmMapView(
             )
         } catch (t: Throwable) {
             Log.w("OsmMapView", "Inquadratura traccia fallita: ${t.message}")
+        }
+    }
+
+    // Aggiorna i punti della heatmap e inquadra la mappa sui di essi.
+    var lastHeatmapFitToken by remember { mutableIntStateOf(0) }
+    LaunchedEffect(heatmapFitToken, heatmapPoints) {
+        val geoPoints = heatmapPoints.map { (lat, lon) -> GeoPoint(lat, lon) }
+        heatmapOverlay.points = geoPoints
+        mapViewInstance?.invalidate()
+        if (heatmapFitToken == 0 || heatmapFitToken == lastHeatmapFitToken || geoPoints.isEmpty()) return@LaunchedEffect
+        lastHeatmapFitToken = heatmapFitToken
+        try {
+            var minLat = geoPoints[0].latitude
+            var maxLat = geoPoints[0].latitude
+            var minLon = geoPoints[0].longitude
+            var maxLon = geoPoints[0].longitude
+            geoPoints.forEach {
+                minLat = min(minLat, it.latitude)
+                maxLat = max(maxLat, it.latitude)
+                minLon = min(minLon, it.longitude)
+                maxLon = max(maxLon, it.longitude)
+            }
+            val marginLat = ((maxLat - minLat) * 0.20).coerceAtLeast(0.003)
+            val marginLon = ((maxLon - minLon) * 0.20).coerceAtLeast(0.003)
+            mapViewInstance?.zoomToBoundingBox(
+                BoundingBox(maxLat + marginLat, maxLon + marginLon, minLat - marginLat, minLon - marginLon),
+                true, 80
+            )
+        } catch (t: Throwable) {
+            Log.w("OsmMapView", "Inquadratura heatmap fallita: ${t.message}")
         }
     }
 

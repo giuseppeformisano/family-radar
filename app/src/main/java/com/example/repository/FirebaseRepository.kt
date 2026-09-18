@@ -3065,6 +3065,15 @@ class FirebaseRepository private constructor(private val context: Context) {
                     .collection("locations").document(user.uid)
                     .set(locMap, com.google.firebase.firestore.SetOptions.merge()).await()
 
+                // Storico per la heatmap: un punto ogni fix accettato.
+                firestore.collection("groups").document(currentGroup)
+                    .collection("locationHistory").document(user.uid)
+                    .collection("points").add(hashMapOf(
+                        "lat" to enrichedLocation.latitude,
+                        "lon" to enrichedLocation.longitude,
+                        "t" to enrichedLocation.timestamp
+                    ))
+
                 // La batteria vive anche in members/{uid} perche' la lista membri la
                 // mostra senza leggere le posizioni. Aggiornarla a ogni fix pero'
                 // raddoppiava le scritture per nulla: cambia di un punto ogni diversi
@@ -3081,6 +3090,30 @@ class FirebaseRepository private constructor(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.w(TAG, "updateLocation firestore error: ${e.message}")
+        }
+    }
+
+    /**
+     * Legge gli ultimi 30 giorni di posizioni storiche di un membro nel gruppo
+     * indicato. Usato dalla heatmap nel dettaglio membro.
+     */
+    suspend fun fetchLocationHistory(groupId: String, userId: String): List<Pair<Double, Double>> {
+        val thirtyDaysAgo = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+        return try {
+            firestore.collection("groups").document(groupId)
+                .collection("locationHistory").document(userId)
+                .collection("points")
+                .whereGreaterThan("t", thirtyDaysAgo)
+                .get().await()
+                .documents
+                .mapNotNull { doc ->
+                    val lat = doc.getDouble("lat") ?: return@mapNotNull null
+                    val lon = doc.getDouble("lon") ?: return@mapNotNull null
+                    Pair(lat, lon)
+                }
+        } catch (e: Exception) {
+            Log.w(TAG, "fetchLocationHistory error: ${e.message}")
+            emptyList()
         }
     }
 

@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.35.0-beta"
+    const val VERSION = "0.36.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧹 Impostazioni riordinate: spaziatura uniforme, nuova sezione 'Mappa', tolto il doppione 'Colore mappa'.",
-        "🧹 Il cursore di taratura del filtro posizione spostato in 'Sviluppatore'."
+        "🗺️ Heatmap percorsi: apri il dettaglio di un membro e tocca 'Percorsi' per vedere sulla mappa dove e' stato negli ultimi 30 giorni.",
+        "👆 Tocca la mappa per chiudere la heatmap."
     )
 }

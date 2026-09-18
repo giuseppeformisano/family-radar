@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.36.0-beta"
+    const val VERSION = "0.37.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🌐 Cruscotto web: visualizza le posizioni della famiglia in tempo reale dal browser (GitHub Pages)."
+        "💬 Menu chat unificato: tieni premuto un messaggio per vedere emoji e azioni nello stesso riquadro."
     )
 }

@@ -3100,17 +3100,17 @@ class FirebaseRepository private constructor(private val context: Context) {
     suspend fun fetchLocationHistory(groupId: String, userId: String): List<Pair<Double, Double>> {
         val thirtyDaysAgo = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
         return try {
-            firestore.collection("groups").document(groupId)
-                .collection("locationHistory").document(userId)
-                .collection("points")
-                .whereGreaterThan("t", thirtyDaysAgo)
-                .get().await()
-                .documents
-                .mapNotNull { doc ->
+            firestore?.collection("groups")?.document(groupId)
+                ?.collection("locationHistory")?.document(userId)
+                ?.collection("points")
+                ?.whereGreaterThan("t", thirtyDaysAgo)
+                ?.get()?.await()
+                ?.documents
+                ?.mapNotNull { doc ->
                     val lat = doc.getDouble("lat") ?: return@mapNotNull null
                     val lon = doc.getDouble("lon") ?: return@mapNotNull null
                     Pair(lat, lon)
-                }
+                } ?: emptyList()
         } catch (e: Exception) {
             Log.w(TAG, "fetchLocationHistory error: ${e.message}")
             emptyList()

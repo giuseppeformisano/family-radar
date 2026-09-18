@@ -62,7 +62,6 @@ fun AuthScreen(
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
-    val gradients = RadarTheme.palette.gradients
 
     var selectedMethod by remember { mutableStateOf(AuthMethod.PHONE) }
 
@@ -84,6 +83,7 @@ fun AuthScreen(
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var successMessage by remember { mutableStateOf<String?>(null) }
+    var showAlternative by remember { mutableStateOf(false) }
 
     fun clearFeedback() {
         errorMessage = null
@@ -93,63 +93,40 @@ fun AuthScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.background),
+        contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = Spacing.xxl, vertical = Spacing.lg),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = Spacing.xxl),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Spacer(Modifier.height(Spacing.xl))
+            Spacer(Modifier.height(Spacing.xxxl))
 
-            // ---- Header ----
-            Text(
-                text = "Family Radar",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
-                ),
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Spacing.xs, vertical = Spacing.xs)
-            )
-
-            Text(
-                text = stringResource(R.string.auth_tagline),
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = Spacing.xs, end = Spacing.xs, top = Spacing.xxs)
-            )
-
-            Spacer(Modifier.height(Spacing.xl))
-
-            // ---- Illustrazione Radar Centrale ----
+            // ── Animazione radar ────────────────────────────────────────────
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.padding(vertical = Spacing.md)
+                modifier = Modifier.size(160.dp)
             ) {
                 RadarPulseAnimation(
-                    modifier = Modifier.size(150.dp),
+                    modifier = Modifier.size(160.dp),
                     color = MaterialTheme.colorScheme.primary
                 )
                 Box(
                     modifier = Modifier
-                        .size(64.dp)
+                        .size(68.dp)
                         .clip(CircleShape)
                         .background(
                             Brush.linearGradient(
                                 listOf(
                                     MaterialTheme.colorScheme.primary,
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.80f)
                                 )
                             )
                         ),
@@ -164,81 +141,111 @@ fun AuthScreen(
                 }
             }
 
-            Spacer(Modifier.height(Spacing.xl))
+            Spacer(Modifier.height(Spacing.xxl))
 
-            // ---- Card dei Contenuti (Login Area) ----
-            Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            // ── Wordmark ───────────────────────────────────────────────────
+            Text(
+                text = "Family Radar",
+                style = MaterialTheme.typography.displaySmall,
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(Spacing.xs))
+
+            Text(
+                text = stringResource(R.string.auth_tagline),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(Modifier.height(Spacing.xxxl))
+
+            // ── Pulsante Google ─────────────────────────────────────────────
+            Button(
+                onClick = {
+                    clearFeedback()
+                    isLoading = true
+                    coroutineScope.launch {
+                        val result = repository.signInWithGoogle(activity ?: context)
+                        isLoading = false
+                        if (result.isSuccess) {
+                            onAuthSuccess()
+                        } else {
+                            errorMessage = result.exceptionOrNull()?.localizedMessage
+                                ?: context.getString(R.string.auth_google_failed)
+                        }
+                    }
+                },
+                enabled = !isLoading,
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Color.Black
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp)
+                    .testTag("google_sign_in_button")
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                    )
+                    Spacer(Modifier.width(Spacing.md))
+                    Text(
+                        stringResource(R.string.auth_connecting),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.Black
+                    )
+                } else {
+                    GoogleIcon(modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(Spacing.md))
+                    Text(
+                        text = stringResource(R.string.auth_google_button),
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                        ),
+                        color = Color.Black
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(Spacing.lg))
+
+            // ── Accesso alternativo (telefono / email) ──────────────────────
+            TextButton(
+                onClick = { showAlternative = !showAlternative; clearFeedback() },
                 modifier = Modifier.fillMaxWidth()
             ) {
+                Text(
+                    text = if (showAlternative)
+                        stringResource(R.string.action_sign_in) + " ← nascondere"
+                    else
+                        "Accedi con numero o email",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            AnimatedVisibility(visible = showAlternative) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(Spacing.xl),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.lg)
+                        .padding(top = Spacing.md),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md)
                 ) {
-                    // Google Login: Rettangolare con angoli arrotondati e sfondo pulito
-                    Button(
-                        onClick = {
-                            clearFeedback()
-                            isLoading = true
-                            coroutineScope.launch {
-                                val result = repository.signInWithGoogle(activity ?: context)
-                                isLoading = false
-                                if (result.isSuccess) {
-                                    onAuthSuccess()
-                                } else {
-                                    errorMessage = result.exceptionOrNull()?.localizedMessage
-                                        ?: context.getString(R.string.auth_google_failed)
-                                }
-                            }
-                        },
-                        enabled = !isLoading,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White,
-                            contentColor = Color.Black
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .testTag("google_sign_in_button")
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                            )
-                            Spacer(Modifier.width(Spacing.md))
-                            Text(
-                                stringResource(R.string.auth_connecting),
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
-                                color = Color.Black
-                            )
-                        } else {
-                            GoogleIcon(modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(Spacing.md))
-                            Text(
-                                text = stringResource(R.string.auth_google_button),
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
-                                ),
-                                color = Color.Black
-                            )
-                        }
-                    }
-
-                    LabeledDivider(stringResource(R.string.label_or))
-
-                    // Selettore metodo di accesso (Phone / Email)
+                    // Selettore metodo
                     Surface(
                         shape = RoundedCornerShape(14.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, MaterialTheme.colorScheme.outline
+                        ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
@@ -258,16 +265,9 @@ fun AuthScreen(
                                 contentPadding = PaddingValues(vertical = Spacing.sm),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Icon(
-                                    Icons.Default.PhoneAndroid,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(Sizes.iconSm)
-                                )
+                                Icon(Icons.Default.PhoneAndroid, null, modifier = Modifier.size(Sizes.iconSm))
                                 Spacer(Modifier.width(Spacing.xs))
-                                Text(
-                                    stringResource(R.string.auth_method_phone),
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
-                                )
+                                Text(stringResource(R.string.auth_method_phone), style = MaterialTheme.typography.labelMedium)
                             }
                             Button(
                                 onClick = { selectedMethod = AuthMethod.EMAIL; clearFeedback() },
@@ -279,16 +279,9 @@ fun AuthScreen(
                                 contentPadding = PaddingValues(vertical = Spacing.sm),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Icon(
-                                    Icons.Default.Email,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(Sizes.iconSm)
-                                )
+                                Icon(Icons.Default.Email, null, modifier = Modifier.size(Sizes.iconSm))
                                 Spacer(Modifier.width(Spacing.xs))
-                                Text(
-                                    stringResource(R.string.auth_method_email),
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
-                                )
+                                Text(stringResource(R.string.auth_method_email), style = MaterialTheme.typography.labelMedium)
                             }
                         }
                     }
@@ -299,9 +292,7 @@ fun AuthScreen(
                             val forward = targetState.ordinal > initialState.ordinal
                             val offset = if (forward) 1 else -1
                             (slideInHorizontally(tween(220)) { it * offset / 4 } + fadeIn(tween(220)))
-                                .togetherWith(
-                                    slideOutHorizontally(tween(180)) { -it * offset / 4 } + fadeOut(tween(180))
-                                )
+                                .togetherWith(slideOutHorizontally(tween(180)) { -it * offset / 4 } + fadeOut(tween(180)))
                         },
                         label = "auth_method"
                     ) { method ->
@@ -340,8 +331,7 @@ fun AuthScreen(
                                                 },
                                                 onVerificationFailed = { e ->
                                                     isLoading = false
-                                                    errorMessage = e.localizedMessage
-                                                        ?: context.getString(R.string.err_sms_send)
+                                                    errorMessage = e.localizedMessage ?: context.getString(R.string.err_sms_send)
                                                 }
                                             )
                                         }
@@ -362,23 +352,14 @@ fun AuthScreen(
                                                 phoneNumber = phoneNumber.trim()
                                             )
                                             isLoading = false
-                                            if (result.isSuccess) {
-                                                onAuthSuccess()
-                                            } else {
-                                                errorMessage = result.exceptionOrNull()?.localizedMessage
-                                                    ?: context.getString(R.string.err_invalid_code)
-                                            }
+                                            if (result.isSuccess) onAuthSuccess()
+                                            else errorMessage = result.exceptionOrNull()?.localizedMessage ?: context.getString(R.string.err_invalid_code)
                                         }
                                     }
                                 },
-                                onEditNumber = {
-                                    isCodeSent = false
-                                    smsCode = ""
-                                    clearFeedback()
-                                },
+                                onEditNumber = { isCodeSent = false; smsCode = ""; clearFeedback() },
                                 onImeDone = { focusManager.clearFocus() }
                             )
-
                             AuthMethod.EMAIL -> EmailAuthForm(
                                 isLoginMode = isLoginMode,
                                 onModeChange = { isLoginMode = it; clearFeedback() },
@@ -401,17 +382,11 @@ fun AuthScreen(
                                             val result = if (isLoginMode) {
                                                 repository.signInWithEmail(email.trim(), password)
                                             } else {
-                                                repository.signUpWithEmail(
-                                                    email.trim(), password, displayName.trim()
-                                                )
+                                                repository.signUpWithEmail(email.trim(), password, displayName.trim())
                                             }
                                             isLoading = false
-                                            if (result.isSuccess) {
-                                                onAuthSuccess()
-                                            } else {
-                                                errorMessage = result.exceptionOrNull()?.localizedMessage
-                                                    ?: context.getString(R.string.err_auth_generic)
-                                            }
+                                            if (result.isSuccess) onAuthSuccess()
+                                            else errorMessage = result.exceptionOrNull()?.localizedMessage ?: context.getString(R.string.err_auth_generic)
                                         }
                                     }
                                 },
@@ -419,44 +394,44 @@ fun AuthScreen(
                             )
                         }
                     }
-
-                    AnimatedVisibility(visible = successMessage != null) {
-                        InfoBanner(
-                            text = successMessage.orEmpty(),
-                            icon = Icons.Default.CheckCircle,
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            accentColor = MaterialTheme.colorScheme.secondary
-                        )
-                    }
-
-                    AnimatedVisibility(visible = errorMessage != null) {
-                        InfoBanner(
-                            text = errorMessage.orEmpty(),
-                            icon = Icons.Default.ErrorOutline
-                        )
-                    }
                 }
             }
 
-            Spacer(Modifier.height(Spacing.xl))
+            AnimatedVisibility(visible = successMessage != null) {
+                InfoBanner(
+                    text = successMessage.orEmpty(),
+                    icon = Icons.Default.CheckCircle,
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    accentColor = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.padding(top = Spacing.md)
+                )
+            }
+
+            AnimatedVisibility(visible = errorMessage != null) {
+                InfoBanner(
+                    text = errorMessage.orEmpty(),
+                    icon = Icons.Default.ErrorOutline,
+                    modifier = Modifier.padding(top = Spacing.md)
+                )
+            }
+
+            Spacer(Modifier.height(Spacing.xxl))
 
             Text(
                 text = stringResource(R.string.auth_privacy_note),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = Spacing.md)
             )
 
-            Spacer(Modifier.height(Spacing.xxl))
+            Spacer(Modifier.height(Spacing.xxxl))
         }
     }
 }
 
-// ============================================================================
-// FORM
-// ============================================================================
+// ── FORM TELEFONO ──────────────────────────────────────────────────────────────
 
 @Composable
 private fun PhoneAuthForm(
@@ -480,19 +455,13 @@ private fun PhoneAuthForm(
                 onValueChange = onPhoneChange,
                 label = { Text(stringResource(R.string.label_phone_number)) },
                 placeholder = { Text(stringResource(R.string.placeholder_phone)) },
-                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Phone,
-                    imeAction = ImeAction.Done
-                ),
+                leadingIcon = { Icon(Icons.Default.Phone, null) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { onImeDone() }),
                 singleLine = true,
                 shape = RoundedCornerShape(Radius.sm),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("phone_number_input")
+                modifier = Modifier.fillMaxWidth().testTag("phone_number_input")
             )
-
             PrimaryActionButton(
                 label = stringResource(R.string.action_send_sms),
                 icon = Icons.Default.Sms,
@@ -506,37 +475,27 @@ private fun PhoneAuthForm(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-
             OutlinedTextField(
                 value = smsCode,
                 onValueChange = onSmsCodeChange,
                 label = { Text(stringResource(R.string.label_sms_code)) },
-                leadingIcon = { Icon(Icons.Default.Pin, contentDescription = null) },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Next
-                ),
+                leadingIcon = { Icon(Icons.Default.Pin, null) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
                 singleLine = true,
                 shape = RoundedCornerShape(Radius.sm),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("sms_code_input")
+                modifier = Modifier.fillMaxWidth().testTag("sms_code_input")
             )
-
             OutlinedTextField(
                 value = displayName,
                 onValueChange = onDisplayNameChange,
                 label = { Text(stringResource(R.string.label_display_name)) },
-                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                leadingIcon = { Icon(Icons.Default.Person, null) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { onImeDone() }),
                 singleLine = true,
                 shape = RoundedCornerShape(Radius.sm),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("phone_name_input")
+                modifier = Modifier.fillMaxWidth().testTag("phone_name_input")
             )
-
             PrimaryActionButton(
                 label = stringResource(R.string.action_verify_and_login),
                 icon = Icons.Default.LockOpen,
@@ -544,16 +503,14 @@ private fun PhoneAuthForm(
                 onClick = onVerify,
                 testTag = "verify_phone_code_button"
             )
-
-            TextButton(
-                onClick = onEditNumber,
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            ) {
+            TextButton(onClick = onEditNumber, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                 Text(stringResource(R.string.action_change_number))
             }
         }
     }
 }
+
+// ── FORM EMAIL ─────────────────────────────────────────────────────────────────
 
 @Composable
 private fun EmailAuthForm(
@@ -572,81 +529,53 @@ private fun EmailAuthForm(
     onImeDone: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
-        ) {
-            PillChip(
-                label = stringResource(R.string.action_sign_in),
-                selected = isLoginMode,
-                onClick = { onModeChange(true) },
-                modifier = Modifier.weight(1f)
-            )
-            PillChip(
-                label = stringResource(R.string.action_register),
-                selected = !isLoginMode,
-                onClick = { onModeChange(false) },
-                modifier = Modifier.weight(1f)
-            )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            PillChip(label = stringResource(R.string.action_sign_in), selected = isLoginMode, onClick = { onModeChange(true) }, modifier = Modifier.weight(1f))
+            PillChip(label = stringResource(R.string.action_register), selected = !isLoginMode, onClick = { onModeChange(false) }, modifier = Modifier.weight(1f))
         }
-
         AnimatedVisibility(visible = !isLoginMode) {
             OutlinedTextField(
                 value = displayName,
                 onValueChange = onDisplayNameChange,
                 label = { Text(stringResource(R.string.label_full_name)) },
-                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                leadingIcon = { Icon(Icons.Default.Person, null) },
                 singleLine = true,
                 shape = RoundedCornerShape(Radius.sm),
                 modifier = Modifier.fillMaxWidth()
             )
         }
-
         OutlinedTextField(
             value = email,
             onValueChange = onEmailChange,
             label = { Text(stringResource(R.string.auth_method_email)) },
-            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email,
-                imeAction = ImeAction.Next
-            ),
+            leadingIcon = { Icon(Icons.Default.Email, null) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
             singleLine = true,
             shape = RoundedCornerShape(Radius.sm),
             modifier = Modifier.fillMaxWidth()
         )
-
         OutlinedTextField(
             value = password,
             onValueChange = onPasswordChange,
             label = { Text("Password") },
-            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+            leadingIcon = { Icon(Icons.Default.Lock, null) },
             trailingIcon = {
                 IconButton(onClick = onTogglePasswordVisibility) {
                     Icon(
                         if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                        contentDescription = if (passwordVisible)
-                            stringResource(R.string.action_hide_password)
-                        else
-                            stringResource(R.string.action_show_password)
+                        contentDescription = if (passwordVisible) stringResource(R.string.action_hide_password) else stringResource(R.string.action_show_password)
                     )
                 }
             },
-            visualTransformation = if (passwordVisible) VisualTransformation.None
-            else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done
-            ),
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { onImeDone() }),
             singleLine = true,
             shape = RoundedCornerShape(Radius.sm),
             modifier = Modifier.fillMaxWidth()
         )
-
         PrimaryActionButton(
-            label = if (isLoginMode) stringResource(R.string.action_sign_in)
-                    else stringResource(R.string.action_create_account),
+            label = if (isLoginMode) stringResource(R.string.action_sign_in) else stringResource(R.string.action_create_account),
             icon = if (isLoginMode) Icons.Default.Login else Icons.Default.PersonAdd,
             isLoading = isLoading,
             onClick = onSubmit
@@ -654,9 +583,7 @@ private fun EmailAuthForm(
     }
 }
 
-// ============================================================================
-// COMPONENTI LOCALI
-// ============================================================================
+// ── COMPONENTI LOCALI ──────────────────────────────────────────────────────────
 
 @Composable
 private fun PrimaryActionButton(
@@ -681,88 +608,36 @@ private fun PrimaryActionButton(
             .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
     ) {
         if (isLoading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.onPrimary,
-                trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
-            )
+            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary, trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f))
         } else {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(Sizes.iconMd))
+            Icon(icon, null, modifier = Modifier.size(Sizes.iconMd))
             Spacer(Modifier.width(Spacing.sm))
-            Text(
-                label,
-                style = MaterialTheme.typography.labelLarge.copy(
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
-                )
-            )
+            Text(label, style = MaterialTheme.typography.labelLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold))
         }
-    }
-}
-
-@Composable
-private fun LabeledDivider(label: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        HorizontalDivider(
-            modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.outline
-        )
-        Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = Spacing.md)
-        )
-        HorizontalDivider(
-            modifier = Modifier.weight(1f),
-            color = MaterialTheme.colorScheme.outline
-        )
     }
 }
 
 /**
  * Logo Google disegnato su Canvas: quattro archi colorati più la barra orizzontale.
- * Evita di dover impacchettare l'asset ufficiale, che ha vincoli di licenza sul brand.
  */
 @Composable
 fun GoogleIcon(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         val stroke = size.minDimension * 0.22f
-        val inset = stroke / 2f
+        val inset  = stroke / 2f
         val arcSize = Size(size.width - stroke, size.height - stroke)
         val topLeft = Offset(inset, inset)
 
-        val red = Color(0xFFEA4335)
-        val blue = Color(0xFF4285F4)
+        val red    = Color(0xFFEA4335)
+        val blue   = Color(0xFF4285F4)
         val yellow = Color(0xFFFBBC05)
-        val green = Color(0xFF34A853)
+        val green  = Color(0xFF34A853)
 
-        // Archi: rosso in alto, giallo a sinistra, verde in basso, blu a destra.
-        drawArc(
-            color = red, startAngle = -135f, sweepAngle = 100f, useCenter = false,
-            topLeft = topLeft, size = arcSize,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
-        )
-        drawArc(
-            color = yellow, startAngle = 125f, sweepAngle = 90f, useCenter = false,
-            topLeft = topLeft, size = arcSize,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
-        )
-        drawArc(
-            color = green, startAngle = 35f, sweepAngle = 90f, useCenter = false,
-            topLeft = topLeft, size = arcSize,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
-        )
-        drawArc(
-            color = blue, startAngle = -35f, sweepAngle = 70f, useCenter = false,
-            topLeft = topLeft, size = arcSize,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke)
-        )
+        drawArc(color = red,    startAngle = -135f, sweepAngle = 100f, useCenter = false, topLeft = topLeft, size = arcSize, style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke))
+        drawArc(color = yellow, startAngle = 125f,  sweepAngle = 90f,  useCenter = false, topLeft = topLeft, size = arcSize, style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke))
+        drawArc(color = green,  startAngle = 35f,   sweepAngle = 90f,  useCenter = false, topLeft = topLeft, size = arcSize, style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke))
+        drawArc(color = blue,   startAngle = -35f,  sweepAngle = 70f,  useCenter = false, topLeft = topLeft, size = arcSize, style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke))
 
-        // Barra orizzontale della "G".
         drawRect(
             color = blue,
             topLeft = Offset(size.width * 0.5f, size.height * 0.5f - stroke / 2f),

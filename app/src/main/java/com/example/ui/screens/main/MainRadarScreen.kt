@@ -3093,7 +3093,6 @@ private fun ChatBubble(
         }
 
         var menuOpen by remember { mutableStateOf(false) }
-        var reactionPickerOpen by remember { mutableStateOf(false) }
         Box {
           Surface(
             shape = RoundedCornerShape(
@@ -3107,10 +3106,7 @@ private fun ChatBubble(
                 .widthIn(max = 300.dp)
                 .combinedClickable(
                     onClick = {},
-                    onLongClick = {
-                        menuOpen = true
-                        reactionPickerOpen = true
-                    }
+                    onLongClick = { menuOpen = true }
                 )
         ) {
             Column(modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp)) {
@@ -3227,6 +3223,27 @@ private fun ChatBubble(
           }
 
           DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+              // Riga emoji in cima, stessa larghezza del menu.
+              Row(
+                  modifier = Modifier
+                      .padding(horizontal = Spacing.sm, vertical = Spacing.xs),
+                  horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
+              ) {
+                  listOf("👍", "❤️", "😂", "😮", "😢").forEach { emoji ->
+                      Text(
+                          text = emoji,
+                          fontSize = 22.sp,
+                          modifier = Modifier
+                              .clip(CircleShape)
+                              .clickable {
+                                  onReactionSelected(emoji)
+                                  menuOpen = false
+                              }
+                              .padding(Spacing.xs)
+                      )
+                  }
+              }
+              HorizontalDivider()
               DropdownMenuItem(
                   text = { Text("Rispondi") },
                   leadingIcon = { Icon(Icons.Default.Reply, contentDescription = null) },
@@ -3250,48 +3267,6 @@ private fun ChatBubble(
                       leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                       onClick = { menuOpen = false; onDeleteForEveryone() }
                   )
-              }
-          }
-
-          // Picker reazioni rapide: appare al long-press come pillola fluttuante
-          // sopra la bolla. Prototipo solo-UI (vedi messageReactions in ChatPanel).
-          if (reactionPickerOpen) {
-              androidx.compose.ui.window.Popup(
-                  alignment = Alignment.TopCenter,
-                  offset = androidx.compose.ui.unit.IntOffset(0, -140),
-                  onDismissRequest = { reactionPickerOpen = false }
-              ) {
-                  androidx.compose.animation.AnimatedVisibility(
-                      visible = reactionPickerOpen,
-                      enter = fadeIn() + scaleIn(initialScale = 0.85f),
-                      exit = fadeOut() + scaleOut(targetScale = 0.85f)
-                  ) {
-                      Surface(
-                          shape = RoundedCornerShape(Radius.pill),
-                          color = MaterialTheme.colorScheme.surface,
-                          shadowElevation = 6.dp,
-                          border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                      ) {
-                          Row(
-                              modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xs),
-                              horizontalArrangement = Arrangement.spacedBy(Spacing.xs)
-                          ) {
-                              listOf("👍", "❤️", "😂", "😮", "😢").forEach { emoji ->
-                                  Text(
-                                      text = emoji,
-                                      fontSize = 22.sp,
-                                      modifier = Modifier
-                                          .clip(CircleShape)
-                                          .clickable {
-                                              onReactionSelected(emoji)
-                                              reactionPickerOpen = false
-                                          }
-                                          .padding(Spacing.xs)
-                                  )
-                              }
-                          }
-                      }
-                  }
               }
           }
 

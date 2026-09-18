@@ -333,19 +333,50 @@ let focusedUid    = null;
 let firstFit      = false;
 let currentLocs   = [];
 
+// ── MAP MATCHING (OSRM) ───────────────────────────────────────────────────────
+const matchCache = {}; // uid → matched coords (invalidated when points change)
+
+async function matchToRoads(uid, rawCoords) {
+  if (rawCoords.length < 2) return null;
+  const key = uid + ':' + rawCoords.map(c=>c.join(',')).join('|');
+  if (matchCache[uid]?.key === key) return matchCache[uid].coords;
+  try {
+    const pts = rawCoords.length > 100 ? rawCoords.slice(-100) : rawCoords;
+    const coordStr   = pts.map(c => c.join(',')).join(';');
+    const radiusStr  = pts.map(() => '40').join(';');
+    const url = `https://router.project-osrm.org/match/v1/driving/${coordStr}` +
+      `?geometries=geojson&overview=full&tidy=true&radiuses=${radiusStr}`;
+    const res  = await fetch(url, { headers:{'User-Agent':'FamilyRadar/1.0'} });
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.code !== 'Ok' || !json.matchings?.length) return null;
+    const m = json.matchings[0];
+    if ((m.confidence || 0) < 0.10) return null;
+    const coords = m.geometry.coordinates; // already [lon,lat]
+    if (coords.length < 2) return null;
+    matchCache[uid] = { key, coords };
+    return coords;
+  } catch { return null; }
+}
+
 // ── RENDER MEMBRI ─────────────────────────────────────────────────────────────
-function renderLocs(locs) {
+async function renderLocs(locs) {
   currentLocs = locs;
   if (!styleReady) { pendingLocs = locs; return; }
 
-  // Scie
-  const trails = locs.filter(l => (l.recentPoints||[]).length >= 2).map(l => ({
-    type:'Feature',
-    properties:{ color: memberColor(l.userId) },
-    geometry:{ type:'LineString',
-      coordinates: l.recentPoints.slice().sort((a,b)=>a.t-b.t).map(p=>[p.lo,p.la]) }
-  }));
-  map.getSource('trails')?.setData({ type:'FeatureCollection', features: trails });
+  // Scie: map matching async, fallback grezzo
+  const trailFeatures = await Promise.all(
+    locs.filter(l => (l.recentPoints||[]).length >= 2).map(async l => {
+      const sorted = l.recentPoints.slice().sort((a,b)=>a.t-b.t).map(p=>[p.lo,p.la]);
+      const matched = await matchToRoads(l.userId, sorted);
+      return {
+        type:'Feature',
+        properties:{ color: memberColor(l.userId) },
+        geometry:{ type:'LineString', coordinates: matched || sorted }
+      };
+    })
+  );
+  map.getSource('trails')?.setData({ type:'FeatureCollection', features: trailFeatures });
 
   const seen   = new Set();
   const bounds = new maplibregl.LngLatBounds();

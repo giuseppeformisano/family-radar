@@ -1,20 +1,8 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// ISTRUZIONI
-//
-// 1. Vai su console.firebase.google.com → seleziona il tuo progetto
-// 2. Impostazioni progetto (ingranaggio) → "Le tue app" → aggiungi una Web app
-//    oppure usa quella esistente se ne hai già una.
-// 3. Copia l'oggetto "firebaseConfig" e sostituisci i valori qui sotto.
-// 4. Torna su GitHub → Settings → Pages → Branch: master, Cartella: /docs → Salva.
-// 5. Aggiungi il tuo dominio GitHub Pages a Firebase Console →
-//    Authentication → Impostazioni → Domini autorizzati.
-// ─────────────────────────────────────────────────────────────────────────────
-
 window.FIREBASE_CONFIG = {
-  apiKey:            "INSERISCI_QUI",
-  authDomain:        "INSERISCI_QUI",
-  projectId:         "INSERISCI_QUI",
-  storageBucket:     "INSERISCI_QUI",
-  messagingSenderId: "INSERISCI_QUI",
-  appId:             "INSERISCI_QUI"
+  apiKey:            "AIzaSyD5x46VNp7d0RVu2Uoh1tD88XffR6cwzBc",
+  authDomain:        "family-tracker-58524.firebaseapp.com",
+  projectId:         "family-tracker-58524",
+  storageBucket:     "family-tracker-58524.firebasestorage.app",
+  messagingSenderId: "357992636648",
+  appId:             "1:357992636648:web:22e7fdc100947b0a20295d"
 };

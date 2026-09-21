@@ -3020,14 +3020,18 @@ class FirebaseRepository private constructor(private val context: Context) {
         prevFilteredLat = loc.latitude
         prevFilteredLon = loc.longitude
         prevFilteredTime = loc.timestamp
-        val safeSpeed = (computedSpeed ?: rawSafe).let { if (it < MOVING_SPEED_THRESHOLD_MS) 0f else it }
-        wasSentMoving = safeSpeed >= MOVING_SPEED_THRESHOLD_MS
+        // Velocita' da mostrare: quella reale (non azzerata sotto soglia) per evitare
+        // il flickering Online/In-movimento ad ogni fix con aggiornamenti frequenti.
+        val displaySpeed = (computedSpeed ?: rawSafe).coerceIn(0f, MAX_PLAUSIBLE_SPEED_MS)
+        // La soglia serve solo per capire se siamo in movimento: usata per wasSentMoving
+        // e per il stop-detection, non per quello che finisce su Firestore.
+        wasSentMoving = displaySpeed >= MOVING_SPEED_THRESHOLD_MS
         val enrichedLocation = loc.copy(
             userId = user.uid,
             userName = user.displayName,
             photoBase64 = user.photoBase64 ?: loc.photoBase64,
             currentPlaceName = matchedPlace?.name,
-            speed = safeSpeed
+            speed = displaySpeed
         )
 
         // Update local list

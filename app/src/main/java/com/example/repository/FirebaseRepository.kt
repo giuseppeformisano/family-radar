@@ -2411,7 +2411,8 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     batteryLevel = (doc.getLong("batteryLevel") ?: 100L).toInt(),
                                     isTrackingActive = doc.getBoolean("isTrackingActive") ?: true,
                                     isOnline = doc.getBoolean("isOnline") ?: true,
-                                    chatLastReadAt = doc.getLong("chatLastReadAt") ?: 0L
+                                    chatLastReadAt = doc.getLong("chatLastReadAt") ?: 0L,
+                                    appVersion = doc.getString("appVersion") ?: ""
                                 )
                             } catch (ex: Exception) {
                                 null

@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.49.0-beta"
+    const val VERSION = "0.50.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧱 Riorganizzazione interna del codice della chat (nessun cambiamento visibile): base piu' pulita per i prossimi lavori."
+        "🔢 La versione installata da ogni membro ora si vede davvero nella lista Membri (prima restava nascosta)."
     )
 }

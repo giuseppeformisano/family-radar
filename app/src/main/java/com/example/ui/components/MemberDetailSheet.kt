@@ -274,7 +274,7 @@ fun MemberDetailSheet(
                         ) {
                             Icon(Icons.Default.Thermostat, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Percorsi", maxLines = 1)
+                            Text(stringResource(R.string.action_paths), maxLines = 1)
                         }
                     }
                 }

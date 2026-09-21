@@ -10,12 +10,12 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.47.0-beta"
+    const val VERSION = "0.48.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "⚡ 1 aggiornamento/sec solo se 'Alta precisione in movimento' e' attiva.",
-        "⏱️ Intervallo minimo impostabile: 1 secondo (era 5).",
-        "✅ Conferma visiva quando l'intervallo viene salvato."
+        "🗺️ Heatmap piu' leggera: i punti si salvano a blocchi (molte meno scritture) e scadono da soli dopo 30 giorni.",
+        "🎨 Indicatori di caricamento ora seguono il colore del tema (anche in modalita' scura).",
+        "🧹 App piu' leggera: rimosse librerie inutilizzate."
     )
 }

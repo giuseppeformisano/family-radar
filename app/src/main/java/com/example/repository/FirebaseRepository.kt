@@ -3084,14 +3084,21 @@ class FirebaseRepository private constructor(private val context: Context) {
                     .collection("locations").document(user.uid)
                     .set(locMap, com.google.firebase.firestore.SetOptions.merge()).await()
 
-                // Storico per la heatmap: un punto ogni fix accettato.
-                firestore.collection("groups").document(currentGroup)
-                    .collection("locationHistory").document(user.uid)
-                    .collection("points").add(hashMapOf(
-                        "lat" to enrichedLocation.latitude,
-                        "lon" to enrichedLocation.longitude,
+                // Storico per la heatmap: i punti si accumulano in memoria e si
+                // scrivono a blocchi (un documento ogni HISTORY_BATCH_SIZE punti,
+                // o sull'heartbeat) invece di una scrittura per fix — taglia le
+                // scritture di ~20x. Ogni blocco porta un campo expireAt (Timestamp)
+                // per la pulizia automatica via TTL a 30 giorni.
+                synchronized(historyBuffer) {
+                    historyBuffer.add(hashMapOf(
+                        "la" to enrichedLocation.latitude,
+                        "lo" to enrichedLocation.longitude,
                         "t" to enrichedLocation.timestamp
                     ))
+                }
+                if (historyBuffer.size >= HISTORY_BATCH_SIZE || gate.isHeartbeat) {
+                    flushHistoryBuffer(currentGroup, user.uid)
+                }
 
                 // La batteria vive anche in members/{uid} perche' la lista membri la
                 // mostra senza leggere le posizioni. Aggiornarla a ogni fix pero'
@@ -3115,9 +3122,39 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
     }
 
+    // Buffer in memoria dei punti storici, svuotato a blocchi (vedi updateLocation).
+    private val HISTORY_BATCH_SIZE = 20
+    private val historyBuffer = mutableListOf<HashMap<String, Any>>()
+
+    /** Svuota il buffer scrivendo un unico documento-blocco con i punti accumulati. */
+    private suspend fun flushHistoryBuffer(groupId: String, userId: String) {
+        val batch: List<HashMap<String, Any>>
+        synchronized(historyBuffer) {
+            if (historyBuffer.isEmpty()) return
+            batch = ArrayList(historyBuffer)
+            historyBuffer.clear()
+        }
+        try {
+            val lastT = batch.maxOf { (it["t"] as Number).toLong() }
+            val expireAt = com.google.firebase.Timestamp(
+                java.util.Date(System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000)
+            )
+            firestore?.collection("groups")?.document(groupId)
+                ?.collection("locationHistory")?.document(userId)
+                ?.collection("points")?.add(hashMapOf(
+                    "pts" to batch,
+                    "lastT" to lastT,
+                    "expireAt" to expireAt
+                ))?.await()
+        } catch (e: Exception) {
+            Log.w(TAG, "flushHistoryBuffer error: ${e.message}")
+        }
+    }
+
     /**
      * Legge gli ultimi 30 giorni di posizioni storiche di un membro nel gruppo
-     * indicato. Usato dalla heatmap nel dettaglio membro.
+     * indicato. Usato dalla heatmap nel dettaglio membro. Ogni documento e' un
+     * blocco che contiene un array di punti (vedi flushHistoryBuffer).
      */
     suspend fun fetchLocationHistory(groupId: String, userId: String): List<Pair<Double, Double>> {
         val thirtyDaysAgo = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
@@ -3125,13 +3162,17 @@ class FirebaseRepository private constructor(private val context: Context) {
             firestore?.collection("groups")?.document(groupId)
                 ?.collection("locationHistory")?.document(userId)
                 ?.collection("points")
-                ?.whereGreaterThan("t", thirtyDaysAgo)
+                ?.whereGreaterThan("lastT", thirtyDaysAgo)
                 ?.get()?.await()
                 ?.documents
-                ?.mapNotNull { doc ->
-                    val lat = doc.getDouble("lat") ?: return@mapNotNull null
-                    val lon = doc.getDouble("lon") ?: return@mapNotNull null
-                    Pair(lat, lon)
+                ?.flatMap { doc ->
+                    @Suppress("UNCHECKED_CAST")
+                    val pts = doc.get("pts") as? List<Map<String, Any>> ?: emptyList()
+                    pts.mapNotNull { p ->
+                        val lat = (p["la"] as? Number)?.toDouble() ?: return@mapNotNull null
+                        val lon = (p["lo"] as? Number)?.toDouble() ?: return@mapNotNull null
+                        Pair(lat, lon)
+                    }
                 } ?: emptyList()
         } catch (e: Exception) {
             Log.w(TAG, "fetchLocationHistory error: ${e.message}")

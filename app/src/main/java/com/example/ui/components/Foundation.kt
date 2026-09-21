@@ -665,8 +665,8 @@ fun RadarProgressIndicator(
     modifier: Modifier = Modifier,
     size: Dp = 24.dp,
     strokeWidth: Dp = 2.5.dp,
-    color: Color = Color(0xFF6366F1),
-    trackColor: Color = Color(0x336366F1)
+    color: Color = MaterialTheme.colorScheme.primary,
+    trackColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
 ) {
     CircularProgressIndicator(
         modifier = modifier.size(size),
@@ -682,8 +682,8 @@ fun RadarProgressIndicator(
 @Composable
 fun RadarLinearProgressIndicator(
     modifier: Modifier = Modifier,
-    color: Color = Color(0xFF6366F1),
-    trackColor: Color = Color(0x336366F1)
+    color: Color = MaterialTheme.colorScheme.primary,
+    trackColor: Color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
 ) {
     LinearProgressIndicator(
         modifier = modifier,

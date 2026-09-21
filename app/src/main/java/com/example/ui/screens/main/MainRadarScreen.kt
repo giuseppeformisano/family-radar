@@ -2561,6 +2561,7 @@ private fun ChatPanel(
     val strCameraError = stringResource(R.string.toast_camera_error)
     val strCameraPermNeeded = stringResource(R.string.toast_camera_permission_needed)
     val strPhotoFileError = stringResource(R.string.toast_photo_file_error)
+    val strTextCopied = stringResource(R.string.toast_text_copied)
 
     var inputText by remember { mutableStateOf("") }
     var isUploading by remember { mutableStateOf(false) }
@@ -2797,7 +2798,7 @@ private fun ChatPanel(
                         onCopy = {
                             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                             cm?.setPrimaryClip(android.content.ClipData.newPlainText("messaggio", msg.text))
-                            Toast.makeText(context, "Testo copiato", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, strTextCopied, Toast.LENGTH_SHORT).show()
                         },
                         onDeleteForMe = { repository.deleteMessageForMe(msg.id) },
                         onDeleteForEveryone = { repository.deleteMessageForEveryone(groupId, msg.id) },
@@ -3258,25 +3259,25 @@ private fun ChatBubble(
               }
               HorizontalDivider()
               DropdownMenuItem(
-                  text = { Text("Rispondi") },
+                  text = { Text(stringResource(R.string.action_reply)) },
                   leadingIcon = { Icon(Icons.Default.Reply, contentDescription = null) },
                   onClick = { menuOpen = false; onReply() }
               )
               if (message.text.isNotBlank()) {
                   DropdownMenuItem(
-                      text = { Text("Copia") },
+                      text = { Text(stringResource(R.string.action_copy)) },
                       leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                       onClick = { menuOpen = false; onCopy() }
                   )
               }
               DropdownMenuItem(
-                  text = { Text("Elimina per me") },
+                  text = { Text(stringResource(R.string.action_delete_for_me)) },
                   leadingIcon = { Icon(Icons.Default.VisibilityOff, contentDescription = null) },
                   onClick = { menuOpen = false; onDeleteForMe() }
               )
               if (isMe) {
                   DropdownMenuItem(
-                      text = { Text("Elimina per tutti") },
+                      text = { Text(stringResource(R.string.action_delete_for_everyone)) },
                       leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                       onClick = { menuOpen = false; onDeleteForEveryone() }
                   )

@@ -482,6 +482,11 @@
     <string name="label_invite_code_section">Codice invito</string>
     <string name="toast_code_copied">Codice copiato</string>
     <string name="action_copy">Copia</string>
+    <string name="action_reply">Rispondi</string>
+    <string name="action_delete_for_me">Elimina per me</string>
+    <string name="action_delete_for_everyone">Elimina per tutti</string>
+    <string name="action_paths">Percorsi</string>
+    <string name="toast_text_copied">Testo copiato</string>
     <string name="settings_approval_title">Approvazione nuovi membri</string>
     <string name="settings_approval_on_desc">Approvi tu ogni nuovo membro</string>
     <string name="settings_approval_off_desc">Chi ha il codice entra subito</string>

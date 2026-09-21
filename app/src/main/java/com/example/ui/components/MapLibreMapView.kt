@@ -89,6 +89,11 @@ fun MapLibreMapView(
     // Smorzamento bearing per la 3D cam: media circolare sugli ultimi N fix.
     val bearingBuffer = remember { BearingBuffer(size = 6) }
 
+    // Cache snap strade: (lat, lon) grezzo → (lat, lon) agganciato alla strada.
+    // Ogni punto viene snappato una sola volta; aggiornamenti successivi riusano
+    // il risultato senza fare nuove query alla mappa.
+    val snapCache = remember { mutableMapOf<Pair<Double, Double>, Pair<Double, Double>>() }
+
     var showMembers by remember { mutableStateOf(true) }
     var showSnapshots by remember { mutableStateOf(true) }
     var showPlaces by remember { mutableStateOf(true) }
@@ -194,11 +199,23 @@ fun MapLibreMapView(
         memberTargets.keys.retainAll(ids)
         memberDisplayed.keys.retainAll(ids)
 
+        // Scia con map matching: ogni punto viene snappato alla strada più vicina
+        // nei tile già caricati. La cache evita di fare query per punti già visti:
+        // in pratica viene chiamato snapToRoad solo per il punto nuovo di ogni secondo.
         val trailFeatures = valid.filter { it.recentPoints.size >= 2 }.map { m ->
             val pts = m.recentPoints.sortedBy { it.t }.map { rp ->
-                org.maplibre.geojson.Point.fromLngLat(rp.lon, rp.lat)
+                val key = rp.lat to rp.lon
+                val (sLat, sLon) = snapCache.getOrPut(key) {
+                    snapToRoad(map, rp.lat, rp.lon)
+                }
+                org.maplibre.geojson.Point.fromLngLat(sLon, sLat)
             }
             org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.LineString.fromLngLats(pts))
+        }
+        // Mantieni la cache entro una dimensione ragionevole (max 500 punti totali).
+        if (snapCache.size > 500) {
+            val toRemove = snapCache.keys.take(snapCache.size - 500)
+            toRemove.forEach { snapCache.remove(it) }
         }
         style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("trail-src")
             ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(trailFeatures))
@@ -675,6 +692,14 @@ private fun chaikinSmooth(pts: List<org.maplibre.geojson.Point>, passes: Int = 3
 // Snap di un punto GPS alla strada piu' vicina gia' caricata nei tile vettoriali.
 // Se nessuna strada e' entro maxDistM metri, restituisce il punto originale (off-road).
 // Deve essere chiamata sul main thread (queryRenderedFeatures e' una API UI).
+// Layer stradali dello stile OpenFreeMap (schema OpenMapTiles).
+// Passare i layer ID specifici è molto più veloce che queryare tutti i layer.
+private val ROAD_LAYER_IDS = arrayOf(
+    "road_path", "road_minor", "road_secondary_tertiary",
+    "road_major", "road_motorway_trunk", "road_link",
+    "road_service_track", "transportation_name_road"
+)
+
 private fun snapToRoad(
     map: org.maplibre.android.maps.MapLibreMap,
     lat: Double,
@@ -684,7 +709,7 @@ private fun snapToRoad(
     val screen = map.projection.toScreenLocation(org.maplibre.android.geometry.LatLng(lat, lon))
     val r = 80f
     val box = android.graphics.RectF(screen.x - r, screen.y - r, screen.x + r, screen.y + r)
-    val features = map.queryRenderedFeatures(box)
+    val features = map.queryRenderedFeatures(box, *ROAD_LAYER_IDS)
     var bestLat = lat; var bestLon = lon; var bestDist = maxDistM
     for (feat in features) {
         val geom = feat.geometry() ?: continue

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Place
@@ -59,6 +60,8 @@ fun MapLibreMapView(
     speakingUserId: String? = null,
     heatmapPoints: List<Pair<Double, Double>> = emptyList(),
     heatmapFitToken: Int = 0,
+    followCam: Boolean = false,
+    onFollowCamChange: (Boolean) -> Unit = {},
     onMemberSelected: (UserLocation) -> Unit = {},
     onPlaceSelected: (com.example.model.SavedPlace) -> Unit = {},
     onSnapshotClusterSelected: (com.example.model.PlaceSnapshotCluster) -> Unit = {},
@@ -79,7 +82,12 @@ fun MapLibreMapView(
     val onClusterSel by androidx.compose.runtime.rememberUpdatedState(onSnapshotClusterSelected)
 
     val currentSpeaking by androidx.compose.runtime.rememberUpdatedState(speakingUserId)
+    val currentFollowCam by androidx.compose.runtime.rememberUpdatedState(followCam)
+    val currentOnFollowCamChange by androidx.compose.runtime.rememberUpdatedState(onFollowCamChange)
     var speakingOffset by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
+
+    // Smorzamento bearing per la 3D cam: media circolare sugli ultimi N fix.
+    val bearingBuffer = remember { BearingBuffer(size = 6) }
 
     var showMembers by remember { mutableStateOf(true) }
     var showSnapshots by remember { mutableStateOf(true) }
@@ -206,8 +214,18 @@ fun MapLibreMapView(
             }
         }
 
-        // Inseguimento: se stai seguendo un membro, la camera lo tiene al centro.
+        // Bearing per la 3D cam: aggiorniamo il buffer solo quando il membro seguito
+        // si muove abbastanza veloce da avere un bearing GPS affidabile (>5 km/h).
         if (followedUserId != null) {
+            val target = valid.find { it.userId == followedUserId }
+            if (target != null && target.speed * 3.6f > 5f && target.bearing >= 0f) {
+                bearingBuffer.add(target.bearing)
+            }
+        }
+
+        // Inseguimento 2D: solo se la 3D cam NON è attiva (quella gestisce posizione
+        // e bearing nel ticker).
+        if (followedUserId != null && !followCam) {
             val target = valid.find { it.userId == followedUserId }
             if (target != null) {
                 map.animateCamera(
@@ -248,6 +266,27 @@ fun MapLibreMapView(
             }
             style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("members-src")
                 ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(features))
+
+            // 3D follow cam: ogni tick aggiorna posizione + bearing + tilt della camera.
+            if (currentFollowCam) {
+                val followed = currentFollowed
+                if (followed != null) {
+                    val pos = memberDisplayed[followed]
+                    val bearing = bearingBuffer.smooth()
+                    if (pos != null) {
+                        mapRef?.animateCamera(
+                            org.maplibre.android.camera.CameraUpdateFactory.newCameraPosition(
+                                org.maplibre.android.camera.CameraPosition.Builder()
+                                    .target(org.maplibre.android.geometry.LatLng(pos.first, pos.second))
+                                    .bearing((bearing ?: mapRef?.cameraPosition?.bearing?.toFloat() ?: 0f).toDouble())
+                                    .tilt(60.0)
+                                    .zoom(18.0)
+                                    .build()
+                            ), 120, null
+                        )
+                    }
+                }
+            }
 
             // Posizione sullo schermo di chi sta mandando un vocale, per l'anello pulsante.
             val sp = currentSpeaking
@@ -391,6 +430,30 @@ fun MapLibreMapView(
         }
     }
 
+    // Edifici 3D e reset camera quando si attiva/disattiva la 3D cam.
+    LaunchedEffect(followCam, styleReady) {
+        if (!styleReady) return@LaunchedEffect
+        val style = mapRef?.style ?: return@LaunchedEffect
+        style.getLayer("buildings-3d")?.setProperties(
+            org.maplibre.android.style.layers.PropertyFactory.visibility(
+                if (followCam) org.maplibre.android.style.layers.Property.VISIBLE
+                else org.maplibre.android.style.layers.Property.NONE
+            )
+        )
+        if (!followCam) {
+            // Torna a vista piana quando si esce dalla 3D cam.
+            mapRef?.animateCamera(
+                org.maplibre.android.camera.CameraUpdateFactory.newCameraPosition(
+                    org.maplibre.android.camera.CameraPosition.Builder()
+                        .tilt(0.0)
+                        .bearing(0.0)
+                        .build()
+                ), 400, null
+            )
+            bearingBuffer.clear()
+        }
+    }
+
     // Mostra/nascondi i layer secondo i toggle.
     LaunchedEffect(showMembers, showSnapshots, showPlaces, styleReady) {
         if (!styleReady) return@LaunchedEffect
@@ -460,6 +523,14 @@ fun MapLibreMapView(
                     CtrlButton(Icons.Default.Place, if (showPlaces) Color(0xFF10B981) else Color(0xCC18181B)) { showPlaces = !showPlaces }
                 }
                 CtrlButton(Icons.Default.Layers, if (layerMenuOpen) Color(0xFF6366F1) else Color(0xCC18181B)) { layerMenuOpen = !layerMenuOpen }
+            }
+
+            // Pulsante 3D cam: visibile solo quando si sta seguendo qualcuno.
+            if (currentFollowed != null) {
+                CtrlButton(
+                    Icons.Default.Navigation,
+                    if (followCam) Color(0xFF6366F1) else Color(0xCC18181B)
+                ) { currentOnFollowCamChange(!followCam) }
             }
 
             CtrlButton(Icons.Default.Group, Color(0xCC18181B)) {
@@ -532,6 +603,31 @@ private fun addRadarLayers(style: org.maplibre.android.maps.Style) {
             org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.NONE)
         )
     )
+    // Edifici 3D: usa i dati di altezza già presenti nei tile OpenFreeMap (schema
+    // OpenMapTiles). Nascosti di default, si attivano con la 3D cam.
+    runCatching {
+        style.addLayerAbove(
+            org.maplibre.android.style.layers.FillExtrusionLayer("buildings-3d", "openmaptiles")
+                .withSourceLayer("building")
+                .withProperties(
+                    org.maplibre.android.style.layers.PropertyFactory.fillExtrusionColor(
+                        android.graphics.Color.rgb(220, 212, 204)
+                    ),
+                    org.maplibre.android.style.layers.PropertyFactory.fillExtrusionHeight(
+                        org.maplibre.android.style.expressions.Expression.get("render_height")
+                    ),
+                    org.maplibre.android.style.layers.PropertyFactory.fillExtrusionBase(
+                        org.maplibre.android.style.expressions.Expression.get("render_min_height")
+                    ),
+                    org.maplibre.android.style.layers.PropertyFactory.fillExtrusionOpacity(0.85f),
+                    org.maplibre.android.style.layers.PropertyFactory.visibility(
+                        org.maplibre.android.style.layers.Property.NONE
+                    )
+                ),
+            "heatmap-layer"
+        )
+    }
+
     style.addSource(org.maplibre.android.style.sources.GeoJsonSource("trail-src"))
     style.addLayer(
         org.maplibre.android.style.layers.LineLayer("trail-layer", "trail-src")
@@ -634,4 +730,32 @@ private fun distanceMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Doubl
         kotlin.math.cos(Math.toRadians(lat1)) * kotlin.math.cos(Math.toRadians(lat2)) *
         kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
     return r * 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+}
+
+/**
+ * Media circolare degli ultimi N bearing GPS.
+ * La media circolare evita l'artefatto 0°/360° (es. media(350°, 10°) = 0°, non 180°).
+ */
+private class BearingBuffer(private val size: Int = 6) {
+    private val values = ArrayDeque<Float>()
+
+    fun add(bearing: Float) {
+        values.addLast(bearing)
+        if (values.size > size) values.removeFirst()
+    }
+
+    fun smooth(): Float? {
+        if (values.isEmpty()) return null
+        var sinSum = 0.0
+        var cosSum = 0.0
+        for (b in values) {
+            val rad = Math.toRadians(b.toDouble())
+            sinSum += kotlin.math.sin(rad)
+            cosSum += kotlin.math.cos(rad)
+        }
+        val deg = Math.toDegrees(kotlin.math.atan2(sinSum, cosSum)).toFloat()
+        return if (deg < 0f) deg + 360f else deg
+    }
+
+    fun clear() = values.clear()
 }

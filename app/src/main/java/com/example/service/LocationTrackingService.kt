@@ -66,6 +66,7 @@ class LocationTrackingService : Service() {
     private lateinit var repository: FirebaseRepository
 
     private var currentIntervalMs: Long = FirebaseRepository.DEFAULT_TRACKING_INTERVAL_SEC * 1000L
+    private var userConfiguredIntervalMs: Long = FirebaseRepository.DEFAULT_TRACKING_INTERVAL_SEC * 1000L
     private var lastFixAtMillis: Long = 0L
     private var lastKnownLocation: Location? = null
 
@@ -104,6 +105,7 @@ class LocationTrackingService : Service() {
         when (intent?.action ?: ACTION_START) {
             ACTION_START -> {
                 currentIntervalMs = intervalMsFrom(intent)
+                userConfiguredIntervalMs = currentIntervalMs
                 startForegroundTracking()
             }
 
@@ -121,6 +123,7 @@ class LocationTrackingService : Service() {
 
             ACTION_UPDATE_INTERVAL -> {
                 currentIntervalMs = intervalMsFrom(intent)
+                userConfiguredIntervalMs = currentIntervalMs
                 requestLocationUpdates()
             }
 
@@ -249,13 +252,17 @@ class LocationTrackingService : Service() {
             }
         }
 
-        if (target != currentPriority) {
+        val targetInterval = if (target == Priority.PRIORITY_HIGH_ACCURACY) 1000L else userConfiguredIntervalMs
+
+        if (target != currentPriority || targetInterval != currentIntervalMs) {
             currentPriority = target
+            currentIntervalMs = targetInterval
             Log.d(
                 TAG,
-                "Precisione GPS: " +
-                    if (target == Priority.PRIORITY_HIGH_ACCURACY) "alta (in movimento)"
-                    else "bilanciata (fermo)"
+                if (target == Priority.PRIORITY_HIGH_ACCURACY)
+                    "Precisione GPS: alta (in movimento), intervallo 1s"
+                else
+                    "Precisione GPS: bilanciata (fermo), intervallo ${userConfiguredIntervalMs / 1000}s"
             )
             requestLocationUpdates()
         }

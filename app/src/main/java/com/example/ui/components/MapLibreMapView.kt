@@ -180,19 +180,15 @@ fun MapLibreMapView(
                 val bmp = (drawable as android.graphics.drawable.BitmapDrawable).bitmap
                 style.addImage(iconId, bmp)
             }
-            val (snapLat, snapLon) = snapToRoad(map, m.latitude, m.longitude)
-            memberTargets[m.userId] = Triple(snapLat, snapLon, iconId)
+            memberTargets[m.userId] = Triple(m.latitude, m.longitude, iconId)
         }
         val ids = valid.map { it.userId }.toSet()
         memberTargets.keys.retainAll(ids)
         memberDisplayed.keys.retainAll(ids)
 
-        // Scia: snap di ogni punto ai dati stradali gia' caricati nei tile MapLibre.
-        // Per punti fuori schermo queryRenderedFeatures restituisce vuoto → GPS grezzo.
         val trailFeatures = valid.filter { it.recentPoints.size >= 2 }.map { m ->
             val pts = m.recentPoints.sortedBy { it.t }.map { rp ->
-                val (sLat, sLon) = snapToRoad(map, rp.lat, rp.lon)
-                org.maplibre.geojson.Point.fromLngLat(sLon, sLat)
+                org.maplibre.geojson.Point.fromLngLat(rp.lon, rp.lat)
             }
             org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.LineString.fromLngLats(pts))
         }

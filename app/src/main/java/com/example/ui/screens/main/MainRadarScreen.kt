@@ -599,7 +599,10 @@ fun MainRadarScreen(
     // velocita' ~40 km/h (11 m/s), bearing calcolato dal segmento corrente, update ogni 1s.
     // Muove il PRIMO membro non-self presente nel gruppo.
     LaunchedEffect(isSimulationRunning) {
-        if (!isSimulationRunning) return@LaunchedEffect
+        if (!isSimulationRunning) {
+            repository.clearSimRecentPoints()
+            return@LaunchedEffect
+        }
 
         val speedMs = 11.0  // ~40 km/h
 

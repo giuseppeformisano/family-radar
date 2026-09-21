@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.54.0-beta"
+    const val VERSION = "0.55.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🎥 3D Cam: segui un membro in prospettiva 3D (pulsante freccia sulla mappa).",
-        "🛣️ Scia agganciata alla strada con cache: ogni punto snappato una volta sola, niente crash."
+        "🛣️ Scia visibile anche in simulazione: il percorso del membro simulato ora lascia la traccia.",
+        "🎥 3D Cam: premi GPS per seguire un membro, poi la freccia per passare alla vista 3D."
     )
 }

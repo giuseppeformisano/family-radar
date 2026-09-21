@@ -3189,10 +3189,17 @@ class FirebaseRepository private constructor(private val context: Context) {
      * Scrive la posizione di un membro arbitrario — usato solo dalla simulazione.
      * Non passa per updateLocation (che sovrascrive sempre con l'uid corrente).
      */
+    // Buffer punti per la scia del membro simulato.
+    private val simRecentPoints = mutableListOf<Triple<Double, Double, Long>>()
+
     suspend fun simulateMemberLocation(location: UserLocation) {
         val groupId = _currentUserState.value?.currentGroupId ?: return
         val db = firestore ?: return
         try {
+            // Accumula i punti per costruire la scia, come fa updateLocation per se stessi.
+            simRecentPoints.add(Triple(location.latitude, location.longitude, location.timestamp))
+            if (simRecentPoints.size > 60) simRecentPoints.removeAt(0)
+
             val locMap = hashMapOf<String, Any?>(
                 "userId" to location.userId,
                 "latitude" to location.latitude,
@@ -3202,21 +3209,31 @@ class FirebaseRepository private constructor(private val context: Context) {
                 "bearing" to location.bearing,
                 "timestamp" to location.timestamp,
                 "isOnline" to true,
-                "currentPlaceName" to (location.currentPlaceName ?: "")
+                "currentPlaceName" to (location.currentPlaceName ?: ""),
+                "recentPoints" to simRecentPoints.map {
+                    hashMapOf("la" to it.first, "lo" to it.second, "t" to it.third)
+                }
             )
             db.collection("groups").document(groupId)
                 .collection("locations").document(location.userId)
                 .set(locMap, com.google.firebase.firestore.SetOptions.merge()).await()
 
-            // Aggiorna anche il StateFlow locale per l'interpolazione immediata
+            // Aggiorna anche il StateFlow locale con i recentPoints aggiornati.
+            val updatedLoc = location.copy(
+                recentPoints = simRecentPoints.map {
+                    com.example.model.RecentPoint(it.first, it.second, it.third)
+                }
+            )
             val list = _currentGroupLocations.value.toMutableList()
             val idx = list.indexOfFirst { it.userId == location.userId }
-            if (idx >= 0) list[idx] = location else list.add(location)
+            if (idx >= 0) list[idx] = updatedLoc else list.add(updatedLoc)
             _currentGroupLocations.value = list
         } catch (e: Exception) {
             Log.w(TAG, "simulateMemberLocation error: ${e.message}")
         }
     }
+
+    fun clearSimRecentPoints() = simRecentPoints.clear()
 
     private var lastNotifiedPlaceId: String? = null
     private var lastNotifiedPlaceName: String? = null

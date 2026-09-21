@@ -3221,7 +3221,7 @@ class FirebaseRepository private constructor(private val context: Context) {
             // Aggiorna anche il StateFlow locale con i recentPoints aggiornati.
             val updatedLoc = location.copy(
                 recentPoints = simRecentPoints.map {
-                    com.example.model.RecentPoint(it.first, it.second, it.third)
+                    com.example.model.TrailPoint(it.first, it.second, it.third)
                 }
             )
             val list = _currentGroupLocations.value.toMutableList()

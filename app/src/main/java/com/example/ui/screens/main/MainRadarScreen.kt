@@ -322,6 +322,8 @@ fun MainRadarScreen(
     // stessi finche' non si tocca un membro nel carosello.
     var followedUserId by remember { mutableStateOf<String?>(null) }
     var followCam by remember { mutableStateOf(false) }
+    // Quando si smette di seguire qualcuno (per qualsiasi motivo), torna al 2D.
+    LaunchedEffect(followedUserId) { if (followedUserId == null) followCam = false }
     var focusTargetUserId by remember { mutableStateOf<String?>(null) }
 
     val followedLocation = followedUserId?.let { id -> locations.find { it.userId == id } }
@@ -812,6 +814,7 @@ fun MainRadarScreen(
             onToggleFollow = {
                 if (followedUserId != null) {
                     followedUserId = null
+                    followCam = false
                     Toast.makeText(context, strFollowOff, Toast.LENGTH_SHORT).show()
                 } else {
                     val targetId = focusTargetUserId ?: currentUserId

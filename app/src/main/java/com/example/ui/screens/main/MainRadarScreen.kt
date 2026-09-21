@@ -3806,9 +3806,18 @@ private fun SettingsPanel(
         )
     }
 
+    var intervalSaved by remember { mutableStateOf(false) }
+    LaunchedEffect(intervalSaved) {
+        if (intervalSaved) {
+            kotlinx.coroutines.delay(1500)
+            intervalSaved = false
+        }
+    }
+
     fun applyInterval(raw: String, unit: TrackingTimeUnit) {
         val num = raw.toIntOrNull() ?: return
-        onUpdateInterval((num * unit.multiplier).coerceIn(5, 86400))
+        onUpdateInterval((num * unit.multiplier).coerceIn(1, 86400))
+        intervalSaved = true
     }
 
     LazyColumn(
@@ -4000,11 +4009,37 @@ private fun SettingsPanel(
                 }
                 Spacer(Modifier.height(Spacing.sm))
                 val effective = (intervalText.toIntOrNull() ?: 0) * intervalUnit.multiplier
-                Text(
-                    text = stringResource(R.string.settings_effective_interval, formatInterval(effective, context)),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                androidx.compose.animation.AnimatedContent(
+                    targetState = intervalSaved,
+                    transitionSpec = {
+                        (androidx.compose.animation.fadeIn() + androidx.compose.animation.scaleIn(initialScale = 0.85f))
+                            .togetherWith(androidx.compose.animation.fadeOut())
+                    },
+                    label = "interval_saved"
+                ) { saved ->
+                    if (saved) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = RadarSemantic.Online
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "Salvato",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = RadarSemantic.Online
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = stringResource(R.string.settings_effective_interval, formatInterval(effective, context)),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
                 Spacer(Modifier.height(Spacing.xs))
                 Text(
                     text = stringResource(R.string.settings_trip_speed_note),

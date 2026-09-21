@@ -252,7 +252,11 @@ class LocationTrackingService : Service() {
             }
         }
 
-        val targetInterval = if (target == Priority.PRIORITY_HIGH_ACCURACY) 1000L else userConfiguredIntervalMs
+        // L'intervallo a 1s scatta solo se l'utente ha abilitato "alta precisione in
+        // movimento". Se l'impostazione e' OFF la frequenza resta sempre quella
+        // configurata dall'utente, qualunque sia la velocita'.
+        val targetInterval = if (target == Priority.PRIORITY_HIGH_ACCURACY &&
+            repository.isHighPrecisionMovement.value) 1000L else userConfiguredIntervalMs
 
         if (target != currentPriority || targetInterval != currentIntervalMs) {
             currentPriority = target
@@ -260,7 +264,7 @@ class LocationTrackingService : Service() {
             Log.d(
                 TAG,
                 if (target == Priority.PRIORITY_HIGH_ACCURACY)
-                    "Precisione GPS: alta (in movimento), intervallo 1s"
+                    "Precisione GPS: alta (in movimento), intervallo ${currentIntervalMs}ms"
                 else
                     "Precisione GPS: bilanciata (fermo), intervallo ${userConfiguredIntervalMs / 1000}s"
             )

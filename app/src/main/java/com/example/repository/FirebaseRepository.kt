@@ -321,7 +321,7 @@ class FirebaseRepository private constructor(private val context: Context) {
     }
 
     fun setTrackingFrequencySeconds(seconds: Int) {
-        val clamped = seconds.coerceIn(5, 86400)
+        val clamped = seconds.coerceIn(1, 86400)
         _trackingFrequencySeconds.value = clamped
         settingsPrefs.edit().putInt("tracking_freq_sec", clamped).apply()
         // Passa dall'intervallo effettivo: se e' in corso un viaggio la sua

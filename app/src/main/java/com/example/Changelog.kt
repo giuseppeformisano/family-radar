@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.50.0-beta"
+    const val VERSION = "0.51.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🔢 La versione installata da ogni membro ora si vede davvero nella lista Membri (prima restava nascosta)."
+        "🔢 La versione installata resta corretta anche per chi e' in piu' gruppi."
     )
 }

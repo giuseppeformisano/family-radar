@@ -1038,7 +1038,11 @@ class FirebaseRepository private constructor(private val context: Context) {
                 "photoBase64" to (user.photoBase64 ?: ""),
                 "fcmToken" to (user.fcmToken ?: getStoredFcmToken() ?: ""),
                 "lastSeen" to System.currentTimeMillis(),
-                "isAnonymous" to user.isAnonymous
+                "isAnonymous" to user.isAnonymous,
+                // Fonte di verità della versione installata: il profilo, riscritto a
+                // ogni avvio, quindi sempre fresco e non duplicato per gruppo. La copia
+                // in members/{uid} resta solo come cache per la lista membri.
+                "appVersion" to com.example.BuildConfig.VERSION_NAME
             )
             firestore.collection("users").document(user.uid).set(userMap).await()
         } catch (e: Exception) {

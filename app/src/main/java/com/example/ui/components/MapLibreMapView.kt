@@ -490,7 +490,7 @@ fun MapLibreMapView(
         mapRef?.uiSettings?.isScrollGesturesEnabled = followedUserId == null
     }
 
-    // Hillshading + terrain 3D: attiva/disattiva quando cambia la preferenza.
+    // Hillshading: attiva/disattiva quando cambia la preferenza.
     LaunchedEffect(terrainEnabled, styleReady) {
         if (!styleReady) return@LaunchedEffect
         val style = mapRef?.style ?: return@LaunchedEffect
@@ -500,13 +500,6 @@ fun MapLibreMapView(
                 else org.maplibre.android.style.layers.Property.NONE
             )
         )
-        runCatching {
-            if (terrainEnabled) {
-                mapRef?.setTerrain(org.maplibre.android.maps.Terrain("dem-src", 1.5f))
-            } else {
-                mapRef?.setTerrain(null)
-            }
-        }
     }
 
     // Mostra/nascondi i layer secondo i toggle.

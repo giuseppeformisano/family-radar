@@ -14,6 +14,6 @@ object Changelog {
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "⛰️ Rilievo 3D: montagne e colline con ombre reali e altezza in 3D (Impostazioni > Mappa)."
+        "⛰️ Rilievo: montagne e colline con ombre reali (hillshading). Attivabile in Impostazioni > Mappa."
     )
 }

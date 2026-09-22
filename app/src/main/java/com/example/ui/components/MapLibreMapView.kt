@@ -633,7 +633,6 @@ private fun addRadarLayers(style: org.maplibre.android.maps.Style) {
     runCatching {
         val demSource = org.maplibre.android.style.sources.RasterDemSource("dem-src",
             "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png")
-        demSource.setEncoding("terrarium")
         style.addSource(demSource)
         style.addLayer(
             org.maplibre.android.style.layers.HillshadeLayer("hillshade-layer", "dem-src")

@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.util.Log
 import com.example.util.ErrorLogger
+import com.example.util.UpdateCheckWorker
 import com.google.firebase.FirebaseApp
 import org.osmdroid.config.Configuration
 import java.io.File
@@ -34,6 +35,12 @@ class FamilyRadarApplication : Application() {
             com.example.notification.RadarNotifier.ensureChannels(this)
         } catch (t: Throwable) {
             Log.w("FamilyRadarApp", "Notification channels warning: ${t.message}")
+        }
+
+        try {
+            UpdateCheckWorker.schedule(this)
+        } catch (t: Throwable) {
+            Log.w("FamilyRadarApp", "UpdateCheckWorker schedule warning: ${t.message}")
         }
 
         try {

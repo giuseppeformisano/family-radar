@@ -38,6 +38,8 @@ object AppUpdater {
         "https://api.github.com/repos/giuseppeformisano/family-radar/releases/tags/latest-debug"
     private const val CHANNEL_UPDATE = "radar_update"
     private const val NOTIF_ID = 8_999
+    private const val NOTIF_AVAILABLE_ID = 8_998
+    private const val PREF_DISMISSED_VERSION = "dismissed_update_version_code"
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -107,6 +109,41 @@ object AppUpdater {
             Log.w("AppUpdater", "check() failed: ${e.message}")
             CheckResult.NetworkError
         }
+    }
+
+    /** True se questo versionCode non è stato già "ignorato" dall'utente. */
+    fun isVersionDismissed(context: Context, versionCode: Int): Boolean =
+        context.getSharedPreferences("family_radar_settings_prefs", Context.MODE_PRIVATE)
+            .getInt(PREF_DISMISSED_VERSION, 0) == versionCode
+
+    /**
+     * Mostra una notifica di sistema "aggiornamento disponibile".
+     * Non fa nulla se la versione è già stata ignorata dall'utente.
+     */
+    fun notifyAvailable(context: Context, info: UpdateInfo) {
+        if (isVersionDismissed(context, info.versionCode)) return
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        ensureChannel(context, manager)
+        val res = res(context)
+        val tapIntent = context.packageManager
+            .getLaunchIntentForPackage(context.packageName)
+            ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            ?: return
+        val pending = PendingIntent.getActivity(
+            context, NOTIF_AVAILABLE_ID, tapIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        manager.notify(
+            NOTIF_AVAILABLE_ID,
+            NotificationCompat.Builder(context, CHANNEL_UPDATE)
+                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setContentTitle(res.getString(R.string.update_available_title))
+                .setContentText(res.getString(R.string.update_available_body, info.versionName))
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(pending)
+                .build()
+        )
     }
 
     /**

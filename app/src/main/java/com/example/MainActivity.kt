@@ -249,10 +249,9 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
         while (attempt < UPDATE_CHECK_ATTEMPTS) {
             when (val result = AppUpdater.checkDetailed()) {
                 is CheckResult.Available -> {
-                    val dismissed = context.getSharedPreferences("family_radar_settings_prefs", android.content.Context.MODE_PRIVATE)
-                        .getInt("dismissed_update_version_code", 0)
-                    if (result.info.versionCode != dismissed) {
+                    if (!AppUpdater.isVersionDismissed(context, result.info.versionCode)) {
                         updateInfo = result.info
+                        AppUpdater.notifyAvailable(context, result.info)
                     }
                     return@LaunchedEffect
                 }

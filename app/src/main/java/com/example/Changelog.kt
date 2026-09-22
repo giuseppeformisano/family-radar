@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.62.0-beta"
+    const val VERSION = "0.63.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "⛰️ Rilievo: usa i layer hillshade gia' inclusi nello stile OpenFreeMap (funziona con Colorato).",
-        "👁️ Anello colorato nel carosello indica chi stai seguendo."
+        "🔔 Notifica di sistema quando un aggiornamento e' disponibile, anche con app chiusa."
     )
 }

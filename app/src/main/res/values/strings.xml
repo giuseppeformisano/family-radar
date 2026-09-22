@@ -505,6 +505,7 @@
     <string name="label_version">Versione</string>
     <string name="action_check_updates">Controlla aggiornamenti</string>
     <string name="checking_updates">Controllo in corso...</string>
+    <string name="update_available_title">Aggiornamento disponibile</string>
     <string name="update_available_body">Versione %1$s disponibile. Aggiorna ora.</string>
     <string name="action_later">Dopo</string>
     <string name="action_update">Aggiorna</string>

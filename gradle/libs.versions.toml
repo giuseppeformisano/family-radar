@@ -45,6 +45,7 @@ osmdroid = "6.1.20"
 maplibre = "11.5.2"
 lottie = "6.6.0"
 composeShimmer = "1.3.0"
+workManager = "2.10.1"
 
 
 [libraries]
@@ -107,6 +108,7 @@ compose-shimmer = { group = "com.valentinilk.shimmer", name = "compose-shimmer",
 androidx-credentials = { group = "androidx.credentials", name = "credentials", version.ref = "credentials" }
 androidx-credentials-play-services = { group = "androidx.credentials", name = "credentials-play-services-auth", version.ref = "credentials" }
 googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 
 
 [plugins]

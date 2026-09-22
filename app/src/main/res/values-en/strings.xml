@@ -488,6 +488,7 @@
     <string name="label_version">Version</string>
     <string name="action_check_updates">Check for updates</string>
     <string name="checking_updates">Checking...</string>
+    <string name="update_available_title">Update available</string>
     <string name="update_available_body">Version %1$s available. Update now.</string>
     <string name="action_later">Later</string>
     <string name="action_update">Update</string>

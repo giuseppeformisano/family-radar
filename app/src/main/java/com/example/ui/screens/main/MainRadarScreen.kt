@@ -675,11 +675,9 @@ fun MainRadarScreen(
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val sheetContentHeight = screenHeight * 0.86f
 
-    val useNewMap by ThemePreferences.useNewMapFlow.collectAsState()
     val mapStyle by ThemePreferences.mapStyleFlow.collectAsState()
     val terrainEnabled by ThemePreferences.terrainFlow.collectAsState()
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-      if (useNewMap) {
         com.example.ui.components.MapLibreMapView(
             locations = locations,
             currentUserId = currentUserId,
@@ -692,71 +690,24 @@ fun MainRadarScreen(
             followCam = followCam,
             onFollowCamChange = { followCam = it },
             terrainEnabled = terrainEnabled,
-            speakingUserId = speakingUserId,
-            heatmapPoints = heatmapPoints,
-            heatmapFitToken = heatmapFitToken,
-            onPlaceSelected = { selectedPlaceForSheet = it },
-            onSnapshotClusterSelected = { selectedSnapshotClusterForGallery = it },
-            onMemberSelected = { loc ->
-                val ping = repository.latestVoicePing.value
-                if (ping != null && ping.userId == loc.userId &&
-                    System.currentTimeMillis() - ping.timestamp < 30_000
-                ) {
-                    playVoiceNoteById(currentGroup?.id, ping.messageId)
-                } else {
-                    selectedMemberForSheet = loc
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
-      } else {
-        OsmMapView(
-            locations = locations,
-            places = places,
-            snapshots = snapshots,
-            trips = remember(groupTrips, selectedTripId, selectedTripTrack) {
-                groupTrips.map {
-                    if (it.id == selectedTripId && selectedTripTrack.isNotEmpty())
-                        it.copy(points = selectedTripTrack) else it
-                }
-            },
-            followedUserId = followedUserId,
-            speakingUserId = speakingUserId,
-            activeTripPoints = activeTrip?.points ?: emptyList(),
-            selectedTripId = selectedTripId,
-            fitSelectedTripToken = fitTripToken,
-            currentUserId = currentUserId,
-            targetFocusPoint = targetMapFocus,
-            focusToken = focusToken,
-            followPoint = followPoint,
-            onMapTap = {
-                activeFullPanel = null
-                if (heatmapPoints.isNotEmpty()) heatmapPoints = emptyList()
-            },
-            onUserPan = {
-                if (followedUserId != null) followedUserId = null
-                if (followCam) followCam = false
-            },
-            onMemberSelected = { loc ->
-                // Se quel membro ha appena mandato un vocale (anello attivo), un tap
-                // sul suo marker lo riproduce/riascolta; altrimenti apre il dettaglio.
-                val ping = repository.latestVoicePing.value
-                if (ping != null && ping.userId == loc.userId &&
-                    System.currentTimeMillis() - ping.timestamp < 30_000
-                ) {
-                    playVoiceNoteById(currentGroup?.id, ping.messageId)
-                } else {
-                    selectedMemberForSheet = loc
-                }
-            },
-            onPlaceSelected = { selectedPlaceForSheet = it },
-            onSnapshotClusterSelected = { selectedSnapshotClusterForGallery = it },
             onMapCenterChanged = { center -> currentMapCenter = center },
+            speakingUserId = speakingUserId,
             heatmapPoints = heatmapPoints,
             heatmapFitToken = heatmapFitToken,
+            onPlaceSelected = { selectedPlaceForSheet = it },
+            onSnapshotClusterSelected = { selectedSnapshotClusterForGallery = it },
+            onMemberSelected = { loc ->
+                val ping = repository.latestVoicePing.value
+                if (ping != null && ping.userId == loc.userId &&
+                    System.currentTimeMillis() - ping.timestamp < 30_000
+                ) {
+                    playVoiceNoteById(currentGroup?.id, ping.messageId)
+                } else {
+                    selectedMemberForSheet = loc
+                }
+            },
             modifier = Modifier.fillMaxSize()
         )
-      }
 
         // Sfumatura in alto
         Box(
@@ -1317,6 +1268,7 @@ fun MainRadarScreen(
         AddPlaceDialog(
             initialLat = editing.latitude,
             initialLon = editing.longitude,
+            styleUrl = mapStyle.url,
             existingPlace = editing,
             onDismiss = { placeToEdit = null },
             onPlaceAdded = { updated ->
@@ -1430,6 +1382,7 @@ fun MainRadarScreen(
         AddPlaceDialog(
             initialLat = initialLat,
             initialLon = initialLon,
+            styleUrl = mapStyle.url,
             onDismiss = { showAddPlaceDialog = false },
             onPlaceAdded = { place ->
                 showAddPlaceDialog = false

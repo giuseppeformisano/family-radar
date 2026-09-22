@@ -1,8 +1,5 @@
 package com.example.ui.components
 
-import android.content.Context
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
 import android.location.Address
 import android.location.Geocoder
 import android.os.Build
@@ -10,7 +7,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -48,15 +44,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.osmdroid.config.Configuration
-import org.osmdroid.events.MapListener
-import org.osmdroid.events.ScrollEvent
-import org.osmdroid.events.ZoomEvent
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Polygon
 import java.util.*
 import kotlin.math.roundToInt
 
@@ -64,6 +51,7 @@ import kotlin.math.roundToInt
 fun AddPlaceDialog(
     initialLat: Double,
     initialLon: Double,
+    styleUrl: String,
     onDismiss: () -> Unit,
     onPlaceAdded: (SavedPlace) -> Unit,
     /**
@@ -76,7 +64,6 @@ fun AddPlaceDialog(
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val coroutineScope = rememberCoroutineScope()
-    val isDark = isSystemInDarkTheme()
     val isEditing = existingPlace != null
 
     var searchQuery by remember { mutableStateOf("") }
@@ -99,7 +86,7 @@ fun AddPlaceDialog(
     var currentPinLon by remember { mutableStateOf(startLon) }
     var resolvedAddress by remember { mutableStateOf(context.getString(R.string.map_position_placeholder)) }
 
-    var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
+    var mapRef by remember { mutableStateOf<org.maplibre.android.maps.MapLibreMap?>(null) }
 
     // Debounced reverse geocoding as user scrolls the map
     LaunchedEffect(currentPinLat, currentPinLon) {
@@ -160,9 +147,11 @@ fun AddPlaceDialog(
                                 isSearching = false
                                 if (results.isNotEmpty()) {
                                     val addr = results[0]
-                                    val targetPoint = GeoPoint(addr.latitude, addr.longitude)
-                                    mapViewInstance?.controller?.animateTo(targetPoint)
-                                    mapViewInstance?.controller?.setZoom(17.0)
+                                    mapRef?.animateCamera(
+                                        org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(
+                                            org.maplibre.android.geometry.LatLng(addr.latitude, addr.longitude), 17.0
+                                        )
+                                    )
                                     currentPinLat = addr.latitude
                                     currentPinLon = addr.longitude
                                     searchFeedback = context.getString(R.string.toast_address_found, addr.getAddressLine(0) ?: searchQuery)
@@ -183,9 +172,11 @@ fun AddPlaceDialog(
                             isSearching = false
                             if (!results.isNullOrEmpty()) {
                                 val addr = results[0]
-                                val targetPoint = GeoPoint(addr.latitude, addr.longitude)
-                                mapViewInstance?.controller?.animateTo(targetPoint)
-                                mapViewInstance?.controller?.setZoom(17.0)
+                                mapRef?.animateCamera(
+                                    org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(
+                                        org.maplibre.android.geometry.LatLng(addr.latitude, addr.longitude), 17.0
+                                    )
+                                )
                                 currentPinLat = addr.latitude
                                 currentPinLon = addr.longitude
                                 searchFeedback = "Trovato: ${addr.getAddressLine(0) ?: searchQuery}"
@@ -322,64 +313,33 @@ fun AddPlaceDialog(
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = { ctx ->
-                            Configuration.getInstance().load(ctx, ctx.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
-                            MapView(ctx).apply {
-                                setTileSource(TileSourceFactory.MAPNIK)
-                                zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-                                setMultiTouchControls(true)
-                                isTilesScaledToDpi = true
-                                controller.setZoom(16.5)
-                                controller.setCenter(GeoPoint(startLat, startLon))
-
-                                // Dark mode map styling if dark theme
-                                if (isDark) {
-                                    val darkMatrix = ColorMatrix(floatArrayOf(
-                                        -0.80f, 0f, 0f, 0f, 210f,
-                                        0f, -0.80f, 0f, 0f, 215f,
-                                        0f, 0f, -0.75f, 0f, 225f,
-                                        0f, 0f, 0f, 1f, 0f
-                                    ))
-                                    overlayManager.tilesOverlay.setColorFilter(ColorMatrixColorFilter(darkMatrix))
+                            org.maplibre.android.MapLibre.getInstance(ctx)
+                            val opts = org.maplibre.android.maps.MapLibreMapOptions().textureMode(true)
+                            org.maplibre.android.maps.MapView(ctx, opts).apply {
+                                onCreate(null)
+                                onStart()
+                                onResume()
+                                getMapAsync { map ->
+                                    mapRef = map
+                                    map.uiSettings.isLogoEnabled = false
+                                    map.uiSettings.isAttributionEnabled = false
+                                    map.uiSettings.isCompassEnabled = false
+                                    map.setStyle(styleUrl) {
+                                        map.cameraPosition = org.maplibre.android.camera.CameraPosition.Builder()
+                                            .target(org.maplibre.android.geometry.LatLng(startLat, startLon))
+                                            .zoom(16.5)
+                                            .build()
+                                    }
+                                    map.addOnCameraIdleListener {
+                                        val pos = map.cameraPosition.target ?: return@addOnCameraIdleListener
+                                        currentPinLat = pos.latitude
+                                        currentPinLon = pos.longitude
+                                    }
                                 }
-
-                                addMapListener(object : MapListener {
-                                    override fun onScroll(event: ScrollEvent?): Boolean {
-                                        val center = mapCenter
-                                        currentPinLat = center.latitude
-                                        currentPinLon = center.longitude
-                                        return false
-                                    }
-                                    override fun onZoom(event: ZoomEvent?): Boolean {
-                                        val center = mapCenter
-                                        currentPinLat = center.latitude
-                                        currentPinLon = center.longitude
-                                        return false
-                                    }
-                                })
-                                mapViewInstance = this
                             }
                         },
-                        update = { mapView ->
-                            mapViewInstance = mapView
-                            try {
-                                if (isDark) {
-                                    val darkMatrix = ColorMatrix(floatArrayOf(
-                                        -0.80f, 0f, 0f, 0f, 210f,
-                                        0f, -0.80f, 0f, 0f, 215f,
-                                        0f, 0f, -0.75f, 0f, 225f,
-                                        0f, 0f, 0f, 1f, 0f
-                                    ))
-                                    mapView.overlayManager.tilesOverlay.setColorFilter(ColorMatrixColorFilter(darkMatrix))
-                                } else {
-                                    mapView.overlayManager.tilesOverlay.setColorFilter(null)
-                                }
-                            } catch (_: Throwable) {}
-                        },
-                        onRelease = { mapView ->
-                            try {
-                                mapView.onPause()
-                                mapView.onDetach()
-                            } catch (_: Throwable) {}
+                        onRelease = { mv ->
+                            try { mv.onPause(); mv.onStop(); mv.onDestroy() } catch (_: Throwable) {}
                         }
                     )
 
@@ -471,7 +431,11 @@ fun AddPlaceDialog(
                             if (initialLat != 0.0) {
                                 IconButton(
                                     onClick = {
-                                        mapViewInstance?.controller?.animateTo(GeoPoint(initialLat, initialLon))
+                                        mapRef?.animateCamera(
+                                            org.maplibre.android.camera.CameraUpdateFactory.newLatLngZoom(
+                                                org.maplibre.android.geometry.LatLng(initialLat, initialLon), 16.5
+                                            )
+                                        )
                                         currentPinLat = initialLat
                                         currentPinLon = initialLon
                                     },

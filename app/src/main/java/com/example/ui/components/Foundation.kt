@@ -67,7 +67,7 @@ import kotlinx.coroutines.delay
 /**
  * Superficie "vetro" da sovrapporre alla mappa.
  *
- * Non è un blur reale: la mappa è una AndroidView osmdroid, disegnata dal view system
+ * Non è un blur reale: la mappa è una AndroidView (MapLibre), disegnata dal view system
  * Android e non dal graphics layer di Compose, quindi le librerie di backdrop-blur
  * (haze & co.) non riuscirebbero a catturarla. Usiamo quindi una tinta traslucida
  * ad alta opacità più un bordo luminoso — lo stesso approccio di Google Maps —

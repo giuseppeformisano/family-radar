@@ -16,8 +16,8 @@ android {
     applicationId = "com.formisano.familyradar"
     minSdk = 24
     targetSdk = 36
-    versionCode = 243
-    versionName = "0.64.0-beta"
+    versionCode = 244
+    versionName = "0.65.0-beta"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -107,7 +107,7 @@ dependencies {
   // implementation(libs.firebase.storage)
   implementation(libs.firebase.messaging)
   implementation(libs.play.services.location)
-  implementation(libs.osmdroid.android)
+  // implementation(libs.osmdroid.android)
   implementation(libs.maplibre.android)
 
   // UI / motion layer

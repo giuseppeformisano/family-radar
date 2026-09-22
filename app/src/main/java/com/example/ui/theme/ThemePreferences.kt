@@ -45,15 +45,6 @@ object ThemePreferences {
     private val _mapColorModeFlow = MutableStateFlow(MapColorMode.THEME)
     val mapColorModeFlow: StateFlow<MapColorMode> = _mapColorModeFlow.asStateFlow()
 
-    private const val KEY_USE_NEW_MAP = "key_use_new_map"
-    private val _useNewMapFlow = MutableStateFlow(false)
-    val useNewMapFlow: StateFlow<Boolean> = _useNewMapFlow.asStateFlow()
-
-    fun setUseNewMap(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_USE_NEW_MAP, enabled).apply()
-        _useNewMapFlow.value = enabled
-    }
-
     private const val KEY_MAP_STYLE = "key_map_style"
     private val _mapStyleFlow = MutableStateFlow(MapStyle.BRIGHT)
     val mapStyleFlow: StateFlow<MapStyle> = _mapStyleFlow.asStateFlow()
@@ -87,8 +78,6 @@ object ThemePreferences {
         } catch (_: Exception) {
             MapColorMode.THEME
         }
-
-        _useNewMapFlow.value = prefs.getBoolean(KEY_USE_NEW_MAP, false)
 
         _mapStyleFlow.value = try {
             MapStyle.valueOf(prefs.getString(KEY_MAP_STYLE, MapStyle.BRIGHT.name) ?: MapStyle.BRIGHT.name)

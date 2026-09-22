@@ -173,7 +173,6 @@ internal fun SettingsPanel(
     val context = LocalContext.current
     val currentThemeMode by ThemePreferences.themeModeFlow.collectAsState()
     val currentMapColorMode by ThemePreferences.mapColorModeFlow.collectAsState()
-    val currentUseNewMap by ThemePreferences.useNewMapFlow.collectAsState()
     val currentMapStyle by ThemePreferences.mapStyleFlow.collectAsState()
     val currentTerrain by ThemePreferences.terrainFlow.collectAsState()
     val currentLanguage by LanguagePreferences.languageFlow.collectAsState()
@@ -717,39 +716,30 @@ internal fun SettingsPanel(
                     subtitle = "Aspetto e sorgente della mappa",
                     icon = Icons.Default.Map
                 )
-                SettingsToggleRow(
-                    title = "Usa nuova mappa",
-                    description = "Mappa vettoriale mondiale (MapLibre + OpenFreeMap) con negozi e punti d'interesse, al posto di quella attuale.",
-                    icon = Icons.Default.Map,
-                    checked = currentUseNewMap,
-                    onCheckedChange = { ThemePreferences.setUseNewMap(context, it) }
-                )
-                if (currentUseNewMap) {
-                    SettingsSelectorGroup(
-                        label = "Stile mappa",
-                        description = "L'aspetto della mappa, indipendente dal tema dell'app."
+                SettingsSelectorGroup(
+                    label = "Stile mappa",
+                    description = "L'aspetto della mappa, indipendente dal tema dell'app."
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.sm)
-                        ) {
-                            com.example.ui.theme.MapStyle.values().forEach { style ->
-                                PillChip(
-                                    label = style.title,
-                                    selected = currentMapStyle == style,
-                                    onClick = { ThemePreferences.setMapStyle(context, style) }
-                                )
-                            }
+                        com.example.ui.theme.MapStyle.values().forEach { style ->
+                            PillChip(
+                                label = style.title,
+                                selected = currentMapStyle == style,
+                                onClick = { ThemePreferences.setMapStyle(context, style) }
+                            )
                         }
                     }
-                    SettingsToggleRow(
-                        title = "Rilievo 3D",
-                        description = "Montagne e colline con ombre e altezza reale. In modalita' 3D cam il terreno si alza.",
-                        icon = Icons.Default.Landscape,
-                        checked = currentTerrain,
-                        onCheckedChange = { ThemePreferences.setTerrain(context, it) }
-                    )
                 }
+                SettingsToggleRow(
+                    title = "Rilievo 3D",
+                    description = "Montagne e colline con ombre e altezza reale. In modalita' 3D cam il terreno si alza.",
+                    icon = Icons.Default.Landscape,
+                    checked = currentTerrain,
+                    onCheckedChange = { ThemePreferences.setTerrain(context, it) }
+                )
             }
         }
 

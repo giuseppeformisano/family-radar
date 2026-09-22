@@ -41,12 +41,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.model.UserLocation
 
-/**
- * Nuova mappa dell'app basata su MapLibre + OpenFreeMap (vettoriale, mondiale).
- * In migrazione: per ora disegna i pallini dei membri e la scia (agganciata alle
- * strade via [com.example.util.RoadMatcher]). Snapshot, luoghi, "segui", nomi/foto
- * arriveranno negli step successivi. La vecchia mappa (osmdroid) resta disponibile.
- */
+/** Mappa dell'app basata su MapLibre + OpenFreeMap (vettoriale, mondiale). */
 @Composable
 fun MapLibreMapView(
     locations: List<UserLocation>,
@@ -63,6 +58,7 @@ fun MapLibreMapView(
     followCam: Boolean = false,
     onFollowCamChange: (Boolean) -> Unit = {},
     terrainEnabled: Boolean = false,
+    onMapCenterChanged: (Pair<Double, Double>) -> Unit = {},
     onMemberSelected: (UserLocation) -> Unit = {},
     onPlaceSelected: (com.example.model.SavedPlace) -> Unit = {},
     onSnapshotClusterSelected: (com.example.model.PlaceSnapshotCluster) -> Unit = {},
@@ -85,6 +81,7 @@ fun MapLibreMapView(
     val currentSpeaking by androidx.compose.runtime.rememberUpdatedState(speakingUserId)
     val currentFollowCam by androidx.compose.runtime.rememberUpdatedState(followCam)
     val currentOnFollowCamChange by androidx.compose.runtime.rememberUpdatedState(onFollowCamChange)
+    val currentOnMapCenterChanged by androidx.compose.runtime.rememberUpdatedState(onMapCenterChanged)
     var speakingOffset by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
 
     // Smorzamento bearing per la 3D cam: media circolare sugli ultimi N fix.
@@ -122,6 +119,10 @@ fun MapLibreMapView(
                 map.setStyle(styleUrl) { style ->
                     addRadarLayers(style)
                     styleReady = true
+                }
+                map.addOnCameraIdleListener {
+                    val pos = map.cameraPosition.target ?: return@addOnCameraIdleListener
+                    currentOnMapCenterChanged(pos.latitude to pos.longitude)
                 }
             }
         }

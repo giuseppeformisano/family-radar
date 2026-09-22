@@ -10,10 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.64.0-beta"
+    const val VERSION = "0.65.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "📍 Alta precisione GPS attiva anche a piedi (soglia abbassata a 3,6 km/h)."
+        "🗺 Mappa unificata: solo MapLibre. Stile e rilievo 3D sempre disponibili nelle impostazioni.",
+        "📍 Dialog luogo usa la stessa mappa principale, parte dalla posizione corrente."
     )
 }

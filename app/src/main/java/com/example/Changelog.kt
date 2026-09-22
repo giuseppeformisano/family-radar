@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.60.2-beta"
+    const val VERSION = "0.61.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "⛰️ Rilievo: montagne e colline con ombre reali (hillshading). Attivabile in Impostazioni > Mappa."
+        "👁️ Anello colorato nel carosello indica chi stai seguendo."
     )
 }

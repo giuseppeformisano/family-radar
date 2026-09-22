@@ -1009,37 +1009,6 @@ fun MainRadarScreen(
                 .padding(bottom = Spacing.xs)
         )
 
-        // Badge inseguimento: piccolo avatar in alto a destra, cliccabile per fermare il follow.
-        AnimatedVisibility(
-            visible = followedUserId != null,
-            enter = androidx.compose.animation.scaleIn(),
-            exit = androidx.compose.animation.scaleOut(),
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(top = Spacing.sm, end = Spacing.md)
-        ) {
-            val badgeName = followedLocation?.let {
-                if (!it.nickname.isNullOrBlank()) it.nickname!! else it.userName
-            } ?: followedMember?.let {
-                if (!it.nickname.isNullOrBlank()) it.nickname!! else it.displayName
-            } ?: "…"
-            val badgePhoto = followedLocation?.photoBase64 ?: followedMember?.photoBase64
-            Surface(
-                onClick = { followedUserId = null },
-                shape = CircleShape,
-                border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
-                modifier = Modifier
-                    .size(Sizes.avatarSm)
-                    .testTag("stop_following_button")
-            ) {
-                RadarAvatar(
-                    name = badgeName,
-                    photoBase64 = badgePhoto,
-                    size = Sizes.avatarSm
-                )
-            }
-        }
 
     // SCHERMATE E PANNELLI FULL-SCREEN SEPARATI (quando activeFullPanel != null)
     activeFullPanel?.let { currentPanel ->
@@ -1978,6 +1947,7 @@ private fun PerspectiveMemberCoverFlow(
     }
 
     val sage = RadarSemantic.Online
+    val followRingColor = MaterialTheme.colorScheme.primary
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -2028,6 +1998,16 @@ private fun PerspectiveMemberCoverFlow(
                                     center = Offset(size.width / 2f, size.height / 2f),
                                     style = Stroke(width = stroke),
                                     alpha = a
+                                )
+                            }
+                            // Anello blu primario per la persona seguita.
+                            if (loc.userId == followedUserId) {
+                                val stroke = 3.dp.toPx()
+                                drawCircle(
+                                    color = followRingColor,
+                                    radius = size.minDimension / 2f - stroke / 2f,
+                                    center = Offset(size.width / 2f, size.height / 2f),
+                                    style = Stroke(width = stroke)
                                 )
                             }
                         }

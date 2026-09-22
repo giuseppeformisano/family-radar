@@ -490,16 +490,21 @@ fun MapLibreMapView(
         mapRef?.uiSettings?.isScrollGesturesEnabled = followedUserId == null
     }
 
-    // Hillshading: attiva/disattiva quando cambia la preferenza.
+    // Hillshading: mostra/nasconde i layer HillshadeLayer già presenti nello stile
+    // OpenFreeMap (sono inclusi nello stile "bright" e altri, con sorgente DEM corretta).
+    // Non carichiamo DEM esterni per evitare problemi di encoding.
     LaunchedEffect(terrainEnabled, styleReady) {
         if (!styleReady) return@LaunchedEffect
         val style = mapRef?.style ?: return@LaunchedEffect
-        style.getLayer("hillshade-layer")?.setProperties(
-            org.maplibre.android.style.layers.PropertyFactory.visibility(
-                if (terrainEnabled) org.maplibre.android.style.layers.Property.VISIBLE
-                else org.maplibre.android.style.layers.Property.NONE
-            )
-        )
+        val vis = if (terrainEnabled) org.maplibre.android.style.layers.Property.VISIBLE
+                  else org.maplibre.android.style.layers.Property.NONE
+        style.layers.forEach { layer ->
+            if (layer is org.maplibre.android.style.layers.HillshadeLayer) {
+                layer.setProperties(
+                    org.maplibre.android.style.layers.PropertyFactory.visibility(vis)
+                )
+            }
+        }
     }
 
     // Mostra/nascondi i layer secondo i toggle.
@@ -627,28 +632,6 @@ private fun addRadarLayers(style: org.maplibre.android.maps.Style) {
             org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap(true),
             org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement(true)
         )
-
-    // Sorgente DEM per hillshading (AWS Terrain, formato terrarium, gratuito).
-    // Nascosta di default; attivata dalla preferenza "Rilievo 3D".
-    runCatching {
-        val demSource = org.maplibre.android.style.sources.RasterDemSource("dem-src",
-            "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png")
-        style.addSource(demSource)
-        style.addLayer(
-            org.maplibre.android.style.layers.HillshadeLayer("hillshade-layer", "dem-src")
-                .withProperties(
-                    org.maplibre.android.style.layers.PropertyFactory.hillshadeExaggeration(0.5f),
-                    org.maplibre.android.style.layers.PropertyFactory.hillshadeHighlightColor(
-                        android.graphics.Color.rgb(255, 250, 240)),
-                    org.maplibre.android.style.layers.PropertyFactory.hillshadeShadowColor(
-                        android.graphics.Color.rgb(60, 55, 50)),
-                    org.maplibre.android.style.layers.PropertyFactory.hillshadeAccentColor(
-                        android.graphics.Color.rgb(100, 90, 80)),
-                    org.maplibre.android.style.layers.PropertyFactory.visibility(
-                        org.maplibre.android.style.layers.Property.NONE)
-                )
-        )
-    }
 
     // Heatmap sotto tutto il resto.
     style.addSource(org.maplibre.android.style.sources.GeoJsonSource("heatmap-src"))

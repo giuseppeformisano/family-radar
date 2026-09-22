@@ -628,11 +628,12 @@ private fun addRadarLayers(style: org.maplibre.android.maps.Style) {
             org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement(true)
         )
 
-    // Sorgente DEM per hillshading e terrain 3D (AWS Terrain, formato terrarium, gratuito).
+    // Sorgente DEM per hillshading (AWS Terrain, formato terrarium, gratuito).
     // Nascosta di default; attivata dalla preferenza "Rilievo 3D".
     runCatching {
         val demSource = org.maplibre.android.style.sources.RasterDemSource("dem-src",
-            "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png", 256)
+            "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png")
+        demSource.setEncoding("terrarium")
         style.addSource(demSource)
         style.addLayer(
             org.maplibre.android.style.layers.HillshadeLayer("hillshade-layer", "dem-src")

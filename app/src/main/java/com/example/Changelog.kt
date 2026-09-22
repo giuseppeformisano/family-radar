@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.58.0-beta"
+    const val VERSION = "0.59.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🎥 3D cam in modalita' street view: tilt 83 gradi, quasi a ras del suolo."
+        "🔔 Tap su notifica di arrivo/partenza: la mappa segue direttamente quella persona."
     )
 }

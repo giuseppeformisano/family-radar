@@ -552,19 +552,27 @@ fun MainRadarScreen(
             "SETTINGS" -> openPanel(RadarPanel.SETTINGS)
             "MAP" -> {
                 activeFullPanel = null
-                // Notifica su un membro (movimento, ingresso/uscita da un luogo):
-                // si centra sulla sua posizione ATTUALE, non sul punto — magari
-                // vecchio — arrivato nel payload. Il fix del payload resta come
-                // fallback se quel membro non e' ancora nelle posizioni caricate.
-                val memberLoc = target.senderId?.let { sid ->
-                    locations.find { it.userId == sid }
-                }
-                when {
-                    memberLoc != null ->
+                val sid = target.senderId
+                if (sid != null) {
+                    // Attiva il follow sul membro: gestisce anche il caso in cui le
+                    // posizioni non siano ancora caricate (il follow le aspetta e
+                    // centra la mappa non appena arrivano).
+                    followedUserId = sid
+                    focusTargetUserId = sid
+                    // Centra subito se la posizione e' gia' disponibile.
+                    val memberLoc = locations.find { it.userId == sid }
+                    if (memberLoc != null) {
                         focusMapOn(memberLoc.latitude, memberLoc.longitude, collapse = false)
-                    target.latitude != null && target.longitude != null &&
-                        !target.latitude.isNaN() && !target.longitude.isNaN() ->
+                    } else if (target.latitude != null && target.longitude != null &&
+                        !target.latitude.isNaN() && !target.longitude.isNaN()) {
                         focusMapOn(target.latitude, target.longitude, collapse = false)
+                    }
+                } else {
+                    // Nessun membro specifico: centra sulle coordinate del payload.
+                    if (target.latitude != null && target.longitude != null &&
+                        !target.latitude.isNaN() && !target.longitude.isNaN()) {
+                        focusMapOn(target.latitude, target.longitude, collapse = false)
+                    }
                 }
             }
         }

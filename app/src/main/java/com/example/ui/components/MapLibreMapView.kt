@@ -296,8 +296,8 @@ fun MapLibreMapView(
                                 org.maplibre.android.camera.CameraPosition.Builder()
                                     .target(org.maplibre.android.geometry.LatLng(pos.first, pos.second))
                                     .bearing((bearing ?: mapRef?.cameraPosition?.bearing?.toFloat() ?: 0f).toDouble())
-                                    .tilt(60.0)
-                                    .zoom(18.0)
+                                    .tilt(83.0)
+                                    .zoom(19.0)
                                     .build()
                             ), 120, null
                         )
@@ -464,7 +464,7 @@ fun MapLibreMapView(
                 mapRef?.animateCamera(
                     org.maplibre.android.camera.CameraUpdateFactory.newCameraPosition(
                         org.maplibre.android.camera.CameraPosition.Builder()
-                            .tilt(60.0)
+                            .tilt(83.0)
                             .build()
                     ), 400, null
                 )

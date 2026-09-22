@@ -10,12 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.57.0-beta"
+    const val VERSION = "0.58.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "📍 Badge avatar in alto a destra indica chi stai seguendo — toccalo per fermare.",
-        "🔒 Pan bloccato durante l'inseguimento, zoom sempre libero.",
-        "🎥 Tasto 3D/2D sempre visibile, funziona anche senza inseguimento."
+        "🎥 3D cam in modalita' street view: tilt 83 gradi, quasi a ras del suolo."
     )
 }

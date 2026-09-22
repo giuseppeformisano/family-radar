@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.59.0-beta"
+    const val VERSION = "0.60.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🔔 Tap su notifica di arrivo/partenza: la mappa segue direttamente quella persona."
+        "⛰️ Rilievo 3D: montagne e colline con ombre reali e altezza in 3D (Impostazioni > Mappa)."
     )
 }

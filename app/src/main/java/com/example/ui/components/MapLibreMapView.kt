@@ -62,6 +62,7 @@ fun MapLibreMapView(
     heatmapFitToken: Int = 0,
     followCam: Boolean = false,
     onFollowCamChange: (Boolean) -> Unit = {},
+    terrainEnabled: Boolean = false,
     onMemberSelected: (UserLocation) -> Unit = {},
     onPlaceSelected: (com.example.model.SavedPlace) -> Unit = {},
     onSnapshotClusterSelected: (com.example.model.PlaceSnapshotCluster) -> Unit = {},
@@ -489,6 +490,25 @@ fun MapLibreMapView(
         mapRef?.uiSettings?.isScrollGesturesEnabled = followedUserId == null
     }
 
+    // Hillshading + terrain 3D: attiva/disattiva quando cambia la preferenza.
+    LaunchedEffect(terrainEnabled, styleReady) {
+        if (!styleReady) return@LaunchedEffect
+        val style = mapRef?.style ?: return@LaunchedEffect
+        style.getLayer("hillshade-layer")?.setProperties(
+            org.maplibre.android.style.layers.PropertyFactory.visibility(
+                if (terrainEnabled) org.maplibre.android.style.layers.Property.VISIBLE
+                else org.maplibre.android.style.layers.Property.NONE
+            )
+        )
+        runCatching {
+            if (terrainEnabled) {
+                mapRef?.setTerrain(org.maplibre.android.maps.Terrain("dem-src", 1.5f))
+            } else {
+                mapRef?.setTerrain(null)
+            }
+        }
+    }
+
     // Mostra/nascondi i layer secondo i toggle.
     LaunchedEffect(showMembers, showSnapshots, showPlaces, styleReady) {
         if (!styleReady) return@LaunchedEffect
@@ -614,6 +634,28 @@ private fun addRadarLayers(style: org.maplibre.android.maps.Style) {
             org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap(true),
             org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement(true)
         )
+
+    // Sorgente DEM per hillshading e terrain 3D (AWS Terrain, formato terrarium, gratuito).
+    // Nascosta di default; attivata dalla preferenza "Rilievo 3D".
+    runCatching {
+        val demSource = org.maplibre.android.style.sources.RasterDemSource("dem-src",
+            "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png", 256)
+        style.addSource(demSource)
+        style.addLayer(
+            org.maplibre.android.style.layers.HillshadeLayer("hillshade-layer", "dem-src")
+                .withProperties(
+                    org.maplibre.android.style.layers.PropertyFactory.hillshadeExaggeration(0.5f),
+                    org.maplibre.android.style.layers.PropertyFactory.hillshadeHighlightColor(
+                        android.graphics.Color.rgb(255, 250, 240)),
+                    org.maplibre.android.style.layers.PropertyFactory.hillshadeShadowColor(
+                        android.graphics.Color.rgb(60, 55, 50)),
+                    org.maplibre.android.style.layers.PropertyFactory.hillshadeAccentColor(
+                        android.graphics.Color.rgb(100, 90, 80)),
+                    org.maplibre.android.style.layers.PropertyFactory.visibility(
+                        org.maplibre.android.style.layers.Property.NONE)
+                )
+        )
+    }
 
     // Heatmap sotto tutto il resto.
     style.addSource(org.maplibre.android.style.sources.GeoJsonSource("heatmap-src"))

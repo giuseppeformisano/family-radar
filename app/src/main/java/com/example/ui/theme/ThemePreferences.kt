@@ -63,6 +63,15 @@ object ThemePreferences {
         _mapStyleFlow.value = style
     }
 
+    private const val KEY_TERRAIN = "key_terrain_enabled"
+    private val _terrainFlow = MutableStateFlow(false)
+    val terrainFlow: StateFlow<Boolean> = _terrainFlow.asStateFlow()
+
+    fun setTerrain(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_TERRAIN, enabled).apply()
+        _terrainFlow.value = enabled
+    }
+
     fun init(context: Context) {
         val prefs = getPrefs(context)
         val savedName = prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)
@@ -86,6 +95,8 @@ object ThemePreferences {
         } catch (_: Exception) {
             MapStyle.BRIGHT
         }
+
+        _terrainFlow.value = prefs.getBoolean(KEY_TERRAIN, false)
     }
 
     fun setMapColorMode(context: Context, mode: MapColorMode) {

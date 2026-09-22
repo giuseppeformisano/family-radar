@@ -175,6 +175,7 @@ internal fun SettingsPanel(
     val currentMapColorMode by ThemePreferences.mapColorModeFlow.collectAsState()
     val currentUseNewMap by ThemePreferences.useNewMapFlow.collectAsState()
     val currentMapStyle by ThemePreferences.mapStyleFlow.collectAsState()
+    val currentTerrain by ThemePreferences.terrainFlow.collectAsState()
     val currentLanguage by LanguagePreferences.languageFlow.collectAsState()
 
     var intervalUnit by remember {
@@ -741,6 +742,13 @@ internal fun SettingsPanel(
                             }
                         }
                     }
+                    SettingsToggleRow(
+                        title = "Rilievo 3D",
+                        description = "Montagne e colline con ombre e altezza reale. In modalita' 3D cam il terreno si alza.",
+                        icon = Icons.Default.Landscape,
+                        checked = currentTerrain,
+                        onCheckedChange = { ThemePreferences.setTerrain(context, it) }
+                    )
                 }
             }
         }

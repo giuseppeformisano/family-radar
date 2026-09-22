@@ -5136,8 +5136,8 @@ class FirebaseRepository private constructor(private val context: Context) {
         /** Sotto questa distanza dall'ultimo fix trasmesso non si scrive su Firestore. */
         const val MIN_DISPLACEMENT_METERS = 18f
 
-        /** Oltre questa velocità si trasmette sempre: ~5,4 km/h, si è chiaramente in moto. */
-        const val MOVING_SPEED_THRESHOLD_MS = 1.5f
+        /** Oltre questa velocità si trasmette sempre: ~1,8 km/h, si è a piedi. */
+        const val MOVING_SPEED_THRESHOLD_MS = 0.5f
 
         /**
          * Velocità implicita oltre la quale un fix è considerato un salto spurio del GPS

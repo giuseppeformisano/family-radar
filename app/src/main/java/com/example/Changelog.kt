@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.63.0-beta"
+    const val VERSION = "0.64.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🔔 Notifica di sistema quando un aggiornamento e' disponibile, anche con app chiusa."
+        "📍 Alta precisione GPS attiva anche a piedi (soglia abbassata a 1,8 km/h)."
     )
 }

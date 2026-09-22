@@ -10,10 +10,12 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.56.0-beta"
+    const val VERSION = "0.57.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🎥 3D Cam torna al 2D automaticamente quando smetti di seguire qualcuno."
+        "📍 Badge avatar in alto a destra indica chi stai seguendo — toccalo per fermare.",
+        "🔒 Pan bloccato durante l'inseguimento, zoom sempre libero.",
+        "🎥 Tasto 3D/2D sempre visibile, funziona anche senza inseguimento."
     )
 }

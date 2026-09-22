@@ -999,57 +999,35 @@ fun MainRadarScreen(
                 .padding(bottom = Spacing.xs)
         )
 
-        // Banner dell'inseguimento
+        // Badge inseguimento: piccolo avatar in alto a destra, cliccabile per fermare il follow.
         AnimatedVisibility(
             visible = followedUserId != null,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = androidx.compose.animation.scaleIn(),
+            exit = androidx.compose.animation.scaleOut(),
             modifier = Modifier
-                .align(Alignment.TopStart)
+                .align(Alignment.TopEnd)
                 .statusBarsPadding()
-                .padding(
-                    start = Spacing.lg,
-                    top = if (locations.isNotEmpty()) 210.dp else 76.dp
-                )
+                .padding(top = Spacing.sm, end = Spacing.md)
         ) {
-            val bannerName = followedLocation?.let {
+            val badgeName = followedLocation?.let {
                 if (!it.nickname.isNullOrBlank()) it.nickname!! else it.userName
             } ?: followedMember?.let {
                 if (!it.nickname.isNullOrBlank()) it.nickname!! else it.displayName
             } ?: "…"
-            val bannerPhoto = followedLocation?.photoBase64 ?: followedMember?.photoBase64
-            GlassSurface(
-                shape = RoundedCornerShape(Radius.pill),
-                contentPadding = Spacing.xs
+            val badgePhoto = followedLocation?.photoBase64 ?: followedMember?.photoBase64
+            Surface(
+                onClick = { followedUserId = null },
+                shape = CircleShape,
+                border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
+                modifier = Modifier
+                    .size(Sizes.avatarSm)
+                    .testTag("stop_following_button")
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-                    modifier = Modifier.padding(start = Spacing.xs, end = Spacing.xs)
-                ) {
-                    RadarAvatar(
-                        name = bannerName,
-                        photoBase64 = bannerPhoto,
-                        size = Sizes.avatarSm,
-                        ringColor = MaterialTheme.colorScheme.primary
-                    )
-                    Surface(
-                        onClick = { followedUserId = null },
-                        shape = RoundedCornerShape(Radius.pill),
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.testTag("stop_following_button")
-                    ) {
-                        Text(
-                            text = stringResource(R.string.action_stop),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.padding(
-                                horizontal = Spacing.sm,
-                                vertical = Spacing.xs
-                            )
-                        )
-                    }
-                }
+                RadarAvatar(
+                    name = badgeName,
+                    photoBase64 = badgePhoto,
+                    size = Sizes.avatarSm
+                )
             }
         }
 

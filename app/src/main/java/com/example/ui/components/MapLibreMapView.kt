@@ -447,7 +447,7 @@ fun MapLibreMapView(
         }
     }
 
-    // Edifici 3D e reset camera quando si attiva/disattiva la 3D cam.
+    // Edifici 3D e tilt camera quando si attiva/disattiva la 3D cam.
     LaunchedEffect(followCam, styleReady) {
         if (!styleReady) return@LaunchedEffect
         val style = mapRef?.style ?: return@LaunchedEffect
@@ -457,7 +457,19 @@ fun MapLibreMapView(
                 else org.maplibre.android.style.layers.Property.NONE
             )
         )
-        if (!followCam) {
+        if (followCam) {
+            // Se non si sta seguendo nessuno, imposta solo il tilt una volta sola.
+            // Se si sta seguendo qualcuno, il ticker gestirà posizione + bearing + tilt.
+            if (followedUserId == null) {
+                mapRef?.animateCamera(
+                    org.maplibre.android.camera.CameraUpdateFactory.newCameraPosition(
+                        org.maplibre.android.camera.CameraPosition.Builder()
+                            .tilt(60.0)
+                            .build()
+                    ), 400, null
+                )
+            }
+        } else {
             // Torna a vista piana quando si esce dalla 3D cam.
             mapRef?.animateCamera(
                 org.maplibre.android.camera.CameraUpdateFactory.newCameraPosition(
@@ -469,6 +481,12 @@ fun MapLibreMapView(
             )
             bearingBuffer.clear()
         }
+    }
+
+    // Blocca lo scorrimento (pan) durante l'inseguimento; zoom rimane libero.
+    LaunchedEffect(followedUserId, styleReady) {
+        if (!styleReady) return@LaunchedEffect
+        mapRef?.uiSettings?.isScrollGesturesEnabled = followedUserId == null
     }
 
     // Mostra/nascondi i layer secondo i toggle.
@@ -542,14 +560,6 @@ fun MapLibreMapView(
                 CtrlButton(Icons.Default.Layers, if (layerMenuOpen) Color(0xFF6366F1) else Color(0xCC18181B)) { layerMenuOpen = !layerMenuOpen }
             }
 
-            // Pulsante 3D cam: visibile solo quando si sta seguendo qualcuno.
-            if (currentFollowed != null) {
-                CtrlButton(
-                    Icons.Default.Navigation,
-                    if (followCam) Color(0xFF6366F1) else Color(0xCC18181B)
-                ) { currentOnFollowCamChange(!followCam) }
-            }
-
             CtrlButton(Icons.Default.Group, Color(0xCC18181B)) {
                 val map = mapRef ?: return@CtrlButton
                 val pts = currentLocations.filter { it.latitude != 0.0 || it.longitude != 0.0 }
@@ -561,6 +571,11 @@ fun MapLibreMapView(
                     map.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.newLatLngBounds(b, 120))
                 }
             }
+            // Pulsante 3D/2D: sempre visibile, indipendente dall'inseguimento.
+            CtrlButton(
+                Icons.Default.Navigation,
+                if (followCam) Color(0xFF6366F1) else Color(0xCC18181B)
+            ) { currentOnFollowCamChange(!followCam) }
             CtrlButton(Icons.Default.Add, Color(0xCC18181B)) {
                 mapRef?.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.zoomIn())
             }

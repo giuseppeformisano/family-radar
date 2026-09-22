@@ -14,6 +14,6 @@ object Changelog {
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "📍 Alta precisione GPS attiva anche a piedi (soglia abbassata a 1,8 km/h)."
+        "📍 Alta precisione GPS attiva anche a piedi (soglia abbassata a 3,6 km/h)."
     )
 }

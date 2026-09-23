@@ -504,11 +504,20 @@ fun MapLibreMapView(
         if (terrainEnabled) {
             runCatching {
                 if (style.getSource(demId) == null) {
+                    // AWS Terrain Tiles: DEM globale, gratuito, senza chiave. Sono
+                    // codificati "terrarium": l'SDK di default decodifica "mapbox",
+                    // quindi impostiamo l'encoding sul TileSet o le montagne non si
+                    // decodificano (era il motivo per cui non si vedeva nulla).
+                    val tileSet = org.maplibre.android.style.sources.TileSet(
+                        "2.1.0",
+                        "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+                    ).apply {
+                        encoding = "terrarium"
+                        minZoom = 0f
+                        maxZoom = 15f
+                    }
                     style.addSource(
-                        org.maplibre.android.style.sources.RasterDemSource(
-                            demId,
-                            "https://demotiles.maplibre.org/terrain-tiles/tiles.json"
-                        )
+                        org.maplibre.android.style.sources.RasterDemSource(demId, tileSet, 256)
                     )
                 }
                 if (style.getLayer(hillId) == null) {

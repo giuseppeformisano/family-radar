@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.65.0-beta"
+    const val VERSION = "0.66.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🗺 Mappa unificata: solo MapLibre. Stile e rilievo 3D sempre disponibili nelle impostazioni.",
-        "📍 Dialog luogo usa la stessa mappa principale, parte dalla posizione corrente."
+        "⛰ Rilievo montagne finalmente visibile: ora le ombre del terreno si vedono davvero."
     )
 }

@@ -491,20 +491,55 @@ fun MapLibreMapView(
         mapRef?.uiSettings?.isScrollGesturesEnabled = followedUserId == null
     }
 
-    // Hillshading: mostra/nasconde i layer HillshadeLayer già presenti nello stile
-    // OpenFreeMap (sono inclusi nello stile "bright" e altri, con sorgente DEM corretta).
-    // Non carichiamo DEM esterni per evitare problemi di encoding.
+    // Rilievo (hillshade): gli stili OpenFreeMap sono solo vettoriali e NON hanno
+    // dati di elevazione, quindi il rilievo va aggiunto a mano. Usiamo un tiles.json
+    // MapLibre che dichiara l'encoding lato server (terrarium), cosi' evitiamo il
+    // problema dell'encoding non impostabile dal codice sull'SDK Android.
+    // Il layer viene inserito SOTTO le etichette, cosi' membri e luoghi restano sopra.
     LaunchedEffect(terrainEnabled, styleReady) {
         if (!styleReady) return@LaunchedEffect
         val style = mapRef?.style ?: return@LaunchedEffect
-        val vis = if (terrainEnabled) org.maplibre.android.style.layers.Property.VISIBLE
-                  else org.maplibre.android.style.layers.Property.NONE
-        style.layers.forEach { layer ->
-            if (layer is org.maplibre.android.style.layers.HillshadeLayer) {
-                layer.setProperties(
-                    org.maplibre.android.style.layers.PropertyFactory.visibility(vis)
-                )
+        val demId = "radar-dem-src"
+        val hillId = "radar-hillshade"
+        if (terrainEnabled) {
+            runCatching {
+                if (style.getSource(demId) == null) {
+                    style.addSource(
+                        org.maplibre.android.style.sources.RasterDemSource(
+                            demId,
+                            "https://demotiles.maplibre.org/terrain-tiles/tiles.json"
+                        )
+                    )
+                }
+                if (style.getLayer(hillId) == null) {
+                    val layer = org.maplibre.android.style.layers.HillshadeLayer(hillId, demId)
+                        .withProperties(
+                            org.maplibre.android.style.layers.PropertyFactory.hillshadeShadowColor(
+                                android.graphics.Color.argb(150, 40, 45, 55)
+                            ),
+                            org.maplibre.android.style.layers.PropertyFactory.hillshadeHighlightColor(
+                                android.graphics.Color.argb(120, 255, 255, 255)
+                            ),
+                            org.maplibre.android.style.layers.PropertyFactory.hillshadeExaggeration(0.7f)
+                        )
+                    val belowId = style.layers.firstOrNull {
+                        it is org.maplibre.android.style.layers.SymbolLayer
+                    }?.id
+                    if (belowId != null) style.addLayerBelow(layer, belowId) else style.addLayer(layer)
+                } else {
+                    style.getLayer(hillId)?.setProperties(
+                        org.maplibre.android.style.layers.PropertyFactory.visibility(
+                            org.maplibre.android.style.layers.Property.VISIBLE
+                        )
+                    )
+                }
             }
+        } else {
+            style.getLayer(hillId)?.setProperties(
+                org.maplibre.android.style.layers.PropertyFactory.visibility(
+                    org.maplibre.android.style.layers.Property.NONE
+                )
+            )
         }
     }
 

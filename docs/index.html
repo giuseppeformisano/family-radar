@@ -458,8 +458,11 @@ function ago(ms) {
 function batColor(b) { return b == null ? '' : b < 20 ? '#EF4444' : b < 50 ? '#F59E0B' : '#22C55E'; }
 function presenceColor(ts) {
   if (!ts) return '#52525B';
-  const s = (Date.now() - ts) / 1000;
-  return s < 90 ? '#22C55E' : s < 300 ? '#EAB308' : '#52525B';
+  // Stesse soglie dell'app (PRESENCE_ONLINE_MS = 12 min, PRESENCE_IDLE_MS = 60 min):
+  // da fermi il telefono invia la posizione solo ogni ~5 min per risparmiare
+  // batteria, quindi soglie piu' strette facevano apparire offline chi e' online.
+  const min = (Date.now() - ts) / 60000;
+  return min < 12 ? '#22C55E' : min < 60 ? '#EAB308' : '#52525B';
 }
 
 function buildMemberPanel(locs) {
@@ -478,7 +481,10 @@ function buildMemberPanel(locs) {
     const spdKmh = Math.round((l.speed||0)*3.6);
     const spdTxt = spdKmh > 2 ? `${spdKmh} km/h` : 'Fermo';
     const batTxt = l.battery != null ? `${l.battery}%` : '';
-    const ts     = l.lastUpdated?.toMillis?.() || l.lastUpdated || null;
+    // Il campo di freschezza sul documento posizione e' "timestamp" (millis),
+    // scritto ad ogni aggiornamento. "lastUpdated" e' scritto solo di rado, quindi
+    // usarlo faceva sembrare offline chi in realta' e' online. Fallback su lastUpdated.
+    const ts     = l.timestamp || l.lastUpdated?.toMillis?.() || l.lastUpdated || null;
 
     const card = document.createElement('div');
     card.className = 'member-card' + (l.userId === focusedUid ? ' focused' : '');
@@ -564,6 +570,7 @@ function listenGroup(gid) {
           latitude:     x.latitude||0, longitude: x.longitude||0,
           speed:        x.speed||0, battery: x.batteryLevel ?? x.battery ?? null,
           currentPlaceName: x.currentPlaceName || '',
+          timestamp:    x.timestamp ?? null,
           lastUpdated:  x.lastUpdated,
           recentPoints: (x.recentPoints||[]).map(p=>({la:p.la,lo:p.lo,t:p.t||0}))
         };

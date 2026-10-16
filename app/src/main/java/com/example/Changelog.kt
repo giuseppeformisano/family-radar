@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.66.1-beta"
+    const val VERSION = "0.67.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "⛰ Rilievo montagne: ora usa dati di elevazione globali, si vede in tutto il mondo."
+        "🛣 Aggancio scia alle strade (map matching locale), attivabile dalle impostazioni sviluppatore."
     )
 }

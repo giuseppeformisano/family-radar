@@ -58,6 +58,7 @@ fun MapLibreMapView(
     followCam: Boolean = false,
     onFollowCamChange: (Boolean) -> Unit = {},
     terrainEnabled: Boolean = false,
+    mapMatchingEnabled: Boolean = false,
     onMapCenterChanged: (Pair<Double, Double>) -> Unit = {},
     onMemberSelected: (UserLocation) -> Unit = {},
     onPlaceSelected: (com.example.model.SavedPlace) -> Unit = {},
@@ -87,10 +88,11 @@ fun MapLibreMapView(
     // Smorzamento bearing per la 3D cam: media circolare sugli ultimi N fix.
     val bearingBuffer = remember { BearingBuffer(size = 6) }
 
-    // Cache snap strade: (lat, lon) grezzo → (lat, lon) agganciato alla strada.
-    // Ogni punto viene snappato una sola volta; aggiornamenti successivi riusano
-    // il risultato senza fare nuove query alla mappa.
-    val snapCache = remember { mutableMapOf<Pair<Double, Double>, Pair<Double, Double>>() }
+    // Cache candidati strada per punto grezzo (lat, lon) → lista di punti strada
+    // vicini. Ogni punto viene interrogato una sola volta; gli aggiornamenti
+    // successivi riusano il risultato senza nuove query alla mappa. Solo il punto
+    // nuovo di ogni secondo viene calcolato.
+    val candCache = remember { mutableMapOf<Pair<Double, Double>, List<RoadCandidate>>() }
 
     var showMembers by remember { mutableStateOf(true) }
     var showSnapshots by remember { mutableStateOf(true) }
@@ -169,7 +171,7 @@ fun MapLibreMapView(
     val memberDisplayed = androidx.compose.runtime.remember { mutableMapOf<String, Pair<Double, Double>>() }
 
     // Aggiornamento in tempo reale di scia + bersagli pallini, + centraggio iniziale.
-    LaunchedEffect(locations, styleReady) {
+    LaunchedEffect(locations, styleReady, mapMatchingEnabled) {
         if (!styleReady) return@LaunchedEffect
         val map = mapRef ?: return@LaunchedEffect
         val style = map.style ?: return@LaunchedEffect
@@ -201,23 +203,31 @@ fun MapLibreMapView(
         memberTargets.keys.retainAll(ids)
         memberDisplayed.keys.retainAll(ids)
 
-        // Scia con map matching: ogni punto viene snappato alla strada più vicina
-        // nei tile già caricati. La cache evita di fare query per punti già visti:
-        // in pratica viene chiamato snapToRoad solo per il punto nuovo di ogni secondo.
+        // Scia: con il map matching ATTIVO (interruttore sviluppatore) i punti
+        // vengono agganciati alle strade reali tenendo conto del percorso (vedi
+        // matchTrailToRoads, calcolo locale sui tile). Spento, si usa la linea
+        // grezza del GPS. I nomi dei livelli stradali cambiano da stile a stile,
+        // quindi li scopriamo al volo: sono i livelli-linea che pescano dal
+        // contenitore dati "transportation", uguale in tutti gli stili OpenFreeMap.
+        val roadLayerIds = if (mapMatchingEnabled) {
+            style.layers.filterIsInstance<org.maplibre.android.style.layers.LineLayer>()
+                .filter { it.sourceLayer == "transportation" }
+                .map { it.id }
+        } else emptyList()
+
         val trailFeatures = valid.filter { it.recentPoints.size >= 2 }.map { m ->
-            val pts = m.recentPoints.sortedBy { it.t }.map { rp ->
-                val key = rp.lat to rp.lon
-                val (sLat, sLon) = snapCache.getOrPut(key) {
-                    snapToRoad(map, rp.lat, rp.lon)
-                }
-                org.maplibre.geojson.Point.fromLngLat(sLon, sLat)
+            val raw = m.recentPoints.sortedBy { it.t }
+            val coords: List<org.maplibre.geojson.Point> = if (mapMatchingEnabled && roadLayerIds.isNotEmpty()) {
+                matchTrailToRoads(map, raw, roadLayerIds, candCache)
+            } else {
+                raw.map { org.maplibre.geojson.Point.fromLngLat(it.lon, it.lat) }
             }
-            org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.LineString.fromLngLats(pts))
+            org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.LineString.fromLngLats(coords))
         }
-        // Mantieni la cache entro una dimensione ragionevole (max 500 punti totali).
-        if (snapCache.size > 500) {
-            val toRemove = snapCache.keys.take(snapCache.size - 500)
-            toRemove.forEach { snapCache.remove(it) }
+        // Tetto alla cache candidati, come prima per lo snap.
+        if (candCache.size > 500) {
+            val toRemove = candCache.keys.take(candCache.size - 500)
+            toRemove.forEach { candCache.remove(it) }
         }
         style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("trail-src")
             ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(trailFeatures))
@@ -767,28 +777,28 @@ private fun chaikinSmooth(pts: List<org.maplibre.geojson.Point>, passes: Int = 3
     return c
 }
 
-// Snap di un punto GPS alla strada piu' vicina gia' caricata nei tile vettoriali.
-// Se nessuna strada e' entro maxDistM metri, restituisce il punto originale (off-road).
-// Deve essere chiamata sul main thread (queryRenderedFeatures e' una API UI).
-// Layer stradali dello stile OpenFreeMap (schema OpenMapTiles).
-// Passare i layer ID specifici è molto più veloce che queryare tutti i layer.
-private val ROAD_LAYER_IDS = arrayOf(
-    "road_path", "road_minor", "road_secondary_tertiary",
-    "road_major", "road_motorway_trunk", "road_link",
-    "road_service_track", "transportation_name_road"
-)
+// ───────────────────────── MAP MATCHING LOCALE (a percorso) ─────────────────────
+// Candidato di aggancio: un punto su una strada vicino al punto GPS grezzo, con la
+// distanza (in metri) di quanto il punto è stato "tirato" verso la strada.
+data class RoadCandidate(val lat: Double, val lon: Double, val emitDist: Double)
 
-private fun snapToRoad(
+private const val MATCH_MAX_DIST_M = 45.0   // oltre questa distanza la strada non è candidata
+private const val MATCH_CANDIDATES = 5      // quante strade vicine considerare per punto
+private const val MATCH_FALLBACK_COST = 60.0 // "costo" del punto grezzo quando non c'è strada
+
+// Per un punto GPS, trova fino a [MATCH_CANDIDATES] strade vicine (una per strada) e
+// per ognuna il punto più vicino su di essa. Interroga solo i tile già disegnati.
+// Deve girare sul main thread (queryRenderedFeatures è una API della UI).
+private fun candidatesForPoint(
     map: org.maplibre.android.maps.MapLibreMap,
-    lat: Double,
-    lon: Double,
-    maxDistM: Double = 40.0
-): Pair<Double, Double> = try {
+    lat: Double, lon: Double,
+    roadLayerIds: List<String>
+): List<RoadCandidate> = try {
     val screen = map.projection.toScreenLocation(org.maplibre.android.geometry.LatLng(lat, lon))
-    val r = 80f
+    val r = 90f
     val box = android.graphics.RectF(screen.x - r, screen.y - r, screen.x + r, screen.y + r)
-    val features = map.queryRenderedFeatures(box, *ROAD_LAYER_IDS)
-    var bestLat = lat; var bestLon = lon; var bestDist = maxDistM
+    val features = map.queryRenderedFeatures(box, *roadLayerIds.toTypedArray())
+    val out = ArrayList<RoadCandidate>()
     for (feat in features) {
         val geom = feat.geometry() ?: continue
         val lines: List<List<org.maplibre.geojson.Point>> = when (geom) {
@@ -796,6 +806,8 @@ private fun snapToRoad(
             is org.maplibre.geojson.MultiLineString -> geom.coordinates()
             else -> emptyList()
         }
+        // Punto più vicino su QUESTA strada (un candidato per strada).
+        var bLat = 0.0; var bLon = 0.0; var bDist = Double.MAX_VALUE
         for (line in lines) {
             for (i in 0 until line.size - 1) {
                 val (sLat, sLon) = nearestOnSegment(
@@ -804,12 +816,70 @@ private fun snapToRoad(
                     line[i + 1].latitude(), line[i + 1].longitude()
                 )
                 val d = distanceMeters(lat, lon, sLat, sLon)
-                if (d < bestDist) { bestDist = d; bestLat = sLat; bestLon = sLon }
+                if (d < bDist) { bDist = d; bLat = sLat; bLon = sLon }
             }
         }
+        if (bDist <= MATCH_MAX_DIST_M) out.add(RoadCandidate(bLat, bLon, bDist))
     }
-    bestLat to bestLon
-} catch (_: Exception) { lat to lon }
+    out.sortedBy { it.emitDist }.take(MATCH_CANDIDATES)
+} catch (_: Exception) { emptyList() }
+
+// Aggancio della scia alle strade tenendo conto del PERCORSO (non punto-per-punto).
+// Algoritmo: per ogni punto GPS si raccolgono alcune strade candidate; poi con una
+// scansione in avanti (Viterbi) si sceglie la sequenza di candidati che minimizza:
+//  - quanto ogni punto viene spostato dalla sua posizione reale (costo "emissione"),
+//  - quanto il passo tra due candidati consecutivi si discosta dal passo GPS reale
+//    (costo "transizione"): così la scia resta continua e non salta su strade parallele.
+private fun matchTrailToRoads(
+    map: org.maplibre.android.maps.MapLibreMap,
+    raw: List<com.example.model.TrailPoint>,
+    roadLayerIds: List<String>,
+    candCache: MutableMap<Pair<Double, Double>, List<RoadCandidate>>
+): List<org.maplibre.geojson.Point> {
+    // Candidati per ogni punto (cache per non riquery-are i punti già visti). Se un
+    // punto non ha strade vicine, si usa il punto grezzo con un costo di penalità.
+    val cands: List<List<RoadCandidate>> = raw.map { rp ->
+        val key = rp.lat to rp.lon
+        val list = candCache.getOrPut(key) { candidatesForPoint(map, rp.lat, rp.lon, roadLayerIds) }
+        if (list.isEmpty()) listOf(RoadCandidate(rp.lat, rp.lon, MATCH_FALLBACK_COST)) else list
+    }
+    val n = raw.size
+    if (n == 0) return emptyList()
+
+    // Viterbi in avanti.
+    val cost = Array(n) { DoubleArray(cands[it].size) { Double.MAX_VALUE } }
+    val back = Array(n) { IntArray(cands[it].size) { -1 } }
+    for (k in cands[0].indices) cost[0][k] = cands[0][k].emitDist
+    for (t in 1 until n) {
+        val gpsStep = distanceMeters(raw[t - 1].lat, raw[t - 1].lon, raw[t].lat, raw[t].lon)
+        for (j in cands[t].indices) {
+            val cj = cands[t][j]
+            var best = Double.MAX_VALUE; var bestI = -1
+            for (i in cands[t - 1].indices) {
+                if (cost[t - 1][i] == Double.MAX_VALUE) continue
+                val ci = cands[t - 1][i]
+                val step = distanceMeters(ci.lat, ci.lon, cj.lat, cj.lon)
+                val trans = kotlin.math.abs(step - gpsStep)
+                val c = cost[t - 1][i] + trans
+                if (c < best) { best = c; bestI = i }
+            }
+            cost[t][j] = (if (best == Double.MAX_VALUE) 0.0 else best) + cj.emitDist
+            back[t][j] = bestI
+        }
+    }
+
+    // Miglior candidato finale e backtrack.
+    var endK = 0; var endCost = Double.MAX_VALUE
+    for (k in cands[n - 1].indices) if (cost[n - 1][k] < endCost) { endCost = cost[n - 1][k]; endK = k }
+    val chosen = IntArray(n)
+    chosen[n - 1] = endK
+    for (t in n - 1 downTo 1) chosen[t - 1] = back[t][chosen[t]].coerceAtLeast(0)
+
+    return raw.indices.map { t ->
+        val c = cands[t][chosen[t]]
+        org.maplibre.geojson.Point.fromLngLat(c.lon, c.lat)
+    }
+}
 
 // Punto piu' vicino sul segmento A-B al punto P (coordinate geografiche).
 private fun nearestOnSegment(

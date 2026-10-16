@@ -677,6 +677,7 @@ fun MainRadarScreen(
 
     val mapStyle by ThemePreferences.mapStyleFlow.collectAsState()
     val terrainEnabled by ThemePreferences.terrainFlow.collectAsState()
+    val mapMatchingEnabled by ThemePreferences.mapMatchingFlow.collectAsState()
     Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         com.example.ui.components.MapLibreMapView(
             locations = locations,
@@ -690,6 +691,7 @@ fun MainRadarScreen(
             followCam = followCam,
             onFollowCamChange = { followCam = it },
             terrainEnabled = terrainEnabled,
+            mapMatchingEnabled = mapMatchingEnabled,
             onMapCenterChanged = { center -> currentMapCenter = center },
             speakingUserId = speakingUserId,
             heatmapPoints = heatmapPoints,

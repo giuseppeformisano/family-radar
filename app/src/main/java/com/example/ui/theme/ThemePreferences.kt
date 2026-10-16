@@ -63,6 +63,17 @@ object ThemePreferences {
         _terrainFlow.value = enabled
     }
 
+    // Map matching locale sulla scia (strumento sviluppatore): aggancia i punti
+    // della scia alle strade dei tile, tenendo conto del percorso. Default spento.
+    private const val KEY_MAP_MATCHING = "key_map_matching_enabled"
+    private val _mapMatchingFlow = MutableStateFlow(false)
+    val mapMatchingFlow: StateFlow<Boolean> = _mapMatchingFlow.asStateFlow()
+
+    fun setMapMatching(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_MAP_MATCHING, enabled).apply()
+        _mapMatchingFlow.value = enabled
+    }
+
     fun init(context: Context) {
         val prefs = getPrefs(context)
         val savedName = prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)
@@ -86,6 +97,7 @@ object ThemePreferences {
         }
 
         _terrainFlow.value = prefs.getBoolean(KEY_TERRAIN, false)
+        _mapMatchingFlow.value = prefs.getBoolean(KEY_MAP_MATCHING, false)
     }
 
     fun setMapColorMode(context: Context, mode: MapColorMode) {

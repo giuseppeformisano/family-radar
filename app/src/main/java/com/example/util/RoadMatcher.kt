@@ -9,7 +9,7 @@ import org.json.JSONObject
 
 /**
  * Utility di routing su strada via OSRM pubblico.
- * Il map-matching (snap pallino + scia) e' ora locale in MapLibreMapView.snapToRoad(),
+ * Il map-matching della scia e' ora locale in MapLibreMapView (matchTrailToRoads),
  * che interroga i tile vettoriali gia' caricati senza inviare dati a server esterni.
  * Qui resta solo `route()` per calcoli di percorso punto-a-punto (es. simulazione).
  */

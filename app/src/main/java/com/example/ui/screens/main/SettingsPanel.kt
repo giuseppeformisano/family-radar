@@ -1022,6 +1022,15 @@ internal fun SettingsPanel(
                     testTag = "simulation_toggle_button"
                 )
 
+                val currentMapMatching by ThemePreferences.mapMatchingFlow.collectAsState()
+                SettingsToggleRow(
+                    title = "Aggancio scia alle strade",
+                    description = "Fa seguire alla scia le strade reali invece della linea grezza del GPS. Calcolo locale, niente dati inviati fuori.",
+                    icon = Icons.Default.Route,
+                    checked = currentMapMatching,
+                    onCheckedChange = { ThemePreferences.setMapMatching(context, it) }
+                )
+
                 SettingsSelectorGroup(
                     label = "Reattività filtro posizione — ${String.format(Locale.US, "%.1f", filterQ)}",
                     description = "Basso = pallino più stabile e liscio (ma più molle). Alto = segue in fretta (ma più nervoso). Per taratura."

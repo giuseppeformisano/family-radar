@@ -778,13 +778,30 @@ private fun chaikinSmooth(pts: List<org.maplibre.geojson.Point>, passes: Int = 3
 }
 
 // ───────────────────────── MAP MATCHING LOCALE (a percorso) ─────────────────────
-// Candidato di aggancio: un punto su una strada vicino al punto GPS grezzo, con la
-// distanza (in metri) di quanto il punto è stato "tirato" verso la strada.
-data class RoadCandidate(val lat: Double, val lon: Double, val emitDist: Double)
+// Candidato di aggancio: un punto su una strada vicino al punto GPS grezzo.
+//  - emitDist: quanto il punto è stato "tirato" verso la strada (metri).
+//  - bearing: orientamento della strada in quel punto (0..360, uso non direzionale);
+//    null quando è il punto grezzo di ripiego (nessuna strada).
+//  - roadId: identità stabile della strada, per la "stickiness" (restare sulla stessa
+//    strada tra punti consecutivi); null quando non ricavabile.
+data class RoadCandidate(
+    val lat: Double,
+    val lon: Double,
+    val emitDist: Double,
+    val bearing: Double? = null,
+    val roadId: String? = null
+)
 
 private const val MATCH_MAX_DIST_M = 45.0   // oltre questa distanza la strada non è candidata
 private const val MATCH_CANDIDATES = 5      // quante strade vicine considerare per punto
 private const val MATCH_FALLBACK_COST = 60.0 // "costo" del punto grezzo quando non c'è strada
+
+// Taratura dei due miglioramenti anti "strade parallele":
+//  - HEADING: penalizza le strade orientate diversamente dalla direzione di marcia.
+//  - STICKINESS: penalizza il cambio di strada tra due punti consecutivi.
+private const val MATCH_HEADING_MIN_STEP_M = 4.0  // sotto questo passo la direzione GPS non è affidabile
+private const val MATCH_HEADING_MAX_M = 30.0      // penalità massima (strada perpendicolare al moto)
+private const val MATCH_SWITCH_PENALTY_M = 25.0   // penalità per saltare da una strada all'altra
 
 // Per un punto GPS, trova fino a [MATCH_CANDIDATES] strade vicine (una per strada) e
 // per ognuna il punto più vicino su di essa. Interroga solo i tile già disegnati.
@@ -806,8 +823,10 @@ private fun candidatesForPoint(
             is org.maplibre.geojson.MultiLineString -> geom.coordinates()
             else -> emptyList()
         }
-        // Punto più vicino su QUESTA strada (un candidato per strada).
+        // Punto più vicino su QUESTA strada (un candidato per strada), e gli estremi
+        // del segmento vincente per ricavarne l'orientamento.
         var bLat = 0.0; var bLon = 0.0; var bDist = Double.MAX_VALUE
+        var saLat = 0.0; var saLon = 0.0; var sbLat = 0.0; var sbLon = 0.0
         for (line in lines) {
             for (i in 0 until line.size - 1) {
                 val (sLat, sLon) = nearestOnSegment(
@@ -816,13 +835,54 @@ private fun candidatesForPoint(
                     line[i + 1].latitude(), line[i + 1].longitude()
                 )
                 val d = distanceMeters(lat, lon, sLat, sLon)
-                if (d < bDist) { bDist = d; bLat = sLat; bLon = sLon }
+                if (d < bDist) {
+                    bDist = d; bLat = sLat; bLon = sLon
+                    saLat = line[i].latitude(); saLon = line[i].longitude()
+                    sbLat = line[i + 1].latitude(); sbLon = line[i + 1].longitude()
+                }
             }
         }
-        if (bDist <= MATCH_MAX_DIST_M) out.add(RoadCandidate(bLat, bLon, bDist))
+        if (bDist <= MATCH_MAX_DIST_M) {
+            val bearing = segmentBearing(saLat, saLon, sbLat, sbLon)
+            out.add(RoadCandidate(bLat, bLon, bDist, bearing, roadIdentity(feat)))
+        }
     }
     out.sortedBy { it.emitDist }.take(MATCH_CANDIDATES)
 } catch (_: Exception) { emptyList() }
+
+// Identità stabile di una strada per la stickiness. Preferisce nome/numero (stabili
+// anche tra tile diversi); in mancanza usa l'id della feature; se non c'è nulla
+// restituisce null (nessuna stickiness, meglio che incollare strade diverse).
+private fun roadIdentity(feat: org.maplibre.geojson.Feature): String? {
+    fun strProp(key: String): String? = try {
+        if (feat.hasProperty(key)) feat.getStringProperty(key)?.takeIf { it.isNotBlank() } else null
+    } catch (_: Exception) { null }
+    val named = listOfNotNull(strProp("name"), strProp("ref")).joinToString("|")
+    if (named.isNotBlank()) return named
+    val id = try { feat.id() } catch (_: Exception) { null }
+    return if (!id.isNullOrBlank()) "id:$id" else null
+}
+
+// Orientamento (0..360) del segmento A→B. Usato in modo NON direzionale (vedi
+// headingDiffDeg): una strada vale uguale percorsa nei due versi.
+private fun segmentBearing(aLat: Double, aLon: Double, bLat: Double, bLon: Double): Double {
+    val dLon = Math.toRadians(bLon - aLon)
+    val la1 = Math.toRadians(aLat); val la2 = Math.toRadians(bLat)
+    val y = kotlin.math.sin(dLon) * kotlin.math.cos(la2)
+    val x = kotlin.math.cos(la1) * kotlin.math.sin(la2) -
+        kotlin.math.sin(la1) * kotlin.math.cos(la2) * kotlin.math.cos(dLon)
+    val brng = Math.toDegrees(kotlin.math.atan2(y, x))
+    return (brng + 360.0) % 360.0
+}
+
+// Differenza angolare tra due orientamenti, ripiegata a 0..90: una strada e la sua
+// opposta (180°) sono "allineate", così il verso di percorrenza non conta.
+private fun headingDiffDeg(a: Double, b: Double): Double {
+    var d = kotlin.math.abs(a - b) % 360.0
+    if (d > 180.0) d = 360.0 - d   // 0..180
+    if (d > 90.0) d = 180.0 - d    // 0..90 (non direzionale)
+    return d
+}
 
 // Aggancio della scia alle strade tenendo conto del PERCORSO (non punto-per-punto).
 // Algoritmo: per ogni punto GPS si raccolgono alcune strade candidate; poi con una
@@ -852,18 +912,27 @@ private fun matchTrailToRoads(
     for (k in cands[0].indices) cost[0][k] = cands[0][k].emitDist
     for (t in 1 until n) {
         val gpsStep = distanceMeters(raw[t - 1].lat, raw[t - 1].lon, raw[t].lat, raw[t].lon)
+        // Direzione di marcia affidabile solo se ci si è spostati abbastanza.
+        val gpsHeading = if (gpsStep >= MATCH_HEADING_MIN_STEP_M)
+            segmentBearing(raw[t - 1].lat, raw[t - 1].lon, raw[t].lat, raw[t].lon) else null
         for (j in cands[t].indices) {
             val cj = cands[t][j]
+            // Costo direzione: dipende solo dal candidato j (strada orientata come il moto?).
+            val headCost = if (gpsHeading != null && cj.bearing != null)
+                (headingDiffDeg(gpsHeading, cj.bearing) / 90.0) * MATCH_HEADING_MAX_M else 0.0
             var best = Double.MAX_VALUE; var bestI = -1
             for (i in cands[t - 1].indices) {
                 if (cost[t - 1][i] == Double.MAX_VALUE) continue
                 val ci = cands[t - 1][i]
                 val step = distanceMeters(ci.lat, ci.lon, cj.lat, cj.lon)
                 val trans = kotlin.math.abs(step - gpsStep)
-                val c = cost[t - 1][i] + trans
+                // Stickiness: penalizza il cambio di strada (solo se entrambe note).
+                val stick = if (ci.roadId != null && cj.roadId != null && ci.roadId != cj.roadId)
+                    MATCH_SWITCH_PENALTY_M else 0.0
+                val c = cost[t - 1][i] + trans + stick
                 if (c < best) { best = c; bestI = i }
             }
-            cost[t][j] = (if (best == Double.MAX_VALUE) 0.0 else best) + cj.emitDist
+            cost[t][j] = (if (best == Double.MAX_VALUE) 0.0 else best) + cj.emitDist + headCost
             back[t][j] = bestI
         }
     }

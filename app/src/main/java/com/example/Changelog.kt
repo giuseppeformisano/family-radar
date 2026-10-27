@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.69.1-beta"
+    const val VERSION = "0.69.2-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🏠 Nuovo widget per la home: scegli un familiare e vedi al volo dove si trova, se è online e la batteria.",
-        "ℹ️ Tieni premuto sulla home → Widget → Family Radar per aggiungerlo."
+        "🏠 Widget home ora anche piccolo (2x2): foto, stato e batteria del familiare scelto.",
+        "⚡ Dopo aver scelto il familiare, il widget si aggiorna subito."
     )
 }

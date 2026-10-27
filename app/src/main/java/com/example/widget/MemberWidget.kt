@@ -11,6 +11,8 @@ import android.graphics.Rect
 import android.graphics.RectF
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -18,6 +20,8 @@ import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
+import androidx.glance.LocalSize
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
@@ -52,6 +56,15 @@ import kotlinx.coroutines.launch
 
 /** Widget sulla home: mostra un familiare scelto (luogo, stato, batteria). */
 class MemberWidget : GlanceAppWidget() {
+
+    // Supporta misure piccole: ~1x1, 2x2 e una versione larga.
+    override val sizeMode: SizeMode = SizeMode.Responsive(
+        setOf(
+            DpSize(60.dp, 60.dp),
+            DpSize(140.dp, 110.dp),
+            DpSize(250.dp, 110.dp)
+        )
+    )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
@@ -95,37 +108,55 @@ private val accent = ColorProvider(day = Color(0xFF3B6FD4), night = Color(0xFF5B
 @Composable
 private fun WidgetUi(member: WidgetMember?) {
     val context = LocalContext.current
-    Column(
-        modifier = GlanceModifier
-            .fillMaxSize()
-            .background(bgColor)
-            .cornerRadius(20.dp)
-            .padding(14.dp)
-            .clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
-    ) {
-        if (member == null) {
-            Box(
-                modifier = GlanceModifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "Apri Family Radar\ne scegli un familiare",
-                    style = TextStyle(color = textSecondary, fontSize = 13.sp)
-                )
-            }
-            return@Column
-        }
+    val base = GlanceModifier
+        .fillMaxSize()
+        .background(bgColor)
+        .cornerRadius(18.dp)
+        .clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
 
-        val now = System.currentTimeMillis()
-        val elapsed = now - member.timestamp
-        val (dot, status) = when {
-            elapsed < 12 * 60_000L -> "🟢" to "Online"
-            elapsed < 60 * 60_000L -> "🟠" to "Inattivo"
-            else -> "⚫" to "Offline"
+    if (member == null) {
+        Box(modifier = base.padding(8.dp), contentAlignment = Alignment.Center) {
+            Text(
+                "Scegli\nun familiare",
+                style = TextStyle(color = textSecondary, fontSize = 12.sp)
+            )
         }
+        return
+    }
 
+    val elapsed = System.currentTimeMillis() - member.timestamp
+    val (dot, status) = when {
+        elapsed < 12 * 60_000L -> "🟢" to "Online"
+        elapsed < 60 * 60_000L -> "🟠" to "Inattivo"
+        else -> "⚫" to "Offline"
+    }
+
+    val compact = LocalSize.current.width < 150.dp
+    if (compact) {
+        Column(
+            modifier = base.padding(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Avatar(member, 40.dp)
+            Spacer(GlanceModifier.height(4.dp))
+            Text(
+                member.name,
+                style = TextStyle(color = textPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium),
+                maxLines = 1
+            )
+            Text(
+                "$dot ${member.battery}%",
+                style = TextStyle(color = textSecondary, fontSize = 11.sp),
+                maxLines = 1
+            )
+        }
+        return
+    }
+
+    Column(modifier = base.padding(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(member)
+            Avatar(member, 48.dp)
             Spacer(GlanceModifier.width(10.dp))
             Column {
                 Text(
@@ -164,7 +195,7 @@ private fun WidgetUi(member: WidgetMember?) {
 }
 
 @Composable
-private fun Avatar(member: WidgetMember) {
+private fun Avatar(member: WidgetMember, sizeDp: Dp) {
     val bmp = member.photoBase64
         ?.let { ImageUtils.base64ToBitmap(it) }
         ?.let { circularBitmap(it) }
@@ -172,11 +203,11 @@ private fun Avatar(member: WidgetMember) {
         Image(
             provider = ImageProvider(bmp),
             contentDescription = null,
-            modifier = GlanceModifier.size(48.dp)
+            modifier = GlanceModifier.size(sizeDp)
         )
     } else {
         Box(
-            modifier = GlanceModifier.size(48.dp).cornerRadius(24.dp).background(accent),
+            modifier = GlanceModifier.size(sizeDp).cornerRadius(sizeDp / 2).background(accent),
             contentAlignment = Alignment.Center
         ) {
             val initial = member.name.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
@@ -184,7 +215,7 @@ private fun Avatar(member: WidgetMember) {
                 initial,
                 style = TextStyle(
                     color = ColorProvider(day = Color.White, night = Color.White),
-                    fontSize = 20.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
             )

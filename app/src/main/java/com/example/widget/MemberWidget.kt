@@ -35,11 +35,13 @@ import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
+import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
+import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
@@ -130,35 +132,31 @@ private fun WidgetUi(member: WidgetMember?) {
         else -> "⚫" to "Offline"
     }
 
-    // Layout fisso verticale (1x2): avatar, nome, posizione, stato, batteria.
-    Column(
-        modifier = base.padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalAlignment = Alignment.CenterHorizontally
+    // Layout fisso orizzontale (2x1): avatar a sinistra, info a destra.
+    Row(
+        modifier = base.padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Avatar(member, 44.dp)
-        Spacer(GlanceModifier.height(6.dp))
-        Text(
-            member.name,
-            style = TextStyle(color = textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold),
-            maxLines = 1
-        )
-        Text(
-            whereLabel(member),
-            style = TextStyle(color = textSecondary, fontSize = 12.sp),
-            maxLines = 2
-        )
-        Spacer(GlanceModifier.height(6.dp))
-        Text(
-            "$dot $status",
-            style = TextStyle(color = textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium),
-            maxLines = 1
-        )
-        Text(
-            "🔋 ${member.battery}%",
-            style = TextStyle(color = textSecondary, fontSize = 12.sp),
-            maxLines = 1
-        )
+        Avatar(member, 46.dp)
+        Spacer(GlanceModifier.width(10.dp))
+        Column {
+            Text(
+                member.name,
+                style = TextStyle(color = textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold),
+                maxLines = 1
+            )
+            Text(
+                whereLabel(member),
+                style = TextStyle(color = textSecondary, fontSize = 12.sp),
+                maxLines = 1
+            )
+            Spacer(GlanceModifier.height(3.dp))
+            Text(
+                "$dot $status  ·  🔋 ${member.battery}%",
+                style = TextStyle(color = textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium),
+                maxLines = 1
+            )
+        }
     }
 }
 

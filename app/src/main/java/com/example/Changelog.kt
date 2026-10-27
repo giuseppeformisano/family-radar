@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.69.5-beta"
+    const val VERSION = "0.69.6-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🏠 Widget home definitivo (1x2, trasparente): nome, posizione, stato e batteria.",
+        "🏠 Widget home orizzontale (2x1, trasparente): foto, nome, posizione, stato e batteria.",
         "🎯 Toccalo per aprire l'app centrata su quella persona."
     )
 }

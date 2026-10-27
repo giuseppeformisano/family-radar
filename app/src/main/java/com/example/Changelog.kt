@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.69.10-beta"
+    const val VERSION = "0.69.11-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🖼️ Widget: ora si vede la foto (o le iniziali se manca) in entrambi i formati.",
-        "📍 Widget 1x1: aggiunta la posizione (luogo o \"In giro\")."
+        "🔎 Widget 1x1: contenuto ingrandito per riempire meglio la cella."
     )
 }

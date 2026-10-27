@@ -21,6 +21,7 @@ import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
+import androidx.glance.LocalSize
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
@@ -210,21 +211,29 @@ private fun SmallUi(member: WidgetMember?) {
 
     val shortPlace = member.placeName?.takeIf { it.isNotBlank() } ?: "In giro"
 
+    // Dimensiona il contenuto in proporzione alla cella reale: altrimenti a misura
+    // fissa resta mezzo vuoto quando la cella 1x1 del launcher e' piu' grande.
+    val size = LocalSize.current
+    val minSide = minOf(size.width.value, size.height.value)
+    val avatarDp = (minSide * 0.52f).coerceIn(32f, 76f).dp
+    val placeSp = (minSide * 0.11f).coerceIn(9f, 14f).sp
+    val batterySp = (minSide * 0.13f).coerceIn(11f, 17f).sp
+
     Column(
         modifier = base.padding(4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Avatar(member, 30.dp)
+        Avatar(member, avatarDp)
         Spacer(GlanceModifier.height(2.dp))
         Text(
             "📍 $shortPlace",
-            style = TextStyle(color = textSecondary, fontSize = 9.sp),
+            style = TextStyle(color = textSecondary, fontSize = placeSp),
             maxLines = 1
         )
         Text(
             "$dot ${member.battery}%",
-            style = TextStyle(color = textPrimary, fontSize = 10.sp, fontWeight = FontWeight.Medium),
+            style = TextStyle(color = textPrimary, fontSize = batterySp, fontWeight = FontWeight.Medium),
             maxLines = 1
         )
     }

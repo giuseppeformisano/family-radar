@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.69.2-beta"
+    const val VERSION = "0.69.3-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🏠 Widget home ora anche piccolo (2x2): foto, stato e batteria del familiare scelto.",
-        "⚡ Dopo aver scelto il familiare, il widget si aggiorna subito."
+        "🏠 Widget home: risolto il problema per cui restava vuoto dopo aver scelto il familiare."
     )
 }

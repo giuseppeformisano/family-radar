@@ -11,6 +11,8 @@ import android.graphics.Rect
 import android.graphics.RectF
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -24,13 +26,13 @@ import androidx.glance.LocalSize
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.updateAll
 import androidx.glance.background
+import androidx.glance.currentState
 import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -67,15 +69,18 @@ class MemberWidget : GlanceAppWidget() {
     )
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
         provideContent {
-            val userId = WidgetCache.getSelection(context, appWidgetId)
+            val prefs = currentState<Preferences>()
+            val userId = prefs[KEY_USER_ID]
             val member = userId?.let { WidgetCache.findMember(context, it) }
             WidgetUi(member)
         }
     }
 
     companion object {
+        /** Chiave dello stato per-widget: quale familiare mostra questa istanza. */
+        val KEY_USER_ID = stringPreferencesKey("widget_user_id")
+
         /** L'app chiama questo quando cambiano le posizioni: salva la cache e ridisegna i widget. */
         fun publish(context: Context, locations: List<UserLocation>) {
             val changed = try {

@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.lifecycle.lifecycleScope
 import com.example.MainActivity
 import com.example.ui.theme.MyApplicationTheme
@@ -79,14 +80,17 @@ class MemberWidgetConfigActivity : ComponentActivity() {
     }
 
     private fun pick(appWidgetId: Int, userId: String) {
-        WidgetCache.setSelection(this, appWidgetId, userId)
+        val ctx = this
         lifecycleScope.launch {
             try {
-                val glanceId = GlanceAppWidgetManager(this@MemberWidgetConfigActivity)
-                    .getGlanceIdBy(appWidgetId)
-                MemberWidget().update(this@MemberWidgetConfigActivity, glanceId)
+                val glanceId = GlanceAppWidgetManager(ctx).getGlanceIdBy(appWidgetId)
+                // Lega la scelta a QUESTA istanza di widget (stato per-widget di Glance).
+                updateAppWidgetState(ctx, glanceId) { prefs ->
+                    prefs[MemberWidget.KEY_USER_ID] = userId
+                }
+                MemberWidget().update(ctx, glanceId)
             } catch (e: Exception) {
-                // il widget verra' comunque disegnato al primo refresh
+                // in caso di errore il widget si aggiorna comunque al refresh successivo
             }
             withContext(Dispatchers.Main) {
                 val result = Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)

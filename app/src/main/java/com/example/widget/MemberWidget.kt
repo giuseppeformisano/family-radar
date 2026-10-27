@@ -215,9 +215,9 @@ private fun SmallUi(member: WidgetMember?) {
     // fissa resta mezzo vuoto quando la cella 1x1 del launcher e' piu' grande.
     val size = LocalSize.current
     val minSide = minOf(size.width.value, size.height.value)
-    val avatarDp = (minSide * 0.52f).coerceIn(32f, 76f).dp
-    val placeSp = (minSide * 0.11f).coerceIn(9f, 14f).sp
-    val batterySp = (minSide * 0.13f).coerceIn(11f, 17f).sp
+    val avatarDp = (minSide * 0.62f).coerceIn(40f, 96f).dp
+    val placeSp = (minSide * 0.13f).coerceIn(10f, 16f).sp
+    val batterySp = (minSide * 0.15f).coerceIn(12f, 19f).sp
 
     Column(
         modifier = base.padding(4.dp),

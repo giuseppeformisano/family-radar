@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.68.0-beta"
+    const val VERSION = "0.68.1-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🛣 Aggancio scia più preciso tra strade parallele: ora considera direzione di marcia e resta sulla stessa strada."
+        "✨ Niente più lampeggio dell'etichetta stato quando ci si muove: la velocità resta stabile."
     )
 }

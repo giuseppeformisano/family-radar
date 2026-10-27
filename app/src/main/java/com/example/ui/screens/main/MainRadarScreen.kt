@@ -1804,6 +1804,11 @@ private data class MemberPresence(
     val color: Color
 )
 
+// Anti-lampeggio etichetta stato: il GPS a volte riporta velocità 0 anche in
+// movimento, facendo crollare la scritta su "Online" per un istante. Teniamo
+// l'ultima etichetta di movimento per questo tempo prima di cedere alla presenza.
+private const val MOVE_LABEL_HOLD_MS = 4000L
+
 private fun getMemberPresence(timestamp: Long): MemberPresence {
     val elapsed = System.currentTimeMillis() - timestamp
     return when {
@@ -2067,8 +2072,24 @@ private fun PerspectiveMemberCoverFlow(
             ActivityKind.WALKING -> if (movingKmH > 0) "A piedi ($movingKmH km/h)" else "A piedi"
             else -> if (movingKmH > 2) "In movimento ($movingKmH km/h)" else null
         }
-        val statusLabel = activityDescription ?: activePresence.label
-        val statusColor = if (activityDescription != null) RadarSemantic.Online else activePresence.color
+        // Tiene l'ultima etichetta di movimento per qualche secondo: così un singolo
+        // fix a velocità 0 (frequente nel GPS anche mentre ci si muove) non fa
+        // lampeggiare la scritta su "Online" e poi di nuovo sul movimento.
+        var heldLabel by remember { mutableStateOf<String?>(null) }
+        var heldUser by remember { mutableStateOf<String?>(null) }
+        var heldAt by remember { mutableStateOf(0L) }
+        LaunchedEffect(activeMemberLoc.userId, activityDescription, activeMemberLoc.timestamp) {
+            if (activityDescription != null) {
+                heldLabel = activityDescription
+                heldUser = activeMemberLoc.userId
+                heldAt = System.currentTimeMillis()
+            }
+        }
+        val useHeld = activityDescription == null && heldLabel != null &&
+            heldUser == activeMemberLoc.userId &&
+            (System.currentTimeMillis() - heldAt) < MOVE_LABEL_HOLD_MS
+        val statusLabel = activityDescription ?: (if (useHeld) heldLabel!! else activePresence.label)
+        val statusColor = if (activityDescription != null || useHeld) RadarSemantic.Online else activePresence.color
         val relativeTimeStr = if (isSelf) "ora" else formatRelativeShort(activeMemberLoc.timestamp)
         val textShadow = Shadow(color = Color.Black, offset = Offset(0f, 1.5f), blurRadius = 6f)
 

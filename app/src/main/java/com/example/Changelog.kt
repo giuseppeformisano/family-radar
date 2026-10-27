@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.69.7-beta"
+    const val VERSION = "0.69.8-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🎨 Schermata di scelta del familiare (widget) allineata allo stile dell'app e sotto la barra di stato."
+        "🎯 Da notifica o widget ora entri centrato sulla persona, e il carosello in alto si posiziona sul suo pallino."
     )
 }

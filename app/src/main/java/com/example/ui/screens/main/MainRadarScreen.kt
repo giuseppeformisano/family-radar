@@ -547,10 +547,9 @@ fun MainRadarScreen(
         }
         when (target.destination.uppercase()) {
             "CHAT" -> openPanel(RadarPanel.CHAT)
-            "ALERT" -> openPanel(RadarPanel.MEMBERS)
             "MEMBERS" -> openPanel(RadarPanel.MEMBERS)
             "SETTINGS" -> openPanel(RadarPanel.SETTINGS)
-            "MAP" -> {
+            "MAP", "ALERT" -> {
                 activeFullPanel = null
                 val sid = target.senderId
                 if (sid != null) {
@@ -761,6 +760,7 @@ fun MainRadarScreen(
                     locations = locations,
                     currentUserId = currentUserId,
                     followedUserId = followedUserId,
+                    selectMemberId = focusTargetUserId,
                     onMemberClick = { loc ->
                         focusTargetUserId = loc.userId
                         focusMapOn(loc.latitude, loc.longitude, collapse = false)
@@ -1825,6 +1825,7 @@ private fun PerspectiveMemberCoverFlow(
     followedUserId: String?,
     onMemberClick: (UserLocation) -> Unit,
     onMemberLongClick: (UserLocation) -> Unit,
+    selectMemberId: String? = null,
     modifier: Modifier = Modifier
 ) {
     if (locations.isEmpty()) return
@@ -1858,6 +1859,25 @@ private fun PerspectiveMemberCoverFlow(
     }
 
     val activeMemberLoc = locations[centerIndex % listCount]
+
+    // Selezione esterna (notifica / widget / deep link): porta al centro il
+    // pallino della persona coinvolta scegliendo la copia piu' vicina nel loop.
+    LaunchedEffect(selectMemberId, listCount) {
+        val id = selectMemberId ?: return@LaunchedEffect
+        val memberIndex = locations.indexOfFirst { it.userId == id }
+        if (memberIndex < 0) return@LaunchedEffect
+        val current = centerIndex
+        val base = current - (current % listCount)
+        val target = listOf(
+            base + memberIndex - listCount,
+            base + memberIndex,
+            base + memberIndex + listCount
+        ).filter { it in 0 until totalCount }
+            .minByOrNull { kotlin.math.abs(it - current) } ?: return@LaunchedEffect
+        if (target != current) {
+            coroutineScope.launch { listState.animateScrollToItem(target) }
+        }
+    }
 
     var hasUserScrolled by remember { mutableStateOf(false) }
 

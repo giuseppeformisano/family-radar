@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -22,7 +21,6 @@ import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
-import androidx.glance.LocalSize
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
@@ -37,19 +35,15 @@ import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
-import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
-import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
-import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.example.MainActivity
-import com.example.model.ActivityKind
 import com.example.model.UserLocation
 import com.example.util.ImageUtils
 import kotlinx.coroutines.CoroutineScope
@@ -59,14 +53,8 @@ import kotlinx.coroutines.launch
 /** Widget sulla home: mostra un familiare scelto (luogo, stato, batteria). */
 class MemberWidget : GlanceAppWidget() {
 
-    // Supporta misure piccole: ~1x1, 2x2 e una versione larga.
-    override val sizeMode: SizeMode = SizeMode.Responsive(
-        setOf(
-            DpSize(48.dp, 48.dp),   // 1x1
-            DpSize(120.dp, 70.dp),  // 2x1
-            DpSize(200.dp, 110.dp)  // largo
-        )
-    )
+    // Dimensione fissa (1x2): un unico layout verticale.
+    override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         provideContent {
@@ -105,7 +93,6 @@ class MemberWidgetReceiver : GlanceAppWidgetReceiver() {
 }
 
 // ---- Colori (chiaro / scuro automatico) ----
-private val bgColor = ColorProvider(day = Color(0xFFFFFFFF), night = Color(0xFF1B1C1E))
 private val textPrimary = ColorProvider(day = Color(0xFF1A1C1E), night = Color(0xFFE6E6E6))
 private val textSecondary = ColorProvider(day = Color(0xFF5A5F66), night = Color(0xFFABB1B8))
 private val accent = ColorProvider(day = Color(0xFF3B6FD4), night = Color(0xFF5B8DEF))
@@ -121,10 +108,9 @@ private fun WidgetUi(member: WidgetMember?) {
             putExtra("userId", member.userId)
         }
     }
+    // Sfondo trasparente come richiesto.
     val base = GlanceModifier
         .fillMaxSize()
-        .background(bgColor)
-        .cornerRadius(18.dp)
         .clickable(actionStartActivity(clickIntent))
 
     if (member == null) {
@@ -144,80 +130,34 @@ private fun WidgetUi(member: WidgetMember?) {
         else -> "⚫" to "Offline"
     }
 
-    val width = LocalSize.current.width
-
-    // 1x1: solo avatar con pallino di stato in sovrimpressione.
-    if (width < 110.dp) {
-        Box(modifier = base.padding(4.dp), contentAlignment = Alignment.Center) {
-            Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Avatar(member, 40.dp)
-            }
-            Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
-                Text(dot, style = TextStyle(color = textPrimary, fontSize = 11.sp))
-            }
-        }
-        return
-    }
-
-    // Compatta (2x1): avatar + nome + stato/batteria.
-    if (width < 180.dp) {
-        Column(
-            modifier = base.padding(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Avatar(member, 36.dp)
-            Spacer(GlanceModifier.height(4.dp))
-            Text(
-                member.name,
-                style = TextStyle(color = textPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium),
-                maxLines = 1
-            )
-            Text(
-                "$dot ${member.battery}%",
-                style = TextStyle(color = textSecondary, fontSize = 11.sp),
-                maxLines = 1
-            )
-        }
-        return
-    }
-
-    Column(modifier = base.padding(14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(member, 48.dp)
-            Spacer(GlanceModifier.width(10.dp))
-            Column {
-                Text(
-                    member.name,
-                    style = TextStyle(color = textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold),
-                    maxLines = 1
-                )
-                Text(
-                    whereLabel(member),
-                    style = TextStyle(color = textSecondary, fontSize = 13.sp),
-                    maxLines = 1
-                )
-            }
-        }
-
-        Spacer(GlanceModifier.height(12.dp))
-
-        Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "$dot $status",
-                style = TextStyle(color = textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            )
-            Spacer(GlanceModifier.defaultWeight())
-            Text(
-                "🔋 ${member.battery}%",
-                style = TextStyle(color = textSecondary, fontSize = 13.sp)
-            )
-        }
-
-        Spacer(GlanceModifier.height(4.dp))
+    // Layout fisso verticale (1x2): avatar, nome, posizione, stato, batteria.
+    Column(
+        modifier = base.padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Avatar(member, 44.dp)
+        Spacer(GlanceModifier.height(6.dp))
         Text(
-            lastSeenLabel(elapsed),
-            style = TextStyle(color = textSecondary, fontSize = 11.sp)
+            member.name,
+            style = TextStyle(color = textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold),
+            maxLines = 1
+        )
+        Text(
+            whereLabel(member),
+            style = TextStyle(color = textSecondary, fontSize = 12.sp),
+            maxLines = 2
+        )
+        Spacer(GlanceModifier.height(6.dp))
+        Text(
+            "$dot $status",
+            style = TextStyle(color = textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium),
+            maxLines = 1
+        )
+        Text(
+            "🔋 ${member.battery}%",
+            style = TextStyle(color = textSecondary, fontSize = 12.sp),
+            maxLines = 1
         )
     }
 }
@@ -253,24 +193,9 @@ private fun Avatar(member: WidgetMember, sizeDp: Dp) {
 
 private fun whereLabel(member: WidgetMember): String {
     val place = member.placeName
-    return when {
-        !place.isNullOrBlank() -> place
-        member.activityType == ActivityKind.VEHICLE -> "In viaggio"
-        member.activityType == ActivityKind.BICYCLE -> "In bici"
-        member.activityType == ActivityKind.RUNNING -> "Di corsa"
-        member.activityType == ActivityKind.WALKING -> "A piedi"
-        member.speed * 3.6f > 2f -> "In movimento"
-        else -> "Fuori dai luoghi noti"
-    }
-}
-
-private fun lastSeenLabel(elapsed: Long): String {
-    if (elapsed < 60_000L) return "Aggiornato ora"
-    val min = elapsed / 60_000L
-    if (min < 60) return "Aggiornato $min min fa"
-    val h = min / 60
-    if (h < 24) return "Aggiornato $h h fa"
-    return "Aggiornato ${h / 24} g fa"
+    if (!place.isNullOrBlank()) return "📍 $place"
+    // Fuori dai luoghi noti: coordinate brevi.
+    return String.format(java.util.Locale.US, "📍 %.4f, %.4f", member.latitude, member.longitude)
 }
 
 /** Ritaglio circolare dell'avatar (il widget non ha clip composabile affidabile su tutte le versioni). */

@@ -18,6 +18,8 @@ data class WidgetMember(
     val timestamp: Long,
     val activityType: String,
     val speed: Float,
+    val latitude: Double,
+    val longitude: Double,
     val photoBase64: String?
 )
 
@@ -44,6 +46,8 @@ object WidgetCache {
                 timestamp = o.optLong("t", 0L),
                 activityType = o.optString("a", ""),
                 speed = o.optDouble("s", 0.0).toFloat(),
+                latitude = o.optDouble("la", 0.0),
+                longitude = o.optDouble("lo", 0.0),
                 photoBase64 = o.optString("img").takeIf { it.isNotEmpty() }
             )
         }
@@ -77,6 +81,8 @@ object WidgetCache {
             o.put("t", loc.timestamp)
             o.put("a", loc.activityType)
             o.put("s", loc.speed.toDouble())
+            o.put("la", loc.latitude)
+            o.put("lo", loc.longitude)
             o.put("img", loc.photoBase64 ?: "")
             arr.put(o)
         }

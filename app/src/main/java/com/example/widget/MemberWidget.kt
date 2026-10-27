@@ -62,9 +62,9 @@ class MemberWidget : GlanceAppWidget() {
     // Supporta misure piccole: ~1x1, 2x2 e una versione larga.
     override val sizeMode: SizeMode = SizeMode.Responsive(
         setOf(
-            DpSize(60.dp, 60.dp),
-            DpSize(140.dp, 110.dp),
-            DpSize(250.dp, 110.dp)
+            DpSize(48.dp, 48.dp),   // 1x1
+            DpSize(120.dp, 70.dp),  // 2x1
+            DpSize(200.dp, 110.dp)  // largo
         )
     )
 
@@ -113,11 +113,19 @@ private val accent = ColorProvider(day = Color(0xFF3B6FD4), night = Color(0xFF5B
 @Composable
 private fun WidgetUi(member: WidgetMember?) {
     val context = LocalContext.current
+    // Al tap: apre l'app e centra/segue la persona sulla mappa (deep link MAP + userId).
+    val clickIntent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        if (member != null) {
+            putExtra("destination", "MAP")
+            putExtra("userId", member.userId)
+        }
+    }
     val base = GlanceModifier
         .fillMaxSize()
         .background(bgColor)
         .cornerRadius(18.dp)
-        .clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
+        .clickable(actionStartActivity(clickIntent))
 
     if (member == null) {
         Box(modifier = base.padding(8.dp), contentAlignment = Alignment.Center) {
@@ -136,14 +144,29 @@ private fun WidgetUi(member: WidgetMember?) {
         else -> "⚫" to "Offline"
     }
 
-    val compact = LocalSize.current.width < 150.dp
-    if (compact) {
+    val width = LocalSize.current.width
+
+    // 1x1: solo avatar con pallino di stato in sovrimpressione.
+    if (width < 110.dp) {
+        Box(modifier = base.padding(4.dp), contentAlignment = Alignment.Center) {
+            Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Avatar(member, 40.dp)
+            }
+            Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
+                Text(dot, style = TextStyle(color = textPrimary, fontSize = 11.sp))
+            }
+        }
+        return
+    }
+
+    // Compatta (2x1): avatar + nome + stato/batteria.
+    if (width < 180.dp) {
         Column(
             modifier = base.padding(6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Avatar(member, 40.dp)
+            Avatar(member, 36.dp)
             Spacer(GlanceModifier.height(4.dp))
             Text(
                 member.name,

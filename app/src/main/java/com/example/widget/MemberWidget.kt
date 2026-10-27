@@ -1,6 +1,7 @@
 package com.example.widget
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -16,6 +17,7 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalContext
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
@@ -23,8 +25,9 @@ import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
-import androidx.glance.appwidget.unit.ColorProvider
+import androidx.glance.appwidget.updateAll
 import androidx.glance.background
+import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
@@ -91,13 +94,14 @@ private val accent = ColorProvider(day = Color(0xFF3B6FD4), night = Color(0xFF5B
 
 @Composable
 private fun WidgetUi(member: WidgetMember?) {
+    val context = LocalContext.current
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
             .background(bgColor)
             .cornerRadius(20.dp)
             .padding(14.dp)
-            .clickable(actionStartActivity<MainActivity>())
+            .clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
     ) {
         if (member == null) {
             Box(

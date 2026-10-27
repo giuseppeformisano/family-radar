@@ -10,7 +10,7 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.69.0-beta"
+    const val VERSION = "0.69.1-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(

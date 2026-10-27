@@ -208,13 +208,20 @@ private fun SmallUi(member: WidgetMember?) {
         else -> "⚫"
     }
 
+    val shortPlace = member.placeName?.takeIf { it.isNotBlank() } ?: "In giro"
+
     Column(
         modifier = base.padding(4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Avatar(member, 34.dp)
+        Avatar(member, 30.dp)
         Spacer(GlanceModifier.height(2.dp))
+        Text(
+            "📍 $shortPlace",
+            style = TextStyle(color = textSecondary, fontSize = 9.sp),
+            maxLines = 1
+        )
         Text(
             "$dot ${member.battery}%",
             style = TextStyle(color = textPrimary, fontSize = 10.sp, fontWeight = FontWeight.Medium),
@@ -225,9 +232,14 @@ private fun SmallUi(member: WidgetMember?) {
 
 @Composable
 private fun Avatar(member: WidgetMember, sizeDp: Dp) {
+    val context = LocalContext.current
+    // Riduciamo l'immagine alla dimensione effettiva: i widget hanno un tetto di
+    // memoria per le immagini e una foto a piena risoluzione verrebbe scartata.
+    val targetPx = (sizeDp.value * context.resources.displayMetrics.density)
+        .toInt().coerceIn(48, 240)
     val bmp = member.photoBase64
         ?.let { ImageUtils.base64ToBitmap(it) }
-        ?.let { circularBitmap(it) }
+        ?.let { circularBitmap(it, targetPx) }
     if (bmp != null) {
         Image(
             provider = ImageProvider(bmp),
@@ -259,17 +271,21 @@ private fun whereLabel(member: WidgetMember): String {
     return String.format(java.util.Locale.US, "📍 %.4f, %.4f", member.latitude, member.longitude)
 }
 
-/** Ritaglio circolare dell'avatar (il widget non ha clip composabile affidabile su tutte le versioni). */
-private fun circularBitmap(src: Bitmap): Bitmap {
-    val size = minOf(src.width, src.height)
-    val left = (src.width - size) / 2
-    val top = (src.height - size) / 2
-    val square = Rect(left, top, left + size, top + size)
-    val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+/**
+ * Ritaglio circolare dell'avatar, ridimensionato a [targetPx] (il widget non ha
+ * clip composabile affidabile su tutte le versioni e ha un tetto di memoria per
+ * le immagini: una bitmap grande verrebbe scartata e l'avatar resterebbe vuoto).
+ */
+private fun circularBitmap(src: Bitmap, targetPx: Int): Bitmap {
+    val side = minOf(src.width, src.height)
+    val left = (src.width - side) / 2
+    val top = (src.height - side) / 2
+    val square = Rect(left, top, left + side, top + side)
+    val out = Bitmap.createBitmap(targetPx, targetPx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(out)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    val dst = RectF(0f, 0f, size.toFloat(), size.toFloat())
-    canvas.drawRoundRect(dst, size / 2f, size / 2f, paint)
+    val dst = RectF(0f, 0f, targetPx.toFloat(), targetPx.toFloat())
+    canvas.drawRoundRect(dst, targetPx / 2f, targetPx / 2f, paint)
     paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
     canvas.drawBitmap(src, square, dst, paint)
     return out

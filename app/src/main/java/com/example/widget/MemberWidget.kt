@@ -81,7 +81,9 @@ class MemberWidget : GlanceAppWidget() {
             if (!changed) return
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    MemberWidget().updateAll(context.applicationContext)
+                    val app = context.applicationContext
+                    MemberWidget().updateAll(app)
+                    MemberWidgetSmall().updateAll(app)
                 } catch (e: Exception) {
                     // ignora: widget non ancora posizionato o aggiornamento non critico
                 }
@@ -92,6 +94,24 @@ class MemberWidget : GlanceAppWidget() {
 
 class MemberWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = MemberWidget()
+}
+
+/** Variante 1x1 compatta (avatar + stato + batteria). Stesso stato per-widget. */
+class MemberWidgetSmall : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Exact
+
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        provideContent {
+            val prefs = currentState<Preferences>()
+            val userId = prefs[MemberWidget.KEY_USER_ID]
+            val member = userId?.let { WidgetCache.findMember(context, it) }
+            SmallUi(member)
+        }
+    }
+}
+
+class MemberWidgetSmallReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = MemberWidgetSmall()
 }
 
 // ---- Colori (chiaro / scuro automatico) ----
@@ -157,6 +177,49 @@ private fun WidgetUi(member: WidgetMember?) {
                 maxLines = 1
             )
         }
+    }
+}
+
+@Composable
+private fun SmallUi(member: WidgetMember?) {
+    val context = LocalContext.current
+    val clickIntent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        if (member != null) {
+            putExtra("destination", "MAP")
+            putExtra("userId", member.userId)
+        }
+    }
+    val base = GlanceModifier
+        .fillMaxSize()
+        .clickable(actionStartActivity(clickIntent))
+
+    if (member == null) {
+        Box(modifier = base.padding(4.dp), contentAlignment = Alignment.Center) {
+            Text("—", style = TextStyle(color = textSecondary, fontSize = 12.sp))
+        }
+        return
+    }
+
+    val elapsed = System.currentTimeMillis() - member.timestamp
+    val dot = when {
+        elapsed < 12 * 60_000L -> "🟢"
+        elapsed < 60 * 60_000L -> "🟠"
+        else -> "⚫"
+    }
+
+    Column(
+        modifier = base.padding(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Avatar(member, 34.dp)
+        Spacer(GlanceModifier.height(2.dp))
+        Text(
+            "$dot ${member.battery}%",
+            style = TextStyle(color = textPrimary, fontSize = 10.sp, fontWeight = FontWeight.Medium),
+            maxLines = 1
+        )
     }
 }
 

@@ -16,8 +16,8 @@ android {
     applicationId = "com.formisano.familyradar"
     minSdk = 24
     targetSdk = 36
-    versionCode = 249
-    versionName = "0.68.1-beta"
+    versionCode = 250
+    versionName = "0.69.0-beta"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -121,6 +121,7 @@ dependencies {
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.androidx.work.runtime.ktx)
+  implementation(libs.androidx.glance.appwidget)
   implementation(libs.logging.interceptor)
   implementation(libs.okhttp)
   testImplementation(libs.androidx.compose.ui.test.junit4)

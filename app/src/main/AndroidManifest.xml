@@ -53,6 +53,27 @@
             </intent-filter>
         </activity>
 
+        <!-- Widget home: mostra un familiare scelto -->
+        <receiver
+            android:name=".widget.MemberWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/member_widget_info" />
+        </receiver>
+
+        <activity
+            android:name=".widget.MemberWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.MyApplication">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".service.LocationTrackingService"
             android:enabled="true"

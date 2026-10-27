@@ -2209,6 +2209,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                             }
                         }
                         _currentGroupLocations.value = list
+                        com.example.widget.MemberWidget.publish(context, list)
                     }
                 }
 
@@ -3048,6 +3049,7 @@ class FirebaseRepository private constructor(private val context: Context) {
             currentList.add(enrichedLocation)
         }
         _currentGroupLocations.value = currentList
+        com.example.widget.MemberWidget.publish(context, currentList)
 
         // Update Firestore
         try {

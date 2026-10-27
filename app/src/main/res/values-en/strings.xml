@@ -1,4 +1,5 @@
 <resources>
+    <string name="widget_description">A family member\'s location and status</string>
 
     <!-- English translation. Keep the keys in sync with res/values/strings.xml:
          a missing key silently falls back to Italian.

@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.70.4-beta"
+    const val VERSION = "0.70.5-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Controlli mappa raggruppati in un'unica barra flottante arrotondata (Material 3 Expressive)."
+        "⚙️ Alzato compileSdk a 37, richiesto dalle nuove librerie grafiche."
     )
 }

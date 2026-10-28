@@ -10,14 +10,14 @@ plugins {
 
 android {
   namespace = "com.example"
-  compileSdk { version = release(36) { minorApiLevel = 1 } }
+  compileSdk { version = release(37) }
 
   defaultConfig {
     applicationId = "com.formisano.familyradar"
     minSdk = 24
     targetSdk = 36
-    versionCode = 268
-    versionName = "0.70.4-beta"
+    versionCode = 269
+    versionName = "0.70.5-beta"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

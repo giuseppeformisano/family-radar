@@ -35,6 +35,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size as GeometrySize
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -1926,6 +1927,21 @@ private fun PerspectiveMemberCoverFlow(
         } else 1f
     }
 
+    // Variante CON SEGNO: distanza dal centro mantenendo la direzione (sinistra/destra),
+    // usata per la rotazione 3D cover-flow (gli avatar laterali ruotano verso il centro).
+    val signedFractionOf: (Int) -> Float = { idx ->
+        val info = listState.layoutInfo
+        val ii = info.visibleItemsInfo.firstOrNull { it.index == idx }
+        if (ii != null && slotPx > 0f) {
+            val vc = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+            val ic = ii.offset + ii.size / 2f
+            ((ic - vc) / slotPx).coerceIn(-2.5f, 2.5f)
+        } else 2.5f
+    }
+
+    // Squircle (M3 Expressive): angolo arrotondato generoso, stesso per avatar e anello.
+    val memberShape = RoundedCornerShape(32)
+
     val sage = RadarSemantic.Online
     val followRingColor = MaterialTheme.colorScheme.primary
 
@@ -1958,24 +1974,32 @@ private fun PerspectiveMemberCoverFlow(
                         .size(itemSlot)
                         // Trasformazione CONTINUA al draw: niente state mutato per
                         // frazione di pixel, zero jitter di ricomposizione.
+                        // Cover-flow 3D (M3 Expressive): prospettiva + scala/opacita'
+                        // continue, lette dallo scroll al draw → movimento fluido a
+                        // refresh pieno, nessuna ricomposizione per frazione di pixel.
                         .graphicsLayer {
-                            val t = centerFractionOf(index)
-                            val s = 1.0f + (0.62f - 1.0f) * t  
+                            val sf = signedFractionOf(index)
+                            val t = kotlin.math.abs(sf).coerceIn(0f, 1f)
+                            val s = 1.0f + (0.58f - 1.0f) * t
                             scaleX = s
                             scaleY = s
-                            alpha = 1f + (0.5f - 1f) * t          // centro 1.0 → laterale 0.5
+                            alpha = 1f + (0.42f - 1f) * t          // centro 1.0 → laterale 0.42
+                            cameraDistance = 20f
+                            rotationY = sf.coerceIn(-1.6f, 1.6f) * -20f
+                            shadowElevation = (1f - t) * 10f
+                            shape = memberShape
                         }
-                        // Anello verde salvia sull'elemento attivo, intensita'
-                        // continua = (1 - t). RIENTRATO dentro il bordo: non disegna
-                        // nulla oltre lo slot, così la LazyRow non lo ritaglia a quadrato.
+                        // Anello di stato squircle sull'elemento attivo, intensita'
+                        // continua = (1 - t). Rientrato nel bordo per non uscire dallo slot.
                         .drawBehind {
                             val a = (1f - centerFractionOf(index)).coerceIn(0f, 1f)
                             if (a > 0.01f) {
-                                val stroke = 2.dp.toPx()
-                                drawCircle(
+                                val stroke = 2.5.dp.toPx()
+                                drawRoundRect(
                                     color = sage,
-                                    radius = size.minDimension / 2f - stroke / 2f,
-                                    center = Offset(size.width / 2f, size.height / 2f),
+                                    topLeft = Offset(stroke / 2f, stroke / 2f),
+                                    size = GeometrySize(size.width - stroke, size.height - stroke),
+                                    cornerRadius = CornerRadius(size.minDimension * 0.30f),
                                     style = Stroke(width = stroke),
                                     alpha = a
                                 )
@@ -1983,10 +2007,11 @@ private fun PerspectiveMemberCoverFlow(
                             // Anello blu primario per la persona seguita.
                             if (loc.userId == followedUserId) {
                                 val stroke = 3.dp.toPx()
-                                drawCircle(
+                                drawRoundRect(
                                     color = followRingColor,
-                                    radius = size.minDimension / 2f - stroke / 2f,
-                                    center = Offset(size.width / 2f, size.height / 2f),
+                                    topLeft = Offset(stroke / 2f, stroke / 2f),
+                                    size = GeometrySize(size.width - stroke, size.height - stroke),
+                                    cornerRadius = CornerRadius(size.minDimension * 0.30f),
                                     style = Stroke(width = stroke)
                                 )
                             }
@@ -2005,9 +2030,9 @@ private fun PerspectiveMemberCoverFlow(
                     Box(
                         modifier = Modifier
                             .size(itemSlot)
-                            .clip(CircleShape)
+                            .clip(memberShape)
                             .background(MaterialTheme.colorScheme.surface)
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape),
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, memberShape),
                         contentAlignment = Alignment.Center
                     ) {
                         if (bmp != null) {

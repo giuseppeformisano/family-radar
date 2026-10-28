@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.69.13-beta"
+    const val VERSION = "0.70.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧹 Pulizia interna: rimosse librerie e codice non più usati. Nessun cambiamento visibile."
+        "✨ Carosello dei familiari rinnovato: effetto 3D fluido, avatar arrotondati (squircle) e anello di stato."
     )
 }

@@ -1,5 +1,8 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +25,10 @@ import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.VerticalFloatingToolbar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -613,28 +619,36 @@ fun MapLibreMapView(
             }
         }
 
-        // Colonna controlli a destra: toggle layer + fit gruppo + zoom.
-        Column(
+        // Controlli a destra (Material 3 Expressive): un'unica barra flottante
+        // squircle. "Livelli" espande i tre toggle (membri/foto/luoghi) nella
+        // stessa barra; seguono centra-gruppo, vista 3D e zoom.
+        VerticalFloatingToolbar(
+            expanded = true,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .padding(end = 12.dp),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(end = 12.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            IconToggleButton(
+                checked = layerMenuOpen,
+                onCheckedChange = { layerMenuOpen = it }
             ) {
-                if (layerMenuOpen) {
-                    CtrlButton(Icons.Default.People, if (showMembers) Color(0xFF6366F1) else Color(0xCC18181B)) { showMembers = !showMembers }
-                    CtrlButton(Icons.Default.PhotoCamera, if (showSnapshots) Color(0xFFEA580C) else Color(0xCC18181B)) { showSnapshots = !showSnapshots }
-                    CtrlButton(Icons.Default.Place, if (showPlaces) Color(0xFF10B981) else Color(0xCC18181B)) { showPlaces = !showPlaces }
-                }
-                CtrlButton(Icons.Default.Layers, if (layerMenuOpen) Color(0xFF6366F1) else Color(0xCC18181B)) { layerMenuOpen = !layerMenuOpen }
+                Icon(Icons.Default.Layers, contentDescription = "Livelli")
             }
-
-            CtrlButton(Icons.Default.Group, Color(0xCC18181B)) {
-                val map = mapRef ?: return@CtrlButton
+            AnimatedVisibility(visible = layerMenuOpen) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconToggleButton(checked = showMembers, onCheckedChange = { showMembers = it }) {
+                        Icon(Icons.Default.People, contentDescription = "Membri")
+                    }
+                    IconToggleButton(checked = showSnapshots, onCheckedChange = { showSnapshots = it }) {
+                        Icon(Icons.Default.PhotoCamera, contentDescription = "Foto")
+                    }
+                    IconToggleButton(checked = showPlaces, onCheckedChange = { showPlaces = it }) {
+                        Icon(Icons.Default.Place, contentDescription = "Luoghi")
+                    }
+                }
+            }
+            IconButton(onClick = {
+                val map = mapRef ?: return@IconButton
                 val pts = currentLocations.filter { it.latitude != 0.0 || it.longitude != 0.0 }
                     .map { org.maplibre.android.geometry.LatLng(it.latitude, it.longitude) }
                 if (pts.size == 1) {
@@ -643,37 +657,18 @@ fun MapLibreMapView(
                     val b = org.maplibre.android.geometry.LatLngBounds.Builder().includes(pts).build()
                     map.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.newLatLngBounds(b, 120))
                 }
+            }) {
+                Icon(Icons.Default.Group, contentDescription = "Centra gruppo")
             }
-            // Pulsante 3D/2D: sempre visibile, indipendente dall'inseguimento.
-            CtrlButton(
-                Icons.Default.Navigation,
-                if (followCam) Color(0xFF6366F1) else Color(0xCC18181B)
-            ) { currentOnFollowCamChange(!followCam) }
-            CtrlButton(Icons.Default.Add, Color(0xCC18181B)) {
-                mapRef?.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.zoomIn())
+            IconToggleButton(checked = followCam, onCheckedChange = { currentOnFollowCamChange(it) }) {
+                Icon(Icons.Default.Navigation, contentDescription = "Vista 3D")
             }
-            CtrlButton(Icons.Default.Remove, Color(0xCC18181B)) {
-                mapRef?.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.zoomOut())
+            IconButton(onClick = { mapRef?.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.zoomIn()) }) {
+                Icon(Icons.Default.Add, contentDescription = "Zoom avanti")
             }
-        }
-    }
-}
-
-@Composable
-private fun CtrlButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    color: Color,
-    onClick: () -> Unit
-) {
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = color,
-        border = BorderStroke(1.dp, Color(0x1F71717A)),
-        modifier = Modifier.size(48.dp)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+            IconButton(onClick = { mapRef?.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.zoomOut()) }) {
+                Icon(Icons.Default.Remove, contentDescription = "Zoom indietro")
+            }
         }
     }
 }

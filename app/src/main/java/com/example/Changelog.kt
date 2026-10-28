@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.0-beta"
+    const val VERSION = "0.71.1-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "⬇️ Nuova schermata di aggiornamento in-app: scarica la nuova versione con barra di avanzamento e installa, senza passare dalle notifiche."
+        "✨ Anche i controlli a destra della mappa ora in barra flottante arrotondata; \"Livelli\" si espande con membri/foto/luoghi."
     )
 }

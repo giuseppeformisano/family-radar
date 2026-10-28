@@ -50,9 +50,9 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.ThemePreferences
 import com.example.ui.theme.RadarDark
 import androidx.compose.ui.graphics.Color
+import com.example.ui.components.UpdateBanner
 import com.example.util.AppUpdater
 import com.example.util.CheckResult
-import com.example.util.UpdateInfo
 
 enum class AppScreen {
     AUTH,
@@ -165,7 +165,6 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
     val isChoosingGroup by repository.isChoosingGroup.collectAsState()
 
     var currentScreen by remember { mutableStateOf(AppScreen.MAIN_RADAR) }
-    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
     var showChangelog by remember { mutableStateOf(false) }
     // Flag di sessione: true quando l'utente ha scelto esplicitamente un gruppo
     // dalla GroupSelectScreen. Resettato al logout. Finché è false e ci sono più
@@ -250,8 +249,7 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
             when (val result = AppUpdater.checkDetailed()) {
                 is CheckResult.Available -> {
                     if (!AppUpdater.isVersionDismissed(context, result.info.versionCode)) {
-                        updateInfo = result.info
-                        AppUpdater.notifyAvailable(context, result.info)
+                        AppUpdater.present(result.info)
                     }
                     return@LaunchedEffect
                 }
@@ -400,66 +398,7 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
         }
     }
 
-    updateInfo?.let { info ->
-        androidx.compose.ui.window.Dialog(onDismissRequest = { updateInfo = null }) {
-            androidx.compose.material3.Card(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
-                colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = RadarDark.Bg),
-                border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.CardBorder)
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(RadarDark.AccentLight.copy(alpha = 0.15f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.SystemUpdate,
-                            contentDescription = null,
-                            tint = RadarDark.AccentLight,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                    Text(
-                        text = "È disponibile la versione ${info.versionName}.\nScaricala e installala ora.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = RadarDark.TextMuted,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(
-                            onClick = {
-                                context.getSharedPreferences("family_radar_settings_prefs", android.content.Context.MODE_PRIVATE)
-                                    .edit().putInt("dismissed_update_version_code", info.versionCode).apply()
-                                updateInfo = null
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, RadarDark.SurfaceBorder),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = RadarDark.TextPrimary)
-                        ) { Text("Dopo") }
-                        Button(
-                            onClick = {
-                                AppUpdater.downloadAndInstall(context, info.apkUrl)
-                                updateInfo = null
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = RadarDark.Accent, contentColor = Color.White)
-                        ) { Text("Aggiorna") }
-                    }
-                }
-            }
-        }
-    }
-
+    Box(modifier = Modifier.fillMaxSize()) {
     Crossfade(targetState = currentScreen, label = "screen_crossfade") { screen ->
         when (screen) {
             AppScreen.AUTH -> {
@@ -499,6 +438,16 @@ fun FamilyRadarApp(repository: FirebaseRepository) {
                 )
             }
         }
+    }
+
+    val bannerUpdate by AppUpdater.availableUpdate.collectAsState()
+    val bannerProgress by AppUpdater.downloadProgress.collectAsState()
+    UpdateBanner(
+        update = bannerUpdate,
+        downloadProgress = bannerProgress,
+        onInstall = { AppUpdater.downloadAndInstallInApp(context) },
+        onDismiss = { AppUpdater.dismiss(context) }
+    )
     }
 }
 

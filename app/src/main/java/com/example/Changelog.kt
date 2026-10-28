@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.70.6-beta"
+    const val VERSION = "0.71.0-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "⚙️ Alzato compileSdk a 37 e nuovi controlli mappa (barra flottante Material 3 Expressive)."
+        "⬇️ Nuova schermata di aggiornamento in-app: scarica la nuova versione con barra di avanzamento e installa, senza passare dalle notifiche."
     )
 }

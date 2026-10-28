@@ -15,6 +15,9 @@ import com.example.ui.theme.LanguagePreferences
 import com.example.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -53,6 +56,104 @@ object AppUpdater {
         .readTimeout(0, TimeUnit.SECONDS)
         .callTimeout(0, TimeUnit.SECONDS)
         .build()
+
+    // --- Stato in-app per la schermata di aggiornamento (banner Compose) ---
+    private val _availableUpdate = MutableStateFlow<UpdateInfo?>(null)
+    val availableUpdate: StateFlow<UpdateInfo?> = _availableUpdate.asStateFlow()
+
+    /** Percentuale 0..100 mentre scarica, null quando non c'è download in corso. */
+    private val _downloadProgress = MutableStateFlow<Int?>(null)
+    val downloadProgress: StateFlow<Int?> = _downloadProgress.asStateFlow()
+
+    private const val PREFS = "family_radar_settings_prefs"
+
+    /** Mostra il banner in-app per [info] (chiamato dal controllo all'avvio). */
+    fun present(info: UpdateInfo) {
+        _availableUpdate.value = info
+    }
+
+    /** "Dopo": ricorda la versione ignorata e nasconde il banner. */
+    fun dismiss(context: Context) {
+        _availableUpdate.value?.versionCode?.let { vc ->
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putInt(PREF_DISMISSED_VERSION, vc).apply()
+        }
+        _availableUpdate.value = null
+    }
+
+    /** "Aggiorna": scarica con avanzamento in-app e lancia l'installer. */
+    fun downloadAndInstallInApp(context: Context) {
+        val apkUrl = _availableUpdate.value?.apkUrl ?: return
+
+        // Serve il permesso "installa app sconosciute": se manca, apri le impostazioni.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !context.packageManager.canRequestPackageInstalls()
+        ) {
+            runCatching {
+                context.startActivity(
+                    Intent(
+                        android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:${context.packageName}")
+                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
+            android.widget.Toast.makeText(
+                context,
+                res(context).getString(R.string.update_allow_unknown_sources),
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        _downloadProgress.value = 0
+        CoroutineScope(Dispatchers.IO).launch {
+            val file = downloadWithProgress(context, apkUrl) { pct ->
+                _downloadProgress.value = pct
+            }
+            if (file != null) {
+                _downloadProgress.value = null
+                _availableUpdate.value = null
+                withContext(Dispatchers.Main) { launchInstaller(context, file) }
+            } else {
+                _downloadProgress.value = null
+                showErrorToast(context, res(context).getString(R.string.update_failed_empty_response))
+            }
+        }
+    }
+
+    /** Scarica l'APK riportando la percentuale via [onProgress]. Ritorna il file o null. */
+    private fun downloadWithProgress(
+        context: Context,
+        apkUrl: String,
+        onProgress: (Int) -> Unit
+    ): File? {
+        return try {
+            context.cacheDir.listFiles { f -> f.name.startsWith("family-radar-update") }
+                ?.forEach { runCatching { it.delete() } }
+
+            val dest = File(context.cacheDir, "family-radar-update-${System.currentTimeMillis()}.apk")
+            val response = downloadClient.newCall(Request.Builder().url(apkUrl).build()).execute()
+            val body = response.body ?: return null
+            val total = body.contentLength()
+            var downloaded = 0L
+
+            dest.outputStream().use { out ->
+                body.byteStream().use { input ->
+                    val buf = ByteArray(8 * 1024)
+                    var n: Int
+                    while (input.read(buf).also { n = it } != -1) {
+                        out.write(buf, 0, n)
+                        downloaded += n
+                        if (total > 0) onProgress((downloaded * 100 / total).toInt())
+                    }
+                }
+            }
+            if (!dest.exists() || dest.length() == 0L) null else dest
+        } catch (e: Exception) {
+            Log.w("AppUpdater", "downloadWithProgress errore: ${e.message}")
+            null
+        }
+    }
 
     /** Ritorna UpdateInfo se c'e' una versione piu' recente, null altrimenti. */
     suspend fun check(): UpdateInfo? = checkDetailed().let {

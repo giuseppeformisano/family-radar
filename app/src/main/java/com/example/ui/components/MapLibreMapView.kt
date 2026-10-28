@@ -681,11 +681,11 @@ fun MapLibreMapView(
                     val onToggle: (Boolean) -> Unit
                 )
                 val fans = listOf(
-                    Fan(Icons.Default.People, showMembers, 22f, "Membri") { showMembers = it },
-                    Fan(Icons.Default.PhotoCamera, showSnapshots, 50f, "Foto") { showSnapshots = it },
-                    Fan(Icons.Default.Place, showPlaces, 78f, "Luoghi") { showPlaces = it }
+                    Fan(Icons.Default.People, showMembers, 25f, "Membri") { showMembers = it },
+                    Fan(Icons.Default.PhotoCamera, showSnapshots, 45f, "Foto") { showSnapshots = it },
+                    Fan(Icons.Default.Place, showPlaces, 65f, "Luoghi") { showPlaces = it }
                 )
-                val radius = 92f
+                val radius = 60f
                 fans.forEachIndexed { i, f ->
                     val p = ((fanProgress * 1.35f) - i * 0.18f).coerceIn(0f, 1f)
                     val rad = Math.toRadians(f.angle.toDouble())
@@ -693,13 +693,13 @@ fun MapLibreMapView(
                     val dy = (-kotlin.math.sin(rad) * radius * p).toFloat()
                     Surface(
                         onClick = { f.onToggle(!f.checked) },
-                        shape = RoundedCornerShape(30),
+                        shape = CircleShape,
                         color = if (f.checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .offset(dx.dp, dy.dp)
-                            .size(46.dp)
+                            .size(48.dp)
                             .graphicsLayer { alpha = p; scaleX = p; scaleY = p }
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -715,11 +715,11 @@ fun MapLibreMapView(
             }
             Surface(
                 onClick = { layerMenuOpen = !layerMenuOpen },
-                shape = RoundedCornerShape(30),
+                shape = CircleShape,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .size(52.dp)
+                    .size(56.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(

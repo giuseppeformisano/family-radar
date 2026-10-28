@@ -65,6 +65,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -804,15 +805,21 @@ fun MainRadarScreen(
 
     // SCHERMATE E PANNELLI FULL-SCREEN SEPARATI (quando activeFullPanel != null)
     activeFullPanel?.let { currentPanel ->
+        // Il tasto Indietro (di sistema o gesture) torna alla mappa, non esce dall'app.
+        BackHandler { activeFullPanel = null }
         Surface(
-            modifier = Modifier.fillMaxSize(),
+            // Lascia scoperta in basso la pulsantiera (dock), che resta visibile e
+            // toccabile sotto i pannelli Chat/Luoghi/Membri.
+            modifier = Modifier
+                .fillMaxSize()
+                .navigationBarsPadding()
+                .padding(bottom = 76.dp),
             color = MaterialTheme.colorScheme.background
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .statusBarsPadding()
-                    .navigationBarsPadding()
             ) {
                 // Intestazione con pulsante di chiusura/indietro
                 Row(

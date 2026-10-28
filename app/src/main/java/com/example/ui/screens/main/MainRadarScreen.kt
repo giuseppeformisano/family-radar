@@ -1486,7 +1486,6 @@ private fun MapTopBar(
     }
 }
 
-@Composable
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun MapActionRail(

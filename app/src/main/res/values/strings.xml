@@ -65,10 +65,6 @@
     <string name="notif_join_request_title">Nuova richiesta di adesione</string>
     <string name="notif_join_request_body">%1$s ha chiesto di entrare nel gruppo</string>
     <string name="notif_generic_title">Family Radar</string>
-    <string name="notif_trip_start_title">Viaggio iniziato</string>
-    <string name="notif_trip_start_body">%1$s ha iniziato un viaggio</string>
-    <string name="notif_trip_end_title">Viaggio concluso</string>
-    <string name="notif_trip_end_body">%1$s ha concluso un viaggio</string>
     <string name="notif_movement_title">In movimento</string>
     <string name="notif_movement_body">%1$s si sta spostando %2$s</string>
     <string name="notif_movement_body_generic">%1$s si sta spostando</string>
@@ -101,7 +97,6 @@
     <string name="err_not_authenticated">Non sei autenticato</string>
     <string name="err_no_group_selected">Nessun gruppo selezionato</string>
     <string name="err_place_without_id">Luogo senza identificativo</string>
-    <string name="err_no_active_trip">Nessun viaggio attivo</string>
     <string name="err_firestore_unavailable">Database non raggiungibile</string>
     <string name="err_invalid_join_code">Codice invito non valido o gruppo inesistente</string>
     <string name="err_only_admin_can_delete_group">Solo un amministratore puo eliminare il gruppo</string>
@@ -210,7 +205,6 @@
     <string name="tab_members">Membri</string>
     <string name="tab_chat">Chat</string>
     <string name="tab_places">Luoghi</string>
-    <string name="tab_trips">Viaggi</string>
     <string name="tab_settings">Impostazioni</string>
     <string name="unit_seconds">Secondi</string>
     <string name="unit_minutes">Minuti</string>
@@ -222,7 +216,6 @@
     <string name="toast_camera_error">Impossibile aprire fotocamera: %1$s</string>
     <string name="toast_request_approved">Richiesta approvata</string>
     <string name="toast_request_rejected">Richiesta rifiutata</string>
-    <string name="toast_trip_saved">Viaggio salvato</string>
     <string name="toast_battery_saver_on">Risparmio energia attivo</string>
     <string name="toast_gps_precision_restored">Precisione GPS ripristinata</string>
     <string name="toast_bg_tracking_on">Tracciamento in background attivato</string>
@@ -239,8 +232,6 @@
     <string name="toast_group_updated">Gruppo aggiornato</string>
     <string name="toast_group_deleted">Gruppo eliminato</string>
     <string name="toast_sos_sent">Allerta SOS inviata al gruppo</string>
-    <string name="toast_trip_auto_on">Family Radar registra i viaggi in automatico</string>
-    <string name="toast_trip_auto_off">Rilevamento automatico disattivato</string>
     <string name="toast_place_deleted">Luogo %1$s eliminato</string>
     <string name="toast_place_added">Luogo %1$s aggiunto</string>
     <string name="toast_place_updated">Luogo %1$s aggiornato</string>
@@ -251,8 +242,6 @@
     <string name="action_send_sos">Invia SOS</string>
     <string name="action_follow_off">Disattiva inseguimento</string>
     <string name="action_follow_on_label">Attiva inseguimento</string>
-    <string name="action_stop_trip">Stop viaggio</string>
-    <string name="action_record_trip">Registra viaggio</string>
     <string name="action_add_place">Aggiungi luogo</string>
     <string name="action_take_snapshot">Scatta istantanea</string>
     <string name="label_you">Tu</string>
@@ -354,8 +343,6 @@
     <string name="map_marker_battery_info">Batteria: %1$d%% • %2$s</string>
     <string name="map_marker_speed_suffix"> • %1$d km/h</string>
     <string name="map_marker_place_zone">Zona: %1$s (%2$dm)</string>
-    <string name="map_trip_start">Partenza</string>
-    <string name="map_trip_end">Arrivo</string>
     <string name="map_time_just_now">Adesso</string>
     <string name="map_time_seconds_ago">%1$ds fa</string>
     <string name="map_time_minutes_ago">%1$dm fa</string>
@@ -402,8 +389,6 @@
     <string name="place_cat_other">Altro</string>
 
     <!-- Sorgente viaggio -->
-    <string name="trip_source_manual">Manuale</string>
-    <string name="trip_source_auto">Automatico</string>
 
     <!-- Modalita di spostamento -->
     <string name="trip_activity_vehicle">In auto</string>
@@ -464,12 +449,6 @@
     <string name="interval_seconds">%1$d secondi</string>
 
     <!-- Impostazioni: Viaggi -->
-    <string name="settings_section_trips">Viaggi</string>
-    <string name="settings_trips_subtitle">Registrazione dei tuoi spostamenti</string>
-    <string name="settings_auto_trip_title">Rileva i viaggi da solo</string>
-    <string name="settings_auto_trip_desc">Si avvia da solo. Consuma piu batteria.</string>
-    <string name="settings_auto_trip_shared_title">Condividi i viaggi automatici</string>
-    <string name="settings_auto_trip_shared_desc">Se lo spegni, li vedi solo tu</string>
 
     <!-- Impostazioni: Gruppo -->
     <string name="label_active_group">GRUPPO ATTIVO</string>
@@ -544,25 +523,7 @@
     <string name="label_you_follow">te</string>
 
     <!-- Pannello Viaggi -->
-    <string name="trip_recording">Registrazione in corso</string>
     <string name="action_stop_and_save">Termina e salva</string>
-    <string name="action_start_trip">Inizia viaggio</string>
-    <string name="empty_trips_title">Nessun viaggio</string>
-    <string name="empty_trips_body">I viaggi registrati appariranno qui</string>
-    <string name="trip_badge_live">IN CORSO</string>
-    <string name="trip_badge_private">PRIVATO</string>
-    <string name="trip_title_of">Viaggio di %1$s</string>
-    <string name="trip_stat_distance">Distanza</string>
-    <string name="trip_stat_duration">Durata</string>
-    <string name="trip_stat_avg_speed">Media</string>
-    <string name="trip_stat_max_speed">Massima</string>
-    <string name="trip_detail_departure">Partenza</string>
-    <string name="trip_detail_arrival">Arrivo</string>
-    <string name="trip_detail_stopped">Tempo fermo</string>
-    <string name="trip_detail_stopped_value">%1$d min</string>
-    <string name="trip_detail_activity">Spostamento</string>
-    <string name="trip_detail_source">Registrazione</string>
-    <string name="trip_detail_by">Da</string>
     <string name="action_remove_from_map">Togli dalla mappa</string>
     <string name="time_short_minutes_ago">%1$d min fa</string>
 

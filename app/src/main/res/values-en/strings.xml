@@ -48,10 +48,6 @@
     <string name="notif_join_request_title">New join request</string>
     <string name="notif_join_request_body">%1$s asked to join the group</string>
     <string name="notif_generic_title">Family Radar</string>
-    <string name="notif_trip_start_title">Trip started</string>
-    <string name="notif_trip_start_body">%1$s started a trip</string>
-    <string name="notif_trip_end_title">Trip ended</string>
-    <string name="notif_trip_end_body">%1$s ended a trip</string>
     <string name="notif_movement_title">On the move</string>
     <string name="notif_movement_body">%1$s is on the move %2$s</string>
     <string name="notif_movement_body_generic">%1$s is on the move</string>
@@ -84,7 +80,6 @@
     <string name="err_not_authenticated">You are not signed in</string>
     <string name="err_no_group_selected">No group selected</string>
     <string name="err_place_without_id">Place without an identifier</string>
-    <string name="err_no_active_trip">No active trip</string>
     <string name="err_firestore_unavailable">Database unreachable</string>
     <string name="err_invalid_join_code">Invalid invite code or group not found</string>
     <string name="err_only_admin_can_delete_group">Only an admin can delete the group</string>
@@ -193,7 +188,6 @@
     <string name="tab_members">Members</string>
     <string name="tab_chat">Chat</string>
     <string name="tab_places">Places</string>
-    <string name="tab_trips">Trips</string>
     <string name="tab_settings">Settings</string>
     <string name="unit_seconds">Seconds</string>
     <string name="unit_minutes">Minutes</string>
@@ -205,7 +199,6 @@
     <string name="toast_camera_error">Camera error: %1$s</string>
     <string name="toast_request_approved">Request approved</string>
     <string name="toast_request_rejected">Request rejected</string>
-    <string name="toast_trip_saved">Trip saved</string>
     <string name="toast_battery_saver_on">Battery saver on</string>
     <string name="toast_gps_precision_restored">GPS precision restored</string>
     <string name="toast_bg_tracking_on">Background tracking enabled</string>
@@ -222,8 +215,6 @@
     <string name="toast_group_updated">Group updated</string>
     <string name="toast_group_deleted">Group deleted</string>
     <string name="toast_sos_sent">SOS alert sent to the group</string>
-    <string name="toast_trip_auto_on">Family Radar records trips automatically</string>
-    <string name="toast_trip_auto_off">Automatic detection disabled</string>
     <string name="toast_place_deleted">Place %1$s deleted</string>
     <string name="toast_place_added">Place %1$s added</string>
     <string name="toast_place_updated">Place %1$s updated</string>
@@ -234,8 +225,6 @@
     <string name="action_send_sos">Send SOS</string>
     <string name="action_follow_off">Disable follow</string>
     <string name="action_follow_on_label">Enable follow</string>
-    <string name="action_stop_trip">Stop trip</string>
-    <string name="action_record_trip">Record trip</string>
     <string name="action_add_place">Add place</string>
     <string name="action_take_snapshot">Take snapshot</string>
     <string name="label_you">You</string>
@@ -337,8 +326,6 @@
     <string name="map_marker_battery_info">Battery: %1$d%% · %2$s</string>
     <string name="map_marker_speed_suffix"> · %1$d km/h</string>
     <string name="map_marker_place_zone">Zone: %1$s (%2$dm)</string>
-    <string name="map_trip_start">Start</string>
-    <string name="map_trip_end">End</string>
     <string name="map_time_just_now">Just now</string>
     <string name="map_time_seconds_ago">%1$ds ago</string>
     <string name="map_time_minutes_ago">%1$dm ago</string>
@@ -385,8 +372,6 @@
     <string name="place_cat_other">Other</string>
 
     <!-- Trip source -->
-    <string name="trip_source_manual">Manual</string>
-    <string name="trip_source_auto">Automatic</string>
 
     <!-- Activity kind -->
     <string name="trip_activity_vehicle">By car</string>
@@ -447,12 +432,6 @@
     <string name="interval_seconds">%1$d seconds</string>
 
     <!-- Settings: Trips -->
-    <string name="settings_section_trips">Trips</string>
-    <string name="settings_trips_subtitle">Recording your journeys</string>
-    <string name="settings_auto_trip_title">Detect trips automatically</string>
-    <string name="settings_auto_trip_desc">Starts on its own. Uses more battery.</string>
-    <string name="settings_auto_trip_shared_title">Share automatic trips</string>
-    <string name="settings_auto_trip_shared_desc">Turn off to see them only yourself</string>
 
     <!-- Settings: Group -->
     <string name="label_active_group">ACTIVE GROUP</string>
@@ -527,25 +506,7 @@
     <string name="label_you_follow">you</string>
 
     <!-- Trips panel -->
-    <string name="trip_recording">Recording in progress</string>
     <string name="action_stop_and_save">Stop and save</string>
-    <string name="action_start_trip">Start trip</string>
-    <string name="empty_trips_title">No trips</string>
-    <string name="empty_trips_body">Recorded trips will appear here</string>
-    <string name="trip_badge_live">LIVE</string>
-    <string name="trip_badge_private">PRIVATE</string>
-    <string name="trip_title_of">%1$s trip</string>
-    <string name="trip_stat_distance">Distance</string>
-    <string name="trip_stat_duration">Duration</string>
-    <string name="trip_stat_avg_speed">Average</string>
-    <string name="trip_stat_max_speed">Maximum</string>
-    <string name="trip_detail_departure">Departure</string>
-    <string name="trip_detail_arrival">Arrival</string>
-    <string name="trip_detail_stopped">Stopped time</string>
-    <string name="trip_detail_stopped_value">%1$d min</string>
-    <string name="trip_detail_activity">Activity</string>
-    <string name="trip_detail_source">Recorded</string>
-    <string name="trip_detail_by">By</string>
     <string name="action_remove_from_map">Remove from map</string>
     <string name="time_short_minutes_ago">%1$d min ago</string>
 

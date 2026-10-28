@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.70.1-beta"
+    const val VERSION = "0.70.2-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧹 Rimossa la funzione viaggi e la modalità simulazione; tolto il tasto \"centra su di me\" (basta toccare il tuo avatar nel carosello)."
+        "🧹 Pulizia interna: rimosso il motore dei viaggi ormai inutilizzato. Nessun cambiamento visibile."
     )
 }

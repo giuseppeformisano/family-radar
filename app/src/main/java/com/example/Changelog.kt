@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.1-beta"
+    const val VERSION = "0.71.2-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Anche i controlli a destra della mappa ora in barra flottante arrotondata; \"Livelli\" si espande con membri/foto/luoghi."
+        "✨ Nuovo carosello familiari: striscia di avatar calma (Carousel Material 3), si tocca per selezionare. Niente più scorrimento nervoso."
     )
 }

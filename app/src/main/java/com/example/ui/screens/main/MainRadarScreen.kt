@@ -1582,6 +1582,7 @@ private fun getMemberPresence(timestamp: Long): MemberPresence {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PerspectiveMemberCoverFlow(
     locations: List<UserLocation>,
@@ -1594,82 +1595,15 @@ private fun PerspectiveMemberCoverFlow(
 ) {
     if (locations.isEmpty()) return
 
-    val listCount = locations.size
-    val loopMultiplier = 1000
-    val totalCount = listCount * loopMultiplier
-    // Di default l'utente selezionato sono IO: la carousel parte centrata sul mio
-    // avatar, non sul primo della lista.
-    val myIndex = locations.indexOfFirst { it.userId == currentUserId }.coerceAtLeast(0)
-    val initialCenter = (totalCount / 2) - ((totalCount / 2) % listCount) + myIndex
+    // Selezione a TAP (niente più auto-selezione da scroll): la persona mostrata
+    // è quella scelta col tocco / deep link; di default sono io.
+    val selectedId = selectMemberId ?: currentUserId
+    val selectedMemberLoc = locations.find { it.userId == selectedId } ?: locations.first()
+    val initialItem = locations.indexOfFirst { it.userId == selectedId }.coerceAtLeast(0)
+    val carouselState = rememberCarouselState(initialItem = initialItem) { locations.size }
 
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialCenter)
-    val snapFlingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
-    val coroutineScope = rememberCoroutineScope()
-
-    // Calcola l'indice dell'elemento più vicino al centro visibile
-    val centerIndex by remember {
-        derivedStateOf {
-            val layoutInfo = listState.layoutInfo
-            val visibleItems = layoutInfo.visibleItemsInfo
-            if (visibleItems.isEmpty()) initialCenter
-            else {
-                val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
-                visibleItems.minByOrNull { item ->
-                    val itemCenter = item.offset + item.size / 2
-                    kotlin.math.abs(itemCenter - viewportCenter)
-                }?.index ?: initialCenter
-            }
-        }
-    }
-
-    val activeMemberLoc = locations[centerIndex % listCount]
-
-    // Selezione esterna (notifica / widget / deep link): porta al centro il
-    // pallino della persona coinvolta scegliendo la copia piu' vicina nel loop.
-    LaunchedEffect(selectMemberId, listCount) {
-        val id = selectMemberId ?: return@LaunchedEffect
-        val memberIndex = locations.indexOfFirst { it.userId == id }
-        if (memberIndex < 0) return@LaunchedEffect
-        val current = centerIndex
-        val base = current - (current % listCount)
-        val target = listOf(
-            base + memberIndex - listCount,
-            base + memberIndex,
-            base + memberIndex + listCount
-        ).filter { it in 0 until totalCount }
-            .minByOrNull { kotlin.math.abs(it - current) } ?: return@LaunchedEffect
-        if (target != current) {
-            coroutineScope.launch { listState.animateScrollToItem(target) }
-        }
-    }
-
-    var hasUserScrolled by remember { mutableStateOf(false) }
-
-    // Quando lo scatto/scorrimento avviato dall'utente si ferma, sincronizza la mappa sull'utente centrato
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (listState.isScrollInProgress) {
-            hasUserScrolled = true
-        } else if (hasUserScrolled) {
-            hasUserScrolled = false
-            onMemberClick(activeMemberLoc)
-        }
-    }
-
-    val density = LocalDensity.current
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-
-    // Slot logico compatto. La scala la applica graphicsLayer al draw, quindi la
-    // dimensione misurata resta fissa: nessun relayout durante lo scorrimento.
-    val itemSlot = 56.dp
-    val overlap = (-4).dp                       // sovrapposizione a filo
-    val horizontalPadding = ((screenWidth - itemSlot) / 2).coerceAtLeast(16.dp)
-    // Passo centro-a-centro (slot + overlap) in px: normalizza la distanza dal
-    // centro viewport in una frazione 0..1 per interpolare scala/opacita'.
-    val slotPx = with(density) { (itemSlot + overlap).toPx() }
-
-    // Avatar DECODIFICATI UNA VOLTA SOLA per membro (chiave = foto, non l'intero
-    // location che cambia a ogni battito/timestamp). Durante lo scroll si disegna
-    // un ImageBitmap gia' pronto: niente decodifiche async che fanno saltare frame.
+    // Avatar decodificati una volta sola per membro (chiave = foto, non il location
+    // che cambia a ogni battito/timestamp).
     val photoSignature = remember(locations) {
         locations.joinToString(",") { "${it.userId}:${it.photoBase64?.length ?: 0}" }
     }
@@ -1677,34 +1611,7 @@ private fun PerspectiveMemberCoverFlow(
         locations.associate { it.userId to ImageUtils.base64ToBitmap(it.photoBase64)?.asImageBitmap() }
     }
 
-    // Frazione 0..1 di distanza dell'item dal centro viewport, letta al DRAW dallo
-    // scroll. Usata identica da scala/alpha e da glow/anello: tutto in draw-phase,
-    // così durante lo scorrimento non si ricompone nulla (movimento a refresh pieno).
-    val centerFractionOf: (Int) -> Float = { idx ->
-        val info = listState.layoutInfo
-        val ii = info.visibleItemsInfo.firstOrNull { it.index == idx }
-        if (ii != null && slotPx > 0f) {
-            val vc = (info.viewportStartOffset + info.viewportEndOffset) / 2f
-            val ic = ii.offset + ii.size / 2f
-            (kotlin.math.abs(ic - vc) / slotPx).coerceIn(0f, 1f)
-        } else 1f
-    }
-
-    // Variante CON SEGNO: distanza dal centro mantenendo la direzione (sinistra/destra),
-    // usata per la rotazione 3D cover-flow (gli avatar laterali ruotano verso il centro).
-    val signedFractionOf: (Int) -> Float = { idx ->
-        val info = listState.layoutInfo
-        val ii = info.visibleItemsInfo.firstOrNull { it.index == idx }
-        if (ii != null && slotPx > 0f) {
-            val vc = (info.viewportStartOffset + info.viewportEndOffset) / 2f
-            val ic = ii.offset + ii.size / 2f
-            ((ic - vc) / slotPx).coerceIn(-2.5f, 2.5f)
-        } else 2.5f
-    }
-
-    // Squircle (M3 Expressive): angolo arrotondato generoso, stesso per avatar e anello.
     val memberShape = RoundedCornerShape(32)
-
     val sage = RadarSemantic.Online
     val followRingColor = MaterialTheme.colorScheme.primary
 
@@ -1712,149 +1619,100 @@ private fun PerspectiveMemberCoverFlow(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Overlap Strip (Magnetic Piling): avatar sovrapposti, snap-to-center,
-        // Hero centrale che emerge. Scala/alpha/glow tutti continui, letti dallo scroll.
-        LazyRow(
-            state = listState,
-            flingBehavior = snapFlingBehavior,
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(overlap),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            items(count = totalCount, key = { it }) { index ->
-                val actualIndex = index % listCount
-                val loc = locations[actualIndex]
-                // Solo per lo z-order (discreto, cambia di rado): il centro sopra tutti.
-                val distance = kotlin.math.abs(index - centerIndex)
-                val bmp = avatarBitmaps[loc.userId]
-                val initial = loc.userName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+        // Carousel ufficiale M3 Expressive (uncontained): avatar uguali, snap
+        // uno-a-uno, scorrimento calmo. Si seleziona toccando.
+        HorizontalUncontainedCarousel(
+            state = carouselState,
+            itemWidth = 64.dp,
+            itemSpacing = 8.dp,
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp)
+        ) { index ->
+            val loc = locations[index]
+            val selected = loc.userId == selectedId
+            val followed = loc.userId == followedUserId
+            val bmp = avatarBitmaps[loc.userId]
+            val initial = loc.userName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
 
+            val ringColor = when {
+                followed -> followRingColor
+                selected -> sage
+                else -> MaterialTheme.colorScheme.outlineVariant
+            }
+            val ringWidth = if (selected || followed) 2.5.dp else 1.dp
+            val avatarSize = if (selected) 58.dp else 50.dp
+
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .combinedClickable(
+                        onClick = { onMemberClick(loc) },
+                        onLongClick = { onMemberLongClick(loc) }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
                 Box(
-                    contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .zIndex(-distance.toFloat())
-                        .size(itemSlot)
-                        // Trasformazione CONTINUA al draw: niente state mutato per
-                        // frazione di pixel, zero jitter di ricomposizione.
-                        // Cover-flow 3D (M3 Expressive): prospettiva + scala/opacita'
-                        // continue, lette dallo scroll al draw → movimento fluido a
-                        // refresh pieno, nessuna ricomposizione per frazione di pixel.
-                        .graphicsLayer {
-                            val sf = signedFractionOf(index)
-                            val t = kotlin.math.abs(sf).coerceIn(0f, 1f)
-                            val s = 1.0f + (0.58f - 1.0f) * t
-                            scaleX = s
-                            scaleY = s
-                            alpha = 1f + (0.42f - 1f) * t          // centro 1.0 → laterale 0.42
-                            cameraDistance = 20f
-                            rotationY = sf.coerceIn(-1.6f, 1.6f) * -20f
-                            shadowElevation = (1f - t) * 10f
-                            shape = memberShape
-                        }
-                        // Anello di stato squircle sull'elemento attivo, intensita'
-                        // continua = (1 - t). Rientrato nel bordo per non uscire dallo slot.
-                        .drawBehind {
-                            val a = (1f - centerFractionOf(index)).coerceIn(0f, 1f)
-                            if (a > 0.01f) {
-                                val stroke = 2.5.dp.toPx()
-                                drawRoundRect(
-                                    color = sage,
-                                    topLeft = Offset(stroke / 2f, stroke / 2f),
-                                    size = GeometrySize(size.width - stroke, size.height - stroke),
-                                    cornerRadius = CornerRadius(size.minDimension * 0.30f),
-                                    style = Stroke(width = stroke),
-                                    alpha = a
-                                )
-                            }
-                            // Anello blu primario per la persona seguita.
-                            if (loc.userId == followedUserId) {
-                                val stroke = 3.dp.toPx()
-                                drawRoundRect(
-                                    color = followRingColor,
-                                    topLeft = Offset(stroke / 2f, stroke / 2f),
-                                    size = GeometrySize(size.width - stroke, size.height - stroke),
-                                    cornerRadius = CornerRadius(size.minDimension * 0.30f),
-                                    style = Stroke(width = stroke)
-                                )
-                            }
-                        }
-                        .combinedClickable(
-                            onClick = {
-                                coroutineScope.launch { listState.animateScrollToItem(index) }
-                                onMemberClick(loc)
-                            },
-                            onLongClick = { onMemberLongClick(loc) }
-                        )
+                        .size(avatarSize)
+                        .clip(memberShape)
+                        .background(MaterialTheme.colorScheme.surface)
+                        .border(ringWidth, ringColor, memberShape),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Avatar: bitmap pre-decodificato o iniziale come fallback a basso costo.
-                    // Stesso colore/trasparenza dei pulsanti mappa (RailButton): fondo
-                    // 0xCC18181B + bordo 0x1F71717A, per un look uniforme sulla mappa.
+                    if (bmp != null) {
+                        Image(
+                            bitmap = bmp,
+                            contentDescription = loc.userName,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text(
+                            text = initial,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                val movementIcon = run {
+                    val isRecent = (System.currentTimeMillis() - loc.timestamp) < PRESENCE_ONLINE_MS
+                    if (!isRecent) null
+                    else {
+                        val speedKmH = loc.speed * 3.6f
+                        when (loc.activityType) {
+                            ActivityKind.VEHICLE -> Icons.Default.DirectionsCar
+                            ActivityKind.BICYCLE -> Icons.Default.DirectionsBike
+                            ActivityKind.RUNNING -> Icons.Default.DirectionsRun
+                            ActivityKind.WALKING -> Icons.Default.DirectionsWalk
+                            ActivityKind.STILL -> if (speedKmH >= 15f) Icons.Default.DirectionsCar else null
+                            else -> when {
+                                speedKmH >= 25f -> Icons.Default.DirectionsCar
+                                speedKmH >= 8f -> Icons.Default.DirectionsBike
+                                speedKmH >= 2.5f -> Icons.Default.DirectionsWalk
+                                else -> null
+                            }
+                        }
+                    }
+                }
+                if (movementIcon != null) {
                     Box(
                         modifier = Modifier
-                            .size(itemSlot)
-                            .clip(memberShape)
+                            .align(Alignment.BottomEnd)
+                            .size(18.dp)
+                            .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surface)
-                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, memberShape),
+                            .border(1.5.dp, MaterialTheme.colorScheme.surfaceVariant, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (bmp != null) {
-                            Image(
-                                bitmap = bmp,
-                                contentDescription = loc.userName,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Text(
-                                text = initial,
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    // Badge iconcina in basso a destra per stato di movimento (auto, bici, corsa, camminata)
-                    val movementIcon = remember(loc.activityType, loc.speed, loc.timestamp) {
-                        val isRecent = (System.currentTimeMillis() - loc.timestamp) < PRESENCE_ONLINE_MS
-                        if (!isRecent) null
-                        else {
-                            val speedKmH = loc.speed * 3.6f
-                            when (loc.activityType) {
-                                ActivityKind.VEHICLE -> Icons.Default.DirectionsCar
-                                ActivityKind.BICYCLE -> Icons.Default.DirectionsBike
-                                ActivityKind.RUNNING -> Icons.Default.DirectionsRun
-                                ActivityKind.WALKING -> Icons.Default.DirectionsWalk
-                                ActivityKind.STILL -> if (speedKmH >= 15f) Icons.Default.DirectionsCar else null
-                                else -> {
-                                    when {
-                                        speedKmH >= 25f -> Icons.Default.DirectionsCar
-                                        speedKmH >= 8f -> Icons.Default.DirectionsBike
-                                        speedKmH >= 2.5f -> Icons.Default.DirectionsWalk
-                                        else -> null
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (movementIcon != null) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .size(18.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.surface)
-                                .border(1.5.dp, MaterialTheme.colorScheme.surfaceVariant, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = movementIcon,
-                                contentDescription = null,
-                                tint = RadarSemantic.Online,
-                                modifier = Modifier.size(11.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = movementIcon,
+                            contentDescription = null,
+                            tint = RadarSemantic.Online,
+                            modifier = Modifier.size(11.dp)
+                        )
                     }
                 }
             }
@@ -1862,18 +1720,18 @@ private fun PerspectiveMemberCoverFlow(
 
         Spacer(Modifier.height(2.dp))
 
-        // --- Telemetria borderless: solo per il membro centrato (nessun box) ---
-        val activeName = if (!activeMemberLoc.nickname.isNullOrBlank()) activeMemberLoc.nickname!!
-            else if (activeMemberLoc.userId == currentUserId) stringResource(R.string.label_you)
-            else activeMemberLoc.userName
-        val isSelf = activeMemberLoc.userId == currentUserId
+        // --- Telemetria borderless: per il membro SELEZIONATO (nessun box) ---
+        val activeName = if (!selectedMemberLoc.nickname.isNullOrBlank()) selectedMemberLoc.nickname!!
+            else if (selectedMemberLoc.userId == currentUserId) stringResource(R.string.label_you)
+            else selectedMemberLoc.userName
+        val isSelf = selectedMemberLoc.userId == currentUserId
         val activePresence = if (isSelf) {
             MemberPresence("Online", RadarSemantic.Online)
         } else {
-            getMemberPresence(activeMemberLoc.timestamp)
+            getMemberPresence(selectedMemberLoc.timestamp)
         }
-        val movingKmH = (activeMemberLoc.speed * 3.6f).toInt()
-        val activityDescription = when (activeMemberLoc.activityType) {
+        val movingKmH = (selectedMemberLoc.speed * 3.6f).toInt()
+        val activityDescription = when (selectedMemberLoc.activityType) {
             ActivityKind.VEHICLE -> if (movingKmH > 0) "In auto ($movingKmH km/h)" else "In auto"
             ActivityKind.BICYCLE -> if (movingKmH > 0) "In bici ($movingKmH km/h)" else "In bici"
             ActivityKind.RUNNING -> if (movingKmH > 0) "Corsa ($movingKmH km/h)" else "Corsa"
@@ -1886,19 +1744,19 @@ private fun PerspectiveMemberCoverFlow(
         var heldLabel by remember { mutableStateOf<String?>(null) }
         var heldUser by remember { mutableStateOf<String?>(null) }
         var heldAt by remember { mutableStateOf(0L) }
-        LaunchedEffect(activeMemberLoc.userId, activityDescription, activeMemberLoc.timestamp) {
+        LaunchedEffect(selectedMemberLoc.userId, activityDescription, selectedMemberLoc.timestamp) {
             if (activityDescription != null) {
                 heldLabel = activityDescription
-                heldUser = activeMemberLoc.userId
+                heldUser = selectedMemberLoc.userId
                 heldAt = System.currentTimeMillis()
             }
         }
         val useHeld = activityDescription == null && heldLabel != null &&
-            heldUser == activeMemberLoc.userId &&
+            heldUser == selectedMemberLoc.userId &&
             (System.currentTimeMillis() - heldAt) < MOVE_LABEL_HOLD_MS
         val statusLabel = activityDescription ?: (if (useHeld) heldLabel!! else activePresence.label)
         val statusColor = if (activityDescription != null || useHeld) RadarSemantic.Online else activePresence.color
-        val relativeTimeStr = if (isSelf) "ora" else formatRelativeShort(activeMemberLoc.timestamp)
+        val relativeTimeStr = if (isSelf) "ora" else formatRelativeShort(selectedMemberLoc.timestamp)
         val textShadow = Shadow(color = Color.Black, offset = Offset(0f, 1.5f), blurRadius = 6f)
 
         // Riga 1 — Nome (SemiBold, #F2F2F7, 15sp).
@@ -1936,7 +1794,7 @@ private fun PerspectiveMemberCoverFlow(
             )
             Text("•", style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow), color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                text = "${activeMemberLoc.batteryLevel}%",
+                text = "${selectedMemberLoc.batteryLevel}%",
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontSize = 12.sp, fontWeight = FontWeight.Medium, shadow = textShadow
                 ),

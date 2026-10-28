@@ -808,18 +808,14 @@ fun MainRadarScreen(
         // Il tasto Indietro (di sistema o gesture) torna alla mappa, non esce dall'app.
         BackHandler { activeFullPanel = null }
         Surface(
-            // Lascia scoperta in basso la pulsantiera (dock), che resta visibile e
-            // toccabile sotto i pannelli Chat/Luoghi/Membri.
-            modifier = Modifier
-                .fillMaxSize()
-                .navigationBarsPadding()
-                .padding(bottom = 76.dp),
+            modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .statusBarsPadding()
+                    .navigationBarsPadding()
             ) {
                 // Intestazione con pulsante di chiusura/indietro
                 Row(

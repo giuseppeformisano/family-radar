@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.6-beta"
+    const val VERSION = "0.71.7-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🪄 Menu Livelli: pulsanti tondi e ventaglio più compatto attorno al pulsante.",
-        "📱 Chat e Luoghi non coprono più la barra in basso; il tasto Indietro torna alla mappa."
+        "📱 I pannelli tornano a schermo intero; il tasto Indietro di sistema torna alla mappa."
     )
 }

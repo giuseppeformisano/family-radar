@@ -1487,6 +1487,8 @@ private fun MapTopBar(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
 private fun MapActionRail(
     isFollowing: Boolean,
     onToggleFollow: () -> Unit,
@@ -1494,33 +1496,41 @@ private fun MapActionRail(
     onTakeSnapshot: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-        horizontalAlignment = Alignment.Start
+    // Material 3 Expressive: i controlli mappa raggruppati in un'unica barra
+    // flottante squircle, invece di tanti pulsanti tondi separati.
+    VerticalFloatingToolbar(
+        expanded = true,
+        modifier = modifier
     ) {
-        RailButton(
-            icon = if (isFollowing) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed,
-            contentDescription = if (isFollowing) stringResource(R.string.action_follow_off) else stringResource(R.string.action_follow_on_label),
-            onClick = onToggleFollow,
-            container = if (isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-            content = if (isFollowing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-            testTag = "follow_mode_fab"
-        )
-        RailButton(
-            icon = Icons.Default.AddLocationAlt,
-            contentDescription = stringResource(R.string.action_add_place),
+        IconToggleButton(
+            checked = isFollowing,
+            onCheckedChange = { onToggleFollow() },
+            modifier = Modifier.testTag("follow_mode_fab")
+        ) {
+            Icon(
+                imageVector = if (isFollowing) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed,
+                contentDescription = if (isFollowing) stringResource(R.string.action_follow_off)
+                    else stringResource(R.string.action_follow_on_label)
+            )
+        }
+        IconButton(
             onClick = onAddPlace,
-            testTag = "add_place_fab"
-        )
-        RailButton(
-            icon = Icons.Default.AddAPhoto,
-            contentDescription = stringResource(R.string.action_take_snapshot),
+            modifier = Modifier.testTag("add_place_fab")
+        ) {
+            Icon(
+                imageVector = Icons.Default.AddLocationAlt,
+                contentDescription = stringResource(R.string.action_add_place)
+            )
+        }
+        FilledIconButton(
             onClick = onTakeSnapshot,
-            container = MaterialTheme.colorScheme.primary,
-            content = MaterialTheme.colorScheme.onPrimary,
-            testTag = "take_geo_snapshot_fab"
-        )
+            modifier = Modifier.testTag("take_geo_snapshot_fab")
+        ) {
+            Icon(
+                imageVector = Icons.Default.AddAPhoto,
+                contentDescription = stringResource(R.string.action_take_snapshot)
+            )
+        }
     }
 }
 

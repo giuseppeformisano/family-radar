@@ -66,8 +66,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
-import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1584,7 +1582,6 @@ private fun getMemberPresence(timestamp: Long): MemberPresence {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PerspectiveMemberCoverFlow(
     locations: List<UserLocation>,
@@ -1597,20 +1594,84 @@ private fun PerspectiveMemberCoverFlow(
 ) {
     if (locations.isEmpty()) return
 
-    // Selezione a TAP (niente più auto-selezione da scroll): la persona mostrata
-    // è quella scelta col tocco / deep link; di default sono io.
-    val selectedId = selectMemberId ?: currentUserId
-    val selectedMemberLoc = locations.find { it.userId == selectedId } ?: locations.first()
-    val initialItem = locations.indexOfFirst { it.userId == selectedId }.coerceAtLeast(0)
-    val carouselState = rememberCarouselState(initialItem = initialItem) { locations.size }
+    val listCount = locations.size
+    val loopMultiplier = 1000
+    val totalCount = listCount * loopMultiplier
+    val myIndex = locations.indexOfFirst { it.userId == currentUserId }.coerceAtLeast(0)
+    val initialCenter = (totalCount / 2) - ((totalCount / 2) % listCount) + myIndex
 
-    // Avatar decodificati una volta sola per membro (chiave = foto, non il location
-    // che cambia a ogni battito/timestamp).
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialCenter)
+    val snapFlingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+    val coroutineScope = rememberCoroutineScope()
+
+    val centerIndex by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val visibleItems = layoutInfo.visibleItemsInfo
+            if (visibleItems.isEmpty()) initialCenter
+            else {
+                val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+                visibleItems.minByOrNull { item ->
+                    val itemCenter = item.offset + item.size / 2
+                    kotlin.math.abs(itemCenter - viewportCenter)
+                }?.index ?: initialCenter
+            }
+        }
+    }
+
+    val activeMemberLoc = locations[centerIndex % listCount]
+
+    LaunchedEffect(selectMemberId, listCount) {
+        val id = selectMemberId ?: return@LaunchedEffect
+        val memberIndex = locations.indexOfFirst { it.userId == id }
+        if (memberIndex < 0) return@LaunchedEffect
+        val current = centerIndex
+        val base = current - (current % listCount)
+        val target = listOf(
+            base + memberIndex - listCount,
+            base + memberIndex,
+            base + memberIndex + listCount
+        ).filter { it in 0 until totalCount }
+            .minByOrNull { kotlin.math.abs(it - current) } ?: return@LaunchedEffect
+        if (target != current) {
+            coroutineScope.launch { listState.animateScrollToItem(target) }
+        }
+    }
+
+    var hasUserScrolled by remember { mutableStateOf(false) }
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (listState.isScrollInProgress) {
+            hasUserScrolled = true
+        } else if (hasUserScrolled) {
+            hasUserScrolled = false
+            onMemberClick(activeMemberLoc)
+        }
+    }
+
+    val density = LocalDensity.current
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+
+    val itemSlot = 56.dp
+    val overlap = (-4).dp
+    val horizontalPadding = ((screenWidth - itemSlot) / 2).coerceAtLeast(16.dp)
+    val slotPx = with(density) { (itemSlot + overlap).toPx() }
+
     val photoSignature = remember(locations) {
         locations.joinToString(",") { "${it.userId}:${it.photoBase64?.length ?: 0}" }
     }
     val avatarBitmaps: Map<String, ImageBitmap?> = remember(photoSignature) {
         locations.associate { it.userId to ImageUtils.base64ToBitmap(it.photoBase64)?.asImageBitmap() }
+    }
+
+    // Frazione 0..1 di distanza dell'item dal centro viewport (letta al draw dallo scroll).
+    val centerFractionOf: (Int) -> Float = { idx ->
+        val info = listState.layoutInfo
+        val ii = info.visibleItemsInfo.firstOrNull { it.index == idx }
+        if (ii != null && slotPx > 0f) {
+            val vc = (info.viewportStartOffset + info.viewportEndOffset) / 2f
+            val ic = ii.offset + ii.size / 2f
+            (kotlin.math.abs(ic - vc) / slotPx).coerceIn(0f, 1f)
+        } else 1f
     }
 
     val memberShape = RoundedCornerShape(32)
@@ -1621,100 +1682,129 @@ private fun PerspectiveMemberCoverFlow(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Carousel ufficiale M3 Expressive (uncontained): avatar uguali, snap
-        // uno-a-uno, scorrimento calmo. Si seleziona toccando.
-        HorizontalUncontainedCarousel(
-            state = carouselState,
-            itemWidth = 64.dp,
-            itemSpacing = 8.dp,
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp)
-        ) { index ->
-            val loc = locations[index]
-            val selected = loc.userId == selectedId
-            val followed = loc.userId == followedUserId
-            val bmp = avatarBitmaps[loc.userId]
-            val initial = loc.userName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+        // Carosello a ciclo infinito "multi-browse": hero al centro (grande), i
+        // laterali rimpiccioliti e sbiaditi. Niente rotazione 3D: scala/opacità
+        // continue lette dallo scroll, snap al centro, scorrimento calmo.
+        LazyRow(
+            state = listState,
+            flingBehavior = snapFlingBehavior,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(overlap),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items(count = totalCount, key = { it }) { index ->
+                val actualIndex = index % listCount
+                val loc = locations[actualIndex]
+                val distance = kotlin.math.abs(index - centerIndex)
+                val bmp = avatarBitmaps[loc.userId]
+                val initial = loc.userName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
 
-            val ringColor = when {
-                followed -> followRingColor
-                selected -> sage
-                else -> MaterialTheme.colorScheme.outlineVariant
-            }
-            val ringWidth = if (selected || followed) 2.5.dp else 1.dp
-            val avatarSize = if (selected) 58.dp else 50.dp
-
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .combinedClickable(
-                        onClick = { onMemberClick(loc) },
-                        onLongClick = { onMemberLongClick(loc) }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
                 Box(
+                    contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(avatarSize)
-                        .clip(memberShape)
-                        .background(MaterialTheme.colorScheme.surface)
-                        .border(ringWidth, ringColor, memberShape),
-                    contentAlignment = Alignment.Center
+                        .zIndex(-distance.toFloat())
+                        .size(itemSlot)
+                        .graphicsLayer {
+                            val t = centerFractionOf(index)
+                            val s = 1.0f + (0.62f - 1.0f) * t
+                            scaleX = s
+                            scaleY = s
+                            alpha = 1f + (0.5f - 1f) * t
+                        }
+                        .drawBehind {
+                            val a = (1f - centerFractionOf(index)).coerceIn(0f, 1f)
+                            if (a > 0.01f) {
+                                val stroke = 2.5.dp.toPx()
+                                drawRoundRect(
+                                    color = sage,
+                                    topLeft = Offset(stroke / 2f, stroke / 2f),
+                                    size = GeometrySize(size.width - stroke, size.height - stroke),
+                                    cornerRadius = CornerRadius(size.minDimension * 0.30f),
+                                    style = Stroke(width = stroke),
+                                    alpha = a
+                                )
+                            }
+                            if (loc.userId == followedUserId) {
+                                val stroke = 3.dp.toPx()
+                                drawRoundRect(
+                                    color = followRingColor,
+                                    topLeft = Offset(stroke / 2f, stroke / 2f),
+                                    size = GeometrySize(size.width - stroke, size.height - stroke),
+                                    cornerRadius = CornerRadius(size.minDimension * 0.30f),
+                                    style = Stroke(width = stroke)
+                                )
+                            }
+                        }
+                        .combinedClickable(
+                            onClick = {
+                                coroutineScope.launch { listState.animateScrollToItem(index) }
+                                onMemberClick(loc)
+                            },
+                            onLongClick = { onMemberLongClick(loc) }
+                        )
                 ) {
-                    if (bmp != null) {
-                        Image(
-                            bitmap = bmp,
-                            contentDescription = loc.userName,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Text(
-                            text = initial,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    Box(
+                        modifier = Modifier
+                            .size(itemSlot)
+                            .clip(memberShape)
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, memberShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (bmp != null) {
+                            Image(
+                                bitmap = bmp,
+                                contentDescription = loc.userName,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text(
+                                text = initial,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                }
 
-                val movementIcon = run {
-                    val isRecent = (System.currentTimeMillis() - loc.timestamp) < PRESENCE_ONLINE_MS
-                    if (!isRecent) null
-                    else {
-                        val speedKmH = loc.speed * 3.6f
-                        when (loc.activityType) {
-                            ActivityKind.VEHICLE -> Icons.Default.DirectionsCar
-                            ActivityKind.BICYCLE -> Icons.Default.DirectionsBike
-                            ActivityKind.RUNNING -> Icons.Default.DirectionsRun
-                            ActivityKind.WALKING -> Icons.Default.DirectionsWalk
-                            ActivityKind.STILL -> if (speedKmH >= 15f) Icons.Default.DirectionsCar else null
-                            else -> when {
-                                speedKmH >= 25f -> Icons.Default.DirectionsCar
-                                speedKmH >= 8f -> Icons.Default.DirectionsBike
-                                speedKmH >= 2.5f -> Icons.Default.DirectionsWalk
-                                else -> null
+                    val movementIcon = run {
+                        val isRecent = (System.currentTimeMillis() - loc.timestamp) < PRESENCE_ONLINE_MS
+                        if (!isRecent) null
+                        else {
+                            val speedKmH = loc.speed * 3.6f
+                            when (loc.activityType) {
+                                ActivityKind.VEHICLE -> Icons.Default.DirectionsCar
+                                ActivityKind.BICYCLE -> Icons.Default.DirectionsBike
+                                ActivityKind.RUNNING -> Icons.Default.DirectionsRun
+                                ActivityKind.WALKING -> Icons.Default.DirectionsWalk
+                                ActivityKind.STILL -> if (speedKmH >= 15f) Icons.Default.DirectionsCar else null
+                                else -> when {
+                                    speedKmH >= 25f -> Icons.Default.DirectionsCar
+                                    speedKmH >= 8f -> Icons.Default.DirectionsBike
+                                    speedKmH >= 2.5f -> Icons.Default.DirectionsWalk
+                                    else -> null
+                                }
                             }
                         }
                     }
-                }
-                if (movementIcon != null) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .size(18.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surface)
-                            .border(1.5.dp, MaterialTheme.colorScheme.surfaceVariant, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = movementIcon,
-                            contentDescription = null,
-                            tint = RadarSemantic.Online,
-                            modifier = Modifier.size(11.dp)
-                        )
+                    if (movementIcon != null) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .size(18.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surface)
+                                .border(1.5.dp, MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = movementIcon,
+                                contentDescription = null,
+                                tint = RadarSemantic.Online,
+                                modifier = Modifier.size(11.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -1722,43 +1812,40 @@ private fun PerspectiveMemberCoverFlow(
 
         Spacer(Modifier.height(2.dp))
 
-        // --- Telemetria borderless: per il membro SELEZIONATO (nessun box) ---
-        val activeName = if (!selectedMemberLoc.nickname.isNullOrBlank()) selectedMemberLoc.nickname!!
-            else if (selectedMemberLoc.userId == currentUserId) stringResource(R.string.label_you)
-            else selectedMemberLoc.userName
-        val isSelf = selectedMemberLoc.userId == currentUserId
+        // --- Telemetria borderless: per il membro centrato (nessun box) ---
+        val activeName = if (!activeMemberLoc.nickname.isNullOrBlank()) activeMemberLoc.nickname!!
+            else if (activeMemberLoc.userId == currentUserId) stringResource(R.string.label_you)
+            else activeMemberLoc.userName
+        val isSelf = activeMemberLoc.userId == currentUserId
         val activePresence = if (isSelf) {
             MemberPresence("Online", RadarSemantic.Online)
         } else {
-            getMemberPresence(selectedMemberLoc.timestamp)
+            getMemberPresence(activeMemberLoc.timestamp)
         }
-        val movingKmH = (selectedMemberLoc.speed * 3.6f).toInt()
-        val activityDescription = when (selectedMemberLoc.activityType) {
+        val movingKmH = (activeMemberLoc.speed * 3.6f).toInt()
+        val activityDescription = when (activeMemberLoc.activityType) {
             ActivityKind.VEHICLE -> if (movingKmH > 0) "In auto ($movingKmH km/h)" else "In auto"
             ActivityKind.BICYCLE -> if (movingKmH > 0) "In bici ($movingKmH km/h)" else "In bici"
             ActivityKind.RUNNING -> if (movingKmH > 0) "Corsa ($movingKmH km/h)" else "Corsa"
             ActivityKind.WALKING -> if (movingKmH > 0) "A piedi ($movingKmH km/h)" else "A piedi"
             else -> if (movingKmH > 2) "In movimento ($movingKmH km/h)" else null
         }
-        // Tiene l'ultima etichetta di movimento per qualche secondo: così un singolo
-        // fix a velocità 0 (frequente nel GPS anche mentre ci si muove) non fa
-        // lampeggiare la scritta su "Online" e poi di nuovo sul movimento.
         var heldLabel by remember { mutableStateOf<String?>(null) }
         var heldUser by remember { mutableStateOf<String?>(null) }
         var heldAt by remember { mutableStateOf(0L) }
-        LaunchedEffect(selectedMemberLoc.userId, activityDescription, selectedMemberLoc.timestamp) {
+        LaunchedEffect(activeMemberLoc.userId, activityDescription, activeMemberLoc.timestamp) {
             if (activityDescription != null) {
                 heldLabel = activityDescription
-                heldUser = selectedMemberLoc.userId
+                heldUser = activeMemberLoc.userId
                 heldAt = System.currentTimeMillis()
             }
         }
         val useHeld = activityDescription == null && heldLabel != null &&
-            heldUser == selectedMemberLoc.userId &&
+            heldUser == activeMemberLoc.userId &&
             (System.currentTimeMillis() - heldAt) < MOVE_LABEL_HOLD_MS
         val statusLabel = activityDescription ?: (if (useHeld) heldLabel!! else activePresence.label)
         val statusColor = if (activityDescription != null || useHeld) RadarSemantic.Online else activePresence.color
-        val relativeTimeStr = if (isSelf) "ora" else formatRelativeShort(selectedMemberLoc.timestamp)
+        val relativeTimeStr = if (isSelf) "ora" else formatRelativeShort(activeMemberLoc.timestamp)
         val textShadow = Shadow(color = Color.Black, offset = Offset(0f, 1.5f), blurRadius = 6f)
 
         // Riga 1 — Nome (SemiBold, #F2F2F7, 15sp).
@@ -1796,7 +1883,7 @@ private fun PerspectiveMemberCoverFlow(
             )
             Text("•", style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp, shadow = textShadow), color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                text = "${selectedMemberLoc.batteryLevel}%",
+                text = "${activeMemberLoc.batteryLevel}%",
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontSize = 12.sp, fontWeight = FontWeight.Medium, shadow = textShadow
                 ),

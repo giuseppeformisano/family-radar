@@ -251,7 +251,6 @@
     <string name="action_send_sos">Invia SOS</string>
     <string name="action_follow_off">Disattiva inseguimento</string>
     <string name="action_follow_on_label">Attiva inseguimento</string>
-    <string name="action_center_my_location">Centra sulla mia posizione</string>
     <string name="action_stop_trip">Stop viaggio</string>
     <string name="action_record_trip">Registra viaggio</string>
     <string name="action_add_place">Aggiungi luogo</string>
@@ -525,8 +524,6 @@
     <!-- Impostazioni: Sviluppo -->
     <string name="settings_section_dev">Sviluppo</string>
     <string name="settings_dev_subtitle">Strumenti di prova</string>
-    <string name="settings_sim_title">Simula movimento</string>
-    <string name="settings_sim_desc">Muove membri finti sulla mappa. Solo per prove</string>
     <string name="settings_dev_feedback_title">Visualizza feedback</string>
     <string name="settings_dev_feedback_desc">Accesso protetto da password sviluppatore</string>
     <string name="dev_area_title">Area sviluppatore</string>

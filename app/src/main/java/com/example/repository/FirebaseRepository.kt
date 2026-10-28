@@ -83,7 +83,6 @@ class FirebaseRepository private constructor(private val context: Context) {
     private var membersListener: ListenerRegistration? = null
     private var eventsListener: ListenerRegistration? = null
     private var snapshotsListener: ListenerRegistration? = null
-    private var tripsListener: ListenerRegistration? = null
     private var userDocListener: ListenerRegistration? = null
     // Auto-recupero listener di gruppo. Un errore recuperabile (quota esaurita,
     // rete assente) chiude lo stream Firestore, che non sempre riparte da solo
@@ -1711,17 +1710,10 @@ class FirebaseRepository private constructor(private val context: Context) {
             if (db != null) {
                 val groupRef = db.collection("groups").document(groupId)
 
-                for (name in listOf("members", "locations", "places", "messages", "events", "snapshots", "trips")) {
+                for (name in listOf("members", "locations", "places", "messages", "events", "snapshots")) {
                     try {
                         val docs = groupRef.collection(name).get().await()
                         for (doc in docs.documents) {
-                            // La traccia di un viaggio e' a sua volta in una
-                            // sottocollezione del viaggio: va tolta prima.
-                            if (name == "trips") {
-                                try {
-                                    doc.reference.collection("track").document("data").delete().await()
-                                } catch (_: Exception) {}
-                            }
                             doc.reference.delete().await()
                         }
                     } catch (e: Exception) {
@@ -1967,8 +1959,6 @@ class FirebaseRepository private constructor(private val context: Context) {
         membersListener = null
         eventsListener = null
         snapshotsListener = null
-        tripsListener?.remove()
-        tripsListener = null
 
         // Staccare i listener non basta: i flow continuano a esporre i dati del
         // gruppo che si sta lasciando finche' i listener del nuovo gruppo non
@@ -2337,28 +2327,6 @@ class FirebaseRepository private constructor(private val context: Context) {
                                             senderId = senderId
                                         )
                                     }
-                                    "trip_start" -> {
-                                        showLocalNotification(
-                                            title = str(R.string.notif_trip_start_title),
-                                            body = str(R.string.notif_trip_start_body, userName),
-                                            isHighPriority = false,
-                                            notificationId = (timestamp % 100000).toInt(),
-                                            destination = "MAP",
-                                            groupId = groupId,
-                                            senderId = senderId
-                                        )
-                                    }
-                                    "trip_end" -> {
-                                        showLocalNotification(
-                                            title = str(R.string.notif_trip_end_title),
-                                            body = str(R.string.notif_trip_end_body, userName),
-                                            isHighPriority = false,
-                                            notificationId = (timestamp % 100000).toInt(),
-                                            destination = "MAP",
-                                            groupId = groupId,
-                                            senderId = senderId
-                                        )
-                                    }
                                     "movement" -> {
                                         val kindText = movementKindText(data["activityKind"] as? String)
                                         val body = if (kindText != null) {
@@ -2457,77 +2425,6 @@ class FirebaseRepository private constructor(private val context: Context) {
                             }
                         }
                         _currentGroupSnapshots.value = list
-                    }
-                }
-
-            // 7. Real-time trips listener
-            tripsListener = firestore.collection("groups").document(groupId)
-                .collection("trips")
-                .orderBy("startTime", Query.Direction.DESCENDING)
-                .limit(50)
-                .addSnapshotListener { snapshot, e ->
-                    if (e != null) {
-                        if (isRecoverableListenerError(e)) scheduleGroupListenersReattach(groupId, "trips: ${e.message}")
-                        return@addSnapshotListener
-                    }
-                    if (snapshot != null) {
-                        val myUid = _currentUserState.value?.uid
-                        val list = snapshot.documents.mapNotNull { doc ->
-                            try {
-                                val isLive = doc.getBoolean("isLive") ?: false
-                                val ownerId = doc.getString("userId") ?: ""
-
-                                // Un viaggio privato lo vede solo chi l'ha fatto.
-                                val isPrivate = doc.getBoolean("isPrivate") ?: false
-                                if (isPrivate && ownerId != myUid) return@mapNotNull null
-
-                                // I punti viaggiano nel documento SOLO finche' il
-                                // viaggio e' in diretta, perche' gli altri devono
-                                // vederlo avanzare. Una volta concluso stanno nel
-                                // sottodocumento e si leggono all'apertura.
-                                val points = if (isLive) {
-                                    @Suppress("UNCHECKED_CAST")
-                                    val rawPoints = doc.get("points") as? List<Map<String, Any>> ?: emptyList()
-                                    rawPoints.mapNotNull { p ->
-                                        val lat = (p["latitude"] as? Double) ?: return@mapNotNull null
-                                        val lon = (p["longitude"] as? Double) ?: return@mapNotNull null
-                                        TripPoint(lat, lon, (p["timestamp"] as? Long) ?: 0L)
-                                    }
-                                } else emptyList()
-
-                                @Suppress("UNCHECKED_CAST")
-                                val liveTrackRaw = doc.get("liveTrack") as? List<Map<String, Any>> ?: emptyList()
-                                val liveTrack = liveTrackRaw.mapNotNull { map ->
-                                    val lt = (map["latitude"] as? Number)?.toDouble() ?: return@mapNotNull null
-                                    val ln = (map["longitude"] as? Number)?.toDouble() ?: return@mapNotNull null
-                                    val ts = (map["timestamp"] as? Long) ?: 0L
-                                    TripPoint(lt, ln, ts)
-                                }
-
-                                Trip(
-                                    id = doc.id,
-                                    groupId = groupId,
-                                    userId = ownerId,
-                                    userName = doc.getString("userName") ?: "Membro",
-                                    startTime = doc.getLong("startTime") ?: 0L,
-                                    endTime = doc.getLong("endTime") ?: 0L,
-                                    durationMs = doc.getLong("durationMs") ?: 0L,
-                                    distanceMeters = doc.getDouble("distanceMeters") ?: 0.0,
-                                    pointCount = (doc.getLong("pointCount") ?: 0L).toInt(),
-                                    source = TripSource.fromRaw(doc.getString("source")),
-                                    maxSpeedMs = (doc.getDouble("maxSpeedMs") ?: 0.0).toFloat(),
-                                    movingMs = doc.getLong("movingMs") ?: 0L,
-                                    startPlaceName = doc.getString("startPlaceName")?.ifBlank { null },
-                                    endPlaceName = doc.getString("endPlaceName")?.ifBlank { null },
-                                    isLive = isLive,
-                                    isPrivate = isPrivate,
-                                    activityKind = doc.getString("activityKind") ?: "",
-                                    points = points,
-                                    liveTrack = liveTrack
-                                )
-                            } catch (ex: Exception) { null }
-                        }
-                        _groupTrips.value = list
                     }
                 }
 
@@ -3178,56 +3075,6 @@ class FirebaseRepository private constructor(private val context: Context) {
             emptyList()
         }
     }
-
-    /**
-     * Scrive la posizione di un membro arbitrario — usato solo dalla simulazione.
-     * Non passa per updateLocation (che sovrascrive sempre con l'uid corrente).
-     */
-    // Buffer punti per la scia del membro simulato.
-    private val simRecentPoints = mutableListOf<Triple<Double, Double, Long>>()
-
-    suspend fun simulateMemberLocation(location: UserLocation) {
-        val groupId = _currentUserState.value?.currentGroupId ?: return
-        val db = firestore ?: return
-        try {
-            // Accumula i punti per costruire la scia, come fa updateLocation per se stessi.
-            simRecentPoints.add(Triple(location.latitude, location.longitude, location.timestamp))
-            if (simRecentPoints.size > 60) simRecentPoints.removeAt(0)
-
-            val locMap = hashMapOf<String, Any?>(
-                "userId" to location.userId,
-                "latitude" to location.latitude,
-                "longitude" to location.longitude,
-                "accuracy" to location.accuracy,
-                "speed" to location.speed,
-                "bearing" to location.bearing,
-                "timestamp" to location.timestamp,
-                "isOnline" to true,
-                "currentPlaceName" to (location.currentPlaceName ?: ""),
-                "recentPoints" to simRecentPoints.map {
-                    hashMapOf("la" to it.first, "lo" to it.second, "t" to it.third)
-                }
-            )
-            db.collection("groups").document(groupId)
-                .collection("locations").document(location.userId)
-                .set(locMap, com.google.firebase.firestore.SetOptions.merge()).await()
-
-            // Aggiorna anche il StateFlow locale con i recentPoints aggiornati.
-            val updatedLoc = location.copy(
-                recentPoints = simRecentPoints.map {
-                    com.example.model.TrailPoint(it.first, it.second, it.third)
-                }
-            )
-            val list = _currentGroupLocations.value.toMutableList()
-            val idx = list.indexOfFirst { it.userId == location.userId }
-            if (idx >= 0) list[idx] = updatedLoc else list.add(updatedLoc)
-            _currentGroupLocations.value = list
-        } catch (e: Exception) {
-            Log.w(TAG, "simulateMemberLocation error: ${e.message}")
-        }
-    }
-
-    fun clearSimRecentPoints() = simRecentPoints.clear()
 
     private var lastNotifiedPlaceId: String? = null
     private var lastNotifiedPlaceName: String? = null

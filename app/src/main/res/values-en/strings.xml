@@ -234,7 +234,6 @@
     <string name="action_send_sos">Send SOS</string>
     <string name="action_follow_off">Disable follow</string>
     <string name="action_follow_on_label">Enable follow</string>
-    <string name="action_center_my_location">Center on my location</string>
     <string name="action_stop_trip">Stop trip</string>
     <string name="action_record_trip">Record trip</string>
     <string name="action_add_place">Add place</string>
@@ -508,8 +507,6 @@
     <!-- Settings: Development -->
     <string name="settings_section_dev">Development</string>
     <string name="settings_dev_subtitle">Test tools</string>
-    <string name="settings_sim_title">Simulate movement</string>
-    <string name="settings_sim_desc">Moves fake members on the map. For testing only</string>
     <string name="settings_dev_feedback_title">View feedback</string>
     <string name="settings_dev_feedback_desc">Protected by developer password</string>
     <string name="dev_area_title">Developer area</string>

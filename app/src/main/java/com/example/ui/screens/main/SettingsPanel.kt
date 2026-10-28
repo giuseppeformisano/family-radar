@@ -142,12 +142,9 @@ internal fun SettingsPanel(
     isTrackingEnabled: Boolean,
     isGlobalGhostMode: Boolean,
     isPowerSavingMode: Boolean,
-    isAutoTripEnabled: Boolean,
-    isAutoTripShared: Boolean,
     isHighPrecisionMovement: Boolean,
     filterQ: Float = 3.0f,
     onSetFilterQ: (Float) -> Unit = {},
-    isSimulationRunning: Boolean,
     isVoiceAutoplayEnabled: Boolean,
     onToggleVoiceAutoplay: (Boolean) -> Unit,
     onEditProfileClick: () -> Unit,
@@ -156,13 +153,10 @@ internal fun SettingsPanel(
     onUpdateInterval: (Int) -> Unit,
     onToggleTracking: (Boolean) -> Unit,
     onTogglePowerSaving: (Boolean) -> Unit,
-    onToggleAutoTrip: (Boolean) -> Unit,
-    onToggleAutoTripShared: (Boolean) -> Unit,
     onToggleHighPrecisionMovement: (Boolean) -> Unit,
     onToggleGlobalGhostMode: (Boolean) -> Unit,
     onToggleGroupTracking: (Boolean) -> Unit,
     onToggleAccessPolicy: (Boolean) -> Unit,
-    onToggleSimulation: (Boolean) -> Unit,
     onRequestLeaveGroup: () -> Unit,
     onRequestDeleteGroup: () -> Unit,
     onLogout: () -> Unit,
@@ -1013,15 +1007,6 @@ internal fun SettingsPanel(
                     subtitle = stringResource(R.string.settings_dev_subtitle),
                     icon = Icons.Default.Code
                 )
-                SettingsToggleRow(
-                    title = stringResource(R.string.settings_sim_title),
-                    description = stringResource(R.string.settings_sim_desc),
-                    icon = if (isSimulationRunning) Icons.Default.DirectionsRun else Icons.Default.PlayCircle,
-                    checked = isSimulationRunning,
-                    onCheckedChange = onToggleSimulation,
-                    testTag = "simulation_toggle_button"
-                )
-
                 val currentMapMatching by ThemePreferences.mapMatchingFlow.collectAsState()
                 SettingsToggleRow(
                     title = "Aggancio scia alle strade",

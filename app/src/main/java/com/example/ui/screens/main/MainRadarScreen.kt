@@ -130,7 +130,6 @@ private enum class RadarPanel(@StringRes val labelRes: Int) {
     MEMBERS(R.string.tab_members),
     CHAT(R.string.tab_chat),
     PLACES(R.string.tab_places),
-    TRIPS(R.string.tab_trips),
     SETTINGS(R.string.tab_settings)
 }
 
@@ -156,11 +155,8 @@ fun MainRadarScreen(
     val strCameraError = stringResource(R.string.toast_camera_error)
     val strRequestApproved = stringResource(R.string.toast_request_approved)
     val strRequestRejected = stringResource(R.string.toast_request_rejected)
-    val strTripSaved = stringResource(R.string.toast_trip_saved)
     val strBatterySaverOn = stringResource(R.string.toast_battery_saver_on)
     val strGpsPrecisionRestored = stringResource(R.string.toast_gps_precision_restored)
-    val strAutoTripOn = stringResource(R.string.toast_trip_auto_on)
-    val strAutoTripOff = stringResource(R.string.toast_trip_auto_off)
     val strBgTrackingOn = stringResource(R.string.toast_bg_tracking_on)
     val strBgTrackingOff = stringResource(R.string.toast_bg_tracking_off)
     val strGhostOn = stringResource(R.string.toast_ghost_on)
@@ -168,8 +164,6 @@ fun MainRadarScreen(
     val strFollowOff = stringResource(R.string.toast_follow_off)
     val strFollowOn = stringResource(R.string.toast_follow_on)
     val strFollowTargetUnavailable = stringResource(R.string.toast_follow_target_unavailable)
-    val strPositionUnavailable = stringResource(R.string.toast_position_unavailable)
-    val strTrackUnavailable = stringResource(R.string.toast_track_unavailable)
     val strInvalidPlaceCoords = stringResource(R.string.toast_invalid_place_coords)
     val strPlaceDeleted = stringResource(R.string.toast_place_deleted)
     val strPlaceAdded = stringResource(R.string.toast_place_added)
@@ -193,8 +187,6 @@ fun MainRadarScreen(
     val isTrackingEnabled by repository.isBackgroundTrackingEnabled.collectAsState()
     val isGlobalGhostMode by repository.isGlobalGhostMode.collectAsState()
     val isPowerSavingMode by repository.isPowerSavingMode.collectAsState()
-    val isAutoTripEnabled by repository.isAutoTripEnabled.collectAsState()
-    val isAutoTripShared by repository.isAutoTripShared.collectAsState()
     val isHighPrecisionMovement by repository.isHighPrecisionMovement.collectAsState()
     val filterQ by repository.filterQ.collectAsState()
     val deepLinkTarget by repository.deepLinkTarget.collectAsState()
@@ -316,7 +308,6 @@ fun MainRadarScreen(
     var pendingMapCameraUri by remember { mutableStateOf<Uri?>(null) }
     var showSnapshotSourceDialog by remember { mutableStateOf(false) }
     var pendingMapCameraAction by remember { mutableStateOf(false) }
-    var isSimulationRunning by remember { mutableStateOf(false) }
 
     // --- Follow Mode ---
     // followedUserId != null significa inseguimento attivo. Il bersaglio e' se
@@ -332,16 +323,6 @@ fun MainRadarScreen(
     val followPoint = followedLocation?.let { Pair(it.latitude, it.longitude) }
 
     val unreadChatCount by repository.unreadChatCount.collectAsState()
-    val groupTrips by repository.groupTrips.collectAsState()
-    val activeTrip by repository.activeTrip.collectAsState()
-    var selectedTripId by remember { mutableStateOf<String?>(null) }
-    var tripForDetail by remember { mutableStateOf<Trip?>(null) }
-    // Traccia del viaggio scelto, letta su richiesta: l'elenco porta solo i
-    // metadati, i punti si pagano una volta sola quando servono davvero.
-    var selectedTripTrack by remember { mutableStateOf<List<TripPoint>>(emptyList()) }
-    // Token di inquadratura: riaprendo lo stesso viaggio i punti sono identici,
-    // quindi da soli non farebbero riscattare l'effetto sulla mappa.
-    var fitTripToken by remember { mutableIntStateOf(0) }
 
     // Heatmap posizioni storiche del membro selezionato.
     var heatmapPoints by remember { mutableStateOf<List<Pair<Double, Double>>>(emptyList()) }
@@ -598,80 +579,6 @@ fun MainRadarScreen(
         }
     }
 
-    // --- Simulazione movimento (utile su emulatore) ---
-    // locations aggiornato in tempo reale dentro la coroutine: senza rememberUpdatedState
-    // la variabile catturata al lancio dell'effetto resterebbe congelata alla prima
-    // composizione, e la simulazione partirebbe dalla posizione "vecchia" del membro.
-    val currentLocations by rememberUpdatedState(locations)
-    val simCurrentUid by rememberUpdatedState(currentUser?.uid)
-
-    // Simulazione percorso realistico in auto: waypoint che formano un loop con curve,
-    // velocita' ~40 km/h (11 m/s), bearing calcolato dal segmento corrente, update ogni 1s.
-    // Muove il PRIMO membro non-self presente nel gruppo.
-    LaunchedEffect(isSimulationRunning) {
-        if (!isSimulationRunning) {
-            repository.clearSimRecentPoints()
-            return@LaunchedEffect
-        }
-
-        val speedMs = 11.0  // ~40 km/h
-
-        // Loop: da dove si trova ora, sceglie una destinazione casuale a ~1-2 km,
-        // chiede a OSRM il PERCORSO SU STRADA e ci fa camminare sopra il pallino.
-        while (isSimulationRunning) {
-            val target = currentLocations.firstOrNull { it.userId != simCurrentUid } ?: break
-            val originLat = target.latitude
-            val originLon = target.longitude
-
-            // Destinazione casuale ~1-2 km in una direzione qualsiasi.
-            val bearingRad = Random.nextDouble(0.0, 2 * Math.PI)
-            val distKm = Random.nextDouble(1.0, 2.0)
-            val dLat = (distKm / 111.0) * Math.cos(bearingRad)
-            val dLon = (distKm / (111.0 * Math.cos(Math.toRadians(originLat)))) * Math.sin(bearingRad)
-            val destLat = originLat + dLat
-            val destLon = originLon + dLon
-
-            // Percorso su strada (fallback: linea retta se OSRM non risponde).
-            val roadPath = com.example.util.RoadMatcher.route(originLat, originLon, destLat, destLon)
-                ?: listOf(originLat to originLon, destLat to destLon)
-
-            for (segIdx in 0 until roadPath.size - 1) {
-                if (!isSimulationRunning) break
-                val (aLat, aLon) = roadPath[segIdx]
-                val (bLat, bLon) = roadPath[segIdx + 1]
-
-                val results = FloatArray(1)
-                android.location.Location.distanceBetween(aLat, aLon, bLat, bLon, results)
-                val segLen = results[0].toDouble().coerceAtLeast(1.0)
-
-                val y = Math.sin(Math.toRadians(bLon - aLon)) * Math.cos(Math.toRadians(bLat))
-                val x = Math.cos(Math.toRadians(aLat)) * Math.sin(Math.toRadians(bLat)) -
-                        Math.sin(Math.toRadians(aLat)) * Math.cos(Math.toRadians(bLat)) *
-                        Math.cos(Math.toRadians(bLon - aLon))
-                val bearing = ((Math.toDegrees(Math.atan2(y, x)) + 360) % 360).toFloat()
-
-                var t = 0.0
-                while (t < 1.0 && isSimulationRunning) {
-                    val curLat = aLat + (bLat - aLat) * t
-                    val curLon = aLon + (bLon - aLon) * t
-                    repository.simulateMemberLocation(
-                        target.copy(
-                            latitude = curLat,
-                            longitude = curLon,
-                            speed = speedMs.toFloat() + (Random.nextFloat() - 0.5f) * 2f,
-                            bearing = bearing,
-                            accuracy = 8f,
-                            timestamp = System.currentTimeMillis()
-                        )
-                    )
-                    delay(1000L)
-                    t += speedMs / segLen
-                }
-            }
-            // Arrivato a destinazione: riparte con un nuovo tragitto su strada.
-        }
-    }
-
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val sheetContentHeight = screenHeight * 0.86f
 
@@ -793,80 +700,12 @@ fun MainRadarScreen(
                     }
                 }
             },
-            onLocateSelf = {
-                val myLoc = locations.find { it.userId == currentUserId }
-                if (myLoc != null) {
-                    focusTargetUserId = currentUserId
-                    focusMapOn(myLoc.latitude, myLoc.longitude, collapse = false)
-                } else {
-                    Toast.makeText(context, strPositionUnavailable, Toast.LENGTH_SHORT).show()
-                }
-            },
-            isRecording = activeTrip != null,
-            onToggleTrip = {
-                if (activeTrip != null) {
-                    coroutineScope.launch {
-                        repository.stopAndSaveTrip()
-                        Toast.makeText(context, strTripSaved, Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    repository.startTrip()
-                }
-            },
             onAddPlace = { showAddPlaceDialog = true },
             onTakeSnapshot = { showSnapshotSourceDialog = true },
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .padding(start = Spacing.md)
         )
-
-        // Pill di registrazione viaggio: in basso a destra
-        AnimatedVisibility(
-            visible = activeTrip != null,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .navigationBarsPadding()
-                .padding(end = Spacing.lg, bottom = 150.dp)
-        ) {
-            activeTrip?.let { trip ->
-                var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
-                LaunchedEffect(trip.startTime) {
-                    while (true) {
-                        nowMs = System.currentTimeMillis()
-                        delay(1000)
-                    }
-                }
-                val elapsedMs = nowMs - trip.startTime
-                val elapsedMin = (elapsedMs / 60000).toInt()
-                val elapsedSec = ((elapsedMs / 1000) % 60).toInt()
-                val km = trip.distanceMeters / 1000.0
-
-                Surface(
-                    shape = RoundedCornerShape(Radius.pill),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    modifier = Modifier.padding(Spacing.xs)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-                        modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs)
-                    ) {
-                        RadarPulseAnimation(
-                            color = RadarSemantic.Sos,
-                            modifier = Modifier.size(10.dp)
-                        )
-                        Text(
-                            text = "%02d:%02d  •  %.2f km".format(elapsedMin, elapsedSec, km),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
-        }
 
         // Push-to-talk vocale: in basso a destra, raggiungibile col pollice destro.
         // Stessa estetica dei RailButton della mappa. Tieni premuto per registrare
@@ -951,7 +790,6 @@ fun MainRadarScreen(
             pendingCount = if (isOwnerOrAdmin) pendingMembers.size else 0,
             memberCount = activeMembers.size,
             placeCount = places.size,
-            tripCount = groupTrips.size,
             onSelectPanel = { target ->
                 if (activeFullPanel == target) activeFullPanel = null
                 else openPanel(target)
@@ -1081,26 +919,6 @@ fun MainRadarScreen(
                                 }
                             )
 
-                            RadarPanel.TRIPS -> TripsPanel(
-                                trips = groupTrips,
-                                activeTrip = activeTrip,
-                                currentUserId = currentUserId,
-                                selectedTripId = selectedTripId,
-                                onTripSelected = { tripId ->
-                                    tripForDetail = groupTrips.find { it.id == tripId }
-                                },
-                                onDeleteTrip = { tripId ->
-                                    coroutineScope.launch { repository.deleteTrip(tripId) }
-                                },
-                                onStartTrip = { repository.startTrip() },
-                                onStopTrip = {
-                                    coroutineScope.launch {
-                                        repository.stopAndSaveTrip()
-                                        Toast.makeText(context, strTripSaved, Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            )
-
                             RadarPanel.SETTINGS -> SettingsPanel(
                                 currentUser = currentUser,
                                 currentGroup = currentGroup,
@@ -1114,13 +932,10 @@ fun MainRadarScreen(
                                 isTrackingEnabled = isTrackingEnabled,
                                 isGlobalGhostMode = isGlobalGhostMode,
                                 isPowerSavingMode = isPowerSavingMode,
-                                isAutoTripEnabled = isAutoTripEnabled,
-                                isAutoTripShared = isAutoTripShared,
                                 isHighPrecisionMovement = isHighPrecisionMovement,
                                 onToggleHighPrecisionMovement = { repository.setHighPrecisionMovement(it) },
                                 filterQ = filterQ,
                                 onSetFilterQ = { repository.setFilterQ(it) },
-                                isSimulationRunning = isSimulationRunning,
                                 isVoiceAutoplayEnabled = voiceAutoplay,
                                 onToggleVoiceAutoplay = { repository.setVoiceAutoplayEnabled(it) },
                                 onEditProfileClick = { showEditProfileDialog = true },
@@ -1137,15 +952,6 @@ fun MainRadarScreen(
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 },
-                                onToggleAutoTrip = { enabled ->
-                                    repository.setAutoTripEnabled(enabled)
-                                    Toast.makeText(
-                                        context,
-                                        if (enabled) strAutoTripOn else strAutoTripOff,
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                },
-                                onToggleAutoTripShared = { repository.setAutoTripShared(it) },
                                 onToggleTracking = { enabled ->
                                     repository.setBackgroundTrackingEnabled(enabled)
                                     Toast.makeText(
@@ -1174,7 +980,6 @@ fun MainRadarScreen(
                                         repository.updateGroupAccessPolicy(gid, requiresApproval)
                                     }
                                 },
-                                onToggleSimulation = { isSimulationRunning = it },
                                 onRequestLeaveGroup = { showLeaveDialog = true },
                                 onRequestDeleteGroup = { showDeleteGroupDialog = true },
                                 onLogout = {
@@ -1339,40 +1144,6 @@ fun MainRadarScreen(
                         else "Errore salvataggio: ${res.exceptionOrNull()?.message}",
                         Toast.LENGTH_SHORT
                     ).show()
-                }
-            }
-        )
-    }
-
-    tripForDetail?.let { trip ->
-        TripDetailDialog(
-            trip = trip,
-            isOnMap = selectedTripId == trip.id,
-            onDismiss = { tripForDetail = null },
-            onHideFromMap = {
-                tripForDetail = null
-                selectedTripId = null
-                selectedTripTrack = emptyList()
-            },
-            onShowOnMap = {
-                tripForDetail = null
-                coroutineScope.launch {
-                    // Un viaggio in corso porta gia' i punti con se': quelli
-                    // conclusi hanno la traccia nel sottodocumento.
-                    val track = if (trip.isLive) trip.points
-                        else repository.loadTripTrack(trip.id)
-
-                    if (track.isEmpty()) {
-                        Toast.makeText(context, strTrackUnavailable, Toast.LENGTH_SHORT).show()
-                        return@launch
-                    }
-                    followedUserId = null
-                    selectedTripTrack = track
-                    selectedTripId = trip.id
-                    collapseSheet()
-                    // Inquadra l'INTERA traccia. Centrare sulla partenza a zoom
-                    // fisso mostrava solo l'inizio del percorso.
-                    fitTripToken++
                 }
             }
         )
@@ -1719,9 +1490,6 @@ private fun MapTopBar(
 private fun MapActionRail(
     isFollowing: Boolean,
     onToggleFollow: () -> Unit,
-    onLocateSelf: () -> Unit,
-    isRecording: Boolean,
-    onToggleTrip: () -> Unit,
     onAddPlace: () -> Unit,
     onTakeSnapshot: () -> Unit,
     modifier: Modifier = Modifier
@@ -1738,20 +1506,6 @@ private fun MapActionRail(
             container = if (isFollowing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
             content = if (isFollowing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
             testTag = "follow_mode_fab"
-        )
-        RailButton(
-            icon = Icons.Default.MyLocation,
-            contentDescription = stringResource(R.string.action_center_my_location),
-            onClick = onLocateSelf,
-            testTag = "locate_self_fab"
-        )
-        RailButton(
-            icon = if (isRecording) Icons.Default.Stop else Icons.Default.DirectionsCar,
-            contentDescription = if (isRecording) stringResource(R.string.action_stop_trip) else stringResource(R.string.action_record_trip),
-            onClick = onToggleTrip,
-            container = if (isRecording) RadarSemantic.Sos else MaterialTheme.colorScheme.surface,
-            content = if (isRecording) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurface,
-            testTag = "trip_record_fab"
         )
         RailButton(
             icon = Icons.Default.AddLocationAlt,
@@ -2205,7 +1959,6 @@ private fun FloatingDock(
     pendingCount: Int,
     memberCount: Int,
     placeCount: Int,
-    tripCount: Int,
     onSelectPanel: (RadarPanel) -> Unit,
     onTakeSnapshot: () -> Unit,
     modifier: Modifier = Modifier

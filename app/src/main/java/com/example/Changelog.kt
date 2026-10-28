@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.70.0-beta"
+    const val VERSION = "0.70.1-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Carosello dei familiari rinnovato: effetto 3D fluido, avatar arrotondati (squircle) e anello di stato."
+        "🧹 Rimossa la funzione viaggi e la modalità simulazione; tolto il tasto \"centra su di me\" (basta toccare il tuo avatar nel carosello)."
     )
 }

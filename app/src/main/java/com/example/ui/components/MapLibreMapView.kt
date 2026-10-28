@@ -2,8 +2,14 @@
 
 package com.example.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -619,34 +625,15 @@ fun MapLibreMapView(
             }
         }
 
-        // Controlli a destra (Material 3 Expressive): un'unica barra flottante
-        // squircle. "Livelli" espande i tre toggle (membri/foto/luoghi) nella
-        // stessa barra; seguono centra-gruppo, vista 3D e zoom.
+        // Controlli a destra (Material 3 Expressive): barra flottante squircle con
+        // centra-gruppo, vista 3D e zoom. (I livelli sono nel menu a ventaglio in
+        // basso a sinistra.)
         VerticalFloatingToolbar(
             expanded = true,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 12.dp)
         ) {
-            IconToggleButton(
-                checked = layerMenuOpen,
-                onCheckedChange = { layerMenuOpen = it }
-            ) {
-                Icon(Icons.Default.Layers, contentDescription = "Livelli")
-            }
-            AnimatedVisibility(visible = layerMenuOpen) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconToggleButton(checked = showMembers, onCheckedChange = { showMembers = it }) {
-                        Icon(Icons.Default.People, contentDescription = "Membri")
-                    }
-                    IconToggleButton(checked = showSnapshots, onCheckedChange = { showSnapshots = it }) {
-                        Icon(Icons.Default.PhotoCamera, contentDescription = "Foto")
-                    }
-                    IconToggleButton(checked = showPlaces, onCheckedChange = { showPlaces = it }) {
-                        Icon(Icons.Default.Place, contentDescription = "Luoghi")
-                    }
-                }
-            }
             IconButton(onClick = {
                 val map = mapRef ?: return@IconButton
                 val pts = currentLocations.filter { it.latitude != 0.0 || it.longitude != 0.0 }
@@ -668,6 +655,82 @@ fun MapLibreMapView(
             }
             IconButton(onClick = { mapRef?.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.zoomOut()) }) {
                 Icon(Icons.Default.Remove, contentDescription = "Zoom indietro")
+            }
+        }
+
+        // Menu "Livelli" a ventaglio: trigger in basso a sinistra; i tre toggle
+        // (membri/foto/luoghi) esplodono verso l'alto-destra con molla. L'animazione
+        // vale sia all'apertura sia alla chiusura (fanProgress torna a 0).
+        val fanProgress by animateFloatAsState(
+            targetValue = if (layerMenuOpen) 1f else 0f,
+            animationSpec = spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow),
+            label = "layerFan"
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .navigationBarsPadding()
+                .padding(start = 16.dp, bottom = 92.dp)
+        ) {
+            if (fanProgress > 0.001f) {
+                data class Fan(
+                    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+                    val checked: Boolean,
+                    val angle: Float,
+                    val desc: String,
+                    val onToggle: (Boolean) -> Unit
+                )
+                val fans = listOf(
+                    Fan(Icons.Default.People, showMembers, 22f, "Membri") { showMembers = it },
+                    Fan(Icons.Default.PhotoCamera, showSnapshots, 50f, "Foto") { showSnapshots = it },
+                    Fan(Icons.Default.Place, showPlaces, 78f, "Luoghi") { showPlaces = it }
+                )
+                val radius = 92f
+                fans.forEachIndexed { i, f ->
+                    val p = ((fanProgress * 1.35f) - i * 0.18f).coerceIn(0f, 1f)
+                    val rad = Math.toRadians(f.angle.toDouble())
+                    val dx = (kotlin.math.cos(rad) * radius * p).toFloat()
+                    val dy = (-kotlin.math.sin(rad) * radius * p).toFloat()
+                    Surface(
+                        onClick = { f.onToggle(!f.checked) },
+                        shape = RoundedCornerShape(30),
+                        color = if (f.checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .offset(dx.dp, dy.dp)
+                            .size(46.dp)
+                            .graphicsLayer { alpha = p; scaleX = p; scaleY = p }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                f.icon,
+                                contentDescription = f.desc,
+                                tint = if (f.checked) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            Surface(
+                onClick = { layerMenuOpen = !layerMenuOpen },
+                shape = RoundedCornerShape(30),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .size(52.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Layers,
+                        contentDescription = "Livelli",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier
+                            .size(24.dp)
+                            .graphicsLayer { rotationZ = fanProgress * 45f }
+                    )
+                }
             }
         }
     }

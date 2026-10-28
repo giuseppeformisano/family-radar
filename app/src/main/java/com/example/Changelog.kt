@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.4-beta"
+    const val VERSION = "0.71.5-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "✨ Carosello familiari: ciclo infinito con l'avatar al centro in evidenza, ma più calmo e senza effetto 3D."
+        "🪄 Nuovo menu \"Livelli\" a ventaglio: pulsante in basso a sinistra che esplode nei tre toggle (membri/foto/luoghi), con animazione."
     )
 }

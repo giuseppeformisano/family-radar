@@ -718,14 +718,6 @@ class FirebaseRepository private constructor(private val context: Context) {
         }
     }
 
-    fun setTrackingFrequency(seconds: Int) {
-        _trackingFrequencySeconds.value = seconds
-    }
-
-    fun setBackgroundTracking(enabled: Boolean) {
-        _isBackgroundTrackingEnabled.value = enabled
-    }
-
     // ================== AUTHENTICATION ==================
 
     suspend fun signInWithGoogle(activityContext: Context): Result<UserData> {

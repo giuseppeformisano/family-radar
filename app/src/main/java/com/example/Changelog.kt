@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.69.12-beta"
+    const val VERSION = "0.69.13-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🔎 Widget 1x1: contenuto ancora più grande."
+        "🧹 Pulizia interna: rimosse librerie e codice non più usati. Nessun cambiamento visibile."
     )
 }

@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.12-beta"
+    const val VERSION = "0.71.13-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🎨 Finestra di aggiornamento ora centrata e con lo stesso tema scuro dell'app."
+        "👤 Membri: il dettaglio ora appare sopra la lista (non torni più alla mappa), icona \"centra\" più chiara e nuovo pulsante Centra sulla mappa nel dettaglio."
     )
 }

@@ -42,6 +42,7 @@ fun MemberDetailSheet(
     onNavigateToChat: () -> Unit,
     onEditProfileClick: (() -> Unit)? = null,
     onShowHeatmap: (() -> Unit)? = null,
+    onCenterOnMap: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -239,6 +240,22 @@ fun MemberDetailSheet(
                 )
 
                 Spacer(modifier = Modifier.height(Spacing.xl))
+
+                // Centra sulla mappa (azione primaria)
+                if (onCenterOnMap != null) {
+                    Button(
+                        onClick = onCenterOnMap,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("center_on_map_button"),
+                        shape = RoundedCornerShape(Radius.md)
+                    ) {
+                        Icon(Icons.Default.MyLocation, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(Spacing.sm))
+                        Text(stringResource(R.string.action_show_on_map))
+                    }
+                    Spacer(modifier = Modifier.height(Spacing.md))
+                }
 
                 // Action Buttons
                 Row(

@@ -855,8 +855,9 @@ fun MainRadarScreen(
                                 isOwnerOrAdmin = isOwnerOrAdmin,
                                 isLoading = members.isEmpty() && currentGroup != null,
                                 onMemberClick = { loc ->
+                                    // Mostra il dettaglio SOPRA la lista membri (non si
+                                    // torna alla mappa): il pannello resta aperto dietro.
                                     selectedMemberForSheet = loc
-                                    activeFullPanel = null
                                 },
                                 onFocusMember = { loc ->
                                     focusTargetUserId = loc.userId
@@ -1024,6 +1025,13 @@ fun MainRadarScreen(
                     heatmapFitToken++
                     collapseSheet()
                 }
+            },
+            onCenterOnMap = {
+                selectedMemberForSheet = null
+                activeFullPanel = null
+                focusTargetUserId = loc.userId
+                if (followedUserId != null) followedUserId = loc.userId
+                focusMapOn(loc.latitude, loc.longitude, collapse = true)
             }
         )
     }
@@ -2172,7 +2180,7 @@ private fun MemberRow(
             if (location != null) {
                 IconButton(onClick = onFocus) {
                     Icon(
-                        Icons.Default.NearMe,
+                        Icons.Default.MyLocation,
                         contentDescription = stringResource(R.string.action_show_on_map),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(Sizes.iconMd)

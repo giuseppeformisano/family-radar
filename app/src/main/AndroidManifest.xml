@@ -65,17 +65,6 @@
                 android:resource="@xml/member_widget_info" />
         </receiver>
 
-        <receiver
-            android:name=".widget.MemberWidgetSmallReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/member_widget_small_info" />
-        </receiver>
-
         <activity
             android:name=".widget.MemberWidgetConfigActivity"
             android:exported="true"

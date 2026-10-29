@@ -2149,7 +2149,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                             }
                         }
                         _currentGroupLocations.value = list
-                        com.example.widget.MemberWidget.publish(context, list)
+                        publishWidget(list)
                     }
                 }
 
@@ -2759,6 +2759,23 @@ class FirebaseRepository private constructor(private val context: Context) {
         return LocationGate(true, "spostamento ${distance.toInt()}m")
     }
 
+    /**
+     * Pubblica le posizioni al widget della home completando la foto profilo:
+     * il documento di posizione non sempre porta l'avatar, mentre l'elenco membri
+     * del gruppo lo ha sempre. Senza questo, il widget mostrava solo l'iniziale.
+     */
+    private fun publishWidget(locations: List<UserLocation>) {
+        val byId = _currentGroupMembers.value.associateBy { it.userId }
+        val enriched = locations.map { loc ->
+            if (!loc.photoBase64.isNullOrBlank()) loc
+            else {
+                val photo = byId[loc.userId]?.photoBase64?.ifBlank { null }
+                if (photo != null) loc.copy(photoBase64 = photo) else loc
+            }
+        }
+        com.example.widget.MemberWidget.publish(context, enriched)
+    }
+
     suspend fun updateLocation(location: UserLocation) {
         val user = _currentUserState.value ?: return
         val currentGroup = user.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id ?: return
@@ -2868,7 +2885,7 @@ class FirebaseRepository private constructor(private val context: Context) {
         val enrichedLocation = loc.copy(
             userId = user.uid,
             userName = user.displayName,
-            photoBase64 = user.photoBase64 ?: loc.photoBase64,
+            photoBase64 = user.photoBase64?.ifBlank { null } ?: loc.photoBase64,
             currentPlaceName = matchedPlace?.name,
             speed = displaySpeed
         )
@@ -2882,7 +2899,7 @@ class FirebaseRepository private constructor(private val context: Context) {
             currentList.add(enrichedLocation)
         }
         _currentGroupLocations.value = currentList
-        com.example.widget.MemberWidget.publish(context, currentList)
+        publishWidget(currentList)
 
         // Update Firestore
         try {

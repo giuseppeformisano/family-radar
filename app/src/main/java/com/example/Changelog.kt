@@ -10,10 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.16-beta"
+    const val VERSION = "0.71.17-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🗺️ Ora puoi togliere i \"Percorsi\" (mappa di calore): compare un pulsante sulla mappa quando sono attivi. Se ne vede uno per volta."
+        "🧩 Widget rinnovato: unico e ridimensionabile (da 1x1 a 2x1), scritte più leggibili e ora mostra la foto del profilo.",
+        "🗺️ Puoi togliere i \"Percorsi\" con un pulsante che compare sulla mappa; se ne vede uno per volta."
     )
 }

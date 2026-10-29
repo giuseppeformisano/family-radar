@@ -83,15 +83,8 @@ class MemberWidgetConfigActivity : ComponentActivity() {
                 updateAppWidgetState(ctx, glanceId) { prefs ->
                     prefs[MemberWidget.KEY_USER_ID] = userId
                 }
-                // Aggiorna subito l'istanza giusta (2x1 o 1x1).
-                val providerClass = AppWidgetManager.getInstance(ctx)
-                    .getAppWidgetInfo(appWidgetId)?.provider?.className
-                val widget = if (providerClass == MemberWidgetSmallReceiver::class.java.name) {
-                    MemberWidgetSmall()
-                } else {
-                    MemberWidget()
-                }
-                widget.update(ctx, glanceId)
+                // Aggiorna subito questa istanza (widget unico, ridimensionabile).
+                MemberWidget().update(ctx, glanceId)
             } catch (e: Exception) {
                 // in caso di errore il widget si aggiorna comunque al refresh successivo
             }

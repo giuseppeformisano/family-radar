@@ -10,10 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.18-beta"
+    const val VERSION = "0.71.19-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🗺️ Pulsante \"Percorsi\": ora mostra il nome della persona e si trova all'altezza degli altri pulsanti in basso."
+        "🗺️ Pulsante \"Percorsi\": ora mostra il nome della persona e si trova all'altezza degli altri pulsanti in basso.",
+        "🧩 Widget unico e ridimensionabile (1x1 / 2x1), scritte più leggibili e foto del profilo."
     )
 }

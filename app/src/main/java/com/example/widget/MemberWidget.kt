@@ -112,7 +112,7 @@ private val panelBg = ColorProvider(day = Color(0xF2FFFFFF), night = Color(0xF21
 private val trackBg = ColorProvider(day = Color(0x1A000000), night = Color(0x33FFFFFF))
 
 /** Verde/arancio/grigio in base a quanto è recente l'ultima posizione. */
-private data class Presence(val color: ColorProvider, val label: String)
+private data class Presence(val color: androidx.glance.unit.ColorProvider, val label: String)
 
 private fun presenceOf(member: WidgetMember): Presence {
     val elapsed = System.currentTimeMillis() - member.timestamp
@@ -275,7 +275,7 @@ private fun BatteryBar(battery: Int) {
 }
 
 @Composable
-private fun Avatar(member: WidgetMember, sizeDp: Dp, ring: ColorProvider) {
+private fun Avatar(member: WidgetMember, sizeDp: Dp, ring: androidx.glance.unit.ColorProvider) {
     val context = LocalContext.current
     // Riduciamo l'immagine alla dimensione effettiva: i widget hanno un tetto di
     // memoria per le immagini e una foto a piena risoluzione verrebbe scartata.

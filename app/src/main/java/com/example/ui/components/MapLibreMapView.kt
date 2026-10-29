@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.graphics.graphicsLayer
+import com.example.ui.theme.Spacing
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -670,7 +671,7 @@ fun MapLibreMapView(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .navigationBarsPadding()
-                .padding(start = 16.dp, bottom = 92.dp)
+                .padding(start = Spacing.lg, bottom = 80.dp)
         ) {
             if (fanProgress > 0.001f) {
                 data class Fan(
@@ -681,11 +682,11 @@ fun MapLibreMapView(
                     val onToggle: (Boolean) -> Unit
                 )
                 val fans = listOf(
-                    Fan(Icons.Default.People, showMembers, 25f, "Membri") { showMembers = it },
+                    Fan(Icons.Default.People, showMembers, 0f, "Membri") { showMembers = it },
                     Fan(Icons.Default.PhotoCamera, showSnapshots, 45f, "Foto") { showSnapshots = it },
-                    Fan(Icons.Default.Place, showPlaces, 65f, "Luoghi") { showPlaces = it }
+                    Fan(Icons.Default.Place, showPlaces, 90f, "Luoghi") { showPlaces = it }
                 )
-                val radius = 60f
+                val radius = 72f
                 fans.forEachIndexed { i, f ->
                     val p = ((fanProgress * 1.35f) - i * 0.18f).coerceIn(0f, 1f)
                     val rad = Math.toRadians(f.angle.toDouble())

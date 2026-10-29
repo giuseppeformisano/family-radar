@@ -39,6 +39,7 @@ import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
+import androidx.glance.layout.defaultWeight
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
@@ -164,26 +165,28 @@ private fun WidgetUi(member: WidgetMember?) {
     val size = LocalSize.current
     // Tutto scala con l'altezza reale della cella (il 2x1 cambia da telefono a telefono).
     val h = size.height.value
-    val avatarDp = (h * 0.62f).coerceIn(40f, 76f)
-    val nameSp = (h * 0.17f).coerceIn(13f, 20f)
-    val subSp = (h * 0.12f).coerceIn(11f, 15f)
+    val avatarDp = (h * 0.5f).coerceIn(34f, 60f)
+    val nameSp = (h * 0.15f).coerceIn(12f, 17f)
+    val subSp = (h * 0.11f).coerceIn(10f, 13f)
     val bmp = avatarRingBitmap(context, member, presence, avatarDp)
 
     Row(
-        modifier = base.background(panelBg).cornerRadius(22.dp).padding(12.dp),
+        modifier = base.background(panelBg).cornerRadius(22.dp).padding(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Image(provider = ImageProvider(bmp), contentDescription = null,
             modifier = GlanceModifier.size((avatarDp + 8f).dp))
-        Spacer(GlanceModifier.width(11.dp))
-        Column {
+        Spacer(GlanceModifier.width(10.dp))
+        // defaultWeight: la colonna prende tutta la larghezza rimasta, così le
+        // scritte hanno spazio e vanno a capo invece di essere tagliate.
+        Column(modifier = GlanceModifier.defaultWeight()) {
             Text(member.name,
                 style = TextStyle(color = textPrimary, fontSize = nameSp.sp, fontWeight = FontWeight.Bold),
                 maxLines = 1)
             Text(whereLabel(member),
                 style = TextStyle(color = textSecondary, fontSize = subSp.sp),
                 maxLines = 2)
-            Spacer(GlanceModifier.height(3.dp))
+            Spacer(GlanceModifier.height(2.dp))
             Text("${presence.label} · ${member.battery}%",
                 style = TextStyle(color = presence.textColor, fontSize = subSp.sp, fontWeight = FontWeight.Medium),
                 maxLines = 1)
@@ -206,10 +209,10 @@ private fun SmallUi(member: WidgetMember?) {
     val presence = presenceOf(member)
     val size = LocalSize.current
     val minSide = minOf(size.width.value, size.height.value)
-    // Avatar più contenuto nel quadrato, così restano righe sotto senza sforare.
-    val avatarDp = (minSide * 0.46f).coerceIn(36f, 74f)
-    val nameSp = (minSide * 0.12f).coerceIn(11f, 16f)
-    val subSp = (minSide * 0.10f).coerceIn(10f, 14f)
+    // Avatar contenuto: lascia spazio alle due righe di testo senza sforare in basso.
+    val avatarDp = (minSide * 0.40f).coerceIn(30f, 56f)
+    val nameSp = (minSide * 0.105f).coerceIn(10f, 14f)
+    val subSp = (minSide * 0.09f).coerceIn(9f, 12f)
     val shortPlace = member.placeName?.takeIf { it.isNotBlank() } ?: "In giro"
     val bmp = avatarRingBitmap(context, member, presence, avatarDp)
 
@@ -220,12 +223,15 @@ private fun SmallUi(member: WidgetMember?) {
     ) {
         Image(provider = ImageProvider(bmp), contentDescription = null,
             modifier = GlanceModifier.size((avatarDp + 8f).dp))
-        Spacer(GlanceModifier.height(3.dp))
+        Spacer(GlanceModifier.height(2.dp))
         Text(member.name,
             style = TextStyle(color = textPrimary, fontSize = nameSp.sp, fontWeight = FontWeight.Bold),
             maxLines = 1)
-        Text("$shortPlace · ${member.battery}%",
+        Text(shortPlace,
             style = TextStyle(color = textSecondary, fontSize = subSp.sp),
+            maxLines = 1)
+        Text("${member.battery}%",
+            style = TextStyle(color = presence.textColor, fontSize = subSp.sp, fontWeight = FontWeight.Medium),
             maxLines = 1)
     }
 }

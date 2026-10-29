@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.20-beta"
+    const val VERSION = "0.71.21-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧩 Widget: la carica è ora un anello attorno alla foto e tutto si adatta alla dimensione, senza testo tagliato (1x1 e 2x1)."
+        "🧩 Widget: risolto il testo tagliato — ora le scritte hanno lo spazio giusto e vanno a capo (1x1 e 2x1)."
     )
 }

@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.14-beta"
+    const val VERSION = "0.71.15-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🌫️ Finestra di aggiornamento con sfondo scuro e sfocato.",
-        "🔥 Heatmap (Percorsi): ora chiude il pannello e mostra la mappa; avvisa se non c'è ancora storico."
+        "🔕 Rimossa la notifica di \"download in corso\"; l'avanzamento si vede nella finestra in-app. Resta l'avviso di nuovo aggiornamento."
     )
 }

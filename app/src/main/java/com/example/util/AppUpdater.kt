@@ -274,8 +274,8 @@ object AppUpdater {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         ensureChannel(context, manager)
 
-        // Notifica di progresso indeterminato mentre parte il download
-        manager.notify(NOTIF_ID, progressNotification(context, -1, 0).build())
+        // Niente notifica di "download in corso": l'avanzamento si vede nella
+        // finestra in-app. Si mantiene solo l'avviso finale "pronto da installare".
         android.widget.Toast.makeText(
             context,
             res(context).getString(R.string.update_download_started),
@@ -308,10 +308,6 @@ object AppUpdater {
                         while (input.read(buf).also { n = it } != -1) {
                             out.write(buf, 0, n)
                             downloaded += n
-                            if (total > 0) {
-                                val pct = (downloaded * 100 / total).toInt()
-                                manager.notify(NOTIF_ID, progressNotification(context, 100, pct).build())
-                            }
                         }
                     }
                 }
@@ -348,25 +344,6 @@ object AppUpdater {
      * la notifica di download resterebbe in italiano con l'app in inglese.
      */
     private fun res(context: Context): Context = LanguagePreferences.localizedContext(context)
-
-    private fun progressNotification(
-        context: Context,
-        max: Int,
-        progress: Int
-    ): NotificationCompat.Builder {
-        val indeterminate = max < 0
-        val res = res(context)
-        return NotificationCompat.Builder(context, CHANNEL_UPDATE)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle(res.getString(R.string.update_downloading_title))
-            .setContentText(
-                if (indeterminate) res.getString(R.string.update_download_starting)
-                else res.getString(R.string.update_download_progress, progress)
-            )
-            .setProgress(if (indeterminate) 0 else max, progress, indeterminate)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-    }
 
     private fun launchInstaller(context: Context, file: File): Boolean {
         if (!file.exists()) return false

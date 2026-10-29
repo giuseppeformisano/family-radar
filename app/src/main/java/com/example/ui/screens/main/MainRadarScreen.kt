@@ -1020,10 +1020,15 @@ fun MainRadarScreen(
                 val gid = currentGroup?.id ?: return@MemberDetailSheet
                 val targetUserId = loc.userId
                 selectedMemberForSheet = null
+                activeFullPanel = null   // mostra la mappa: altrimenti la heatmap resta coperta dal pannello
                 coroutineScope.launch {
-                    heatmapPoints = repository.fetchLocationHistory(gid, targetUserId)
+                    val pts = repository.fetchLocationHistory(gid, targetUserId)
+                    heatmapPoints = pts
                     heatmapFitToken++
                     collapseSheet()
+                    if (pts.isEmpty()) {
+                        Toast.makeText(context, "Nessuno storico posizioni da mostrare per ora", Toast.LENGTH_SHORT).show()
+                    }
                 }
             },
             onCenterOnMap = {

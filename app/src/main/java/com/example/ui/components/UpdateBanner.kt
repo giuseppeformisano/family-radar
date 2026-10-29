@@ -1,18 +1,14 @@
 package com.example.ui.components
 
+import android.os.Build
+import android.view.WindowManager
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,22 +21,25 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import com.example.R
-import androidx.compose.ui.res.stringResource
 import com.example.util.UpdateInfo
 
 /**
- * Finestra di aggiornamento in-app: overlay centrato nello schermo, stesso fondo
- * scuro del resto dell'app, con barra di avanzamento durante il download. Non si
- * può chiudere mentre scarica.
+ * Finestra di aggiornamento in-app: un Dialog centrato con lo stesso fondo scuro
+ * dell'app e un backdrop scuro + sfocato dietro (dove il dispositivo lo supporta).
+ * Con barra di avanzamento durante il download; non si può chiudere mentre scarica.
  */
 @Composable
 fun UpdateBanner(
@@ -53,22 +52,34 @@ fun UpdateBanner(
     val visible = update != null || downloadProgress != null
     if (!visible) return
 
-    val interaction = remember { MutableInteractionSource() }
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.45f))
-            .clickable(interactionSource = interaction, indication = null) {
-                if (downloadProgress == null) onDismiss()
-            }
+    Dialog(
+        onDismissRequest = { if (downloadProgress == null) onDismiss() },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = downloadProgress == null,
+            dismissOnClickOutside = downloadProgress == null
+        )
     ) {
+        // Backdrop: scurisce (dim) e sfoca dietro la finestra. Il blur vero è a
+        // livello di sistema (copre anche la mappa) su Android 12+ con blur attivo.
+        val view = LocalView.current
+        SideEffect {
+            val w = (view.parent as? DialogWindowProvider)?.window
+            if (w != null) {
+                w.setDimAmount(0.55f)
+                w.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    w.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+                    w.attributes = w.attributes.apply { blurBehindRadius = 48 }
+                }
+            }
+        }
+
         Surface(
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.background,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-            modifier = Modifier
-                .align(Alignment.Center)
+            modifier = modifier
                 .fillMaxWidth(0.9f)
                 .padding(horizontal = 24.dp)
         ) {

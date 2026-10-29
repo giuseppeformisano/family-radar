@@ -82,7 +82,7 @@ internal fun createMemberMarkerDrawable(
         style = Paint.Style.STROKE; strokeWidth = 3 * density
     })
 
-    val userAvatarBitmap = ImageUtils.base64ToBitmap(photoBase64)
+    val userAvatarBitmap = ImageUtils.base64ToBitmapScaled(photoBase64, 192)
     if (userAvatarBitmap != null) {
         val squared = centerCropSquare(userAvatarBitmap)
         val side = (radius * 2).toInt().coerceAtLeast(1)
@@ -156,7 +156,7 @@ internal fun createSnapshotMarkerDrawable(ctx: Context, cluster: PlaceSnapshotCl
         color = AndroidColor.rgb(234, 88, 12); style = Paint.Style.STROKE; strokeWidth = 3 * density
     })
 
-    val thumbBmp = ImageUtils.base64ToBitmap(cluster.latestSnapshot?.photoBase64)
+    val thumbBmp = ImageUtils.base64ToBitmapScaled(cluster.latestSnapshot?.photoBase64, 192)
     if (thumbBmp != null) {
         canvas.drawBitmap(
             getCircularBitmap(Bitmap.createScaledBitmap(thumbBmp, (radius * 2).toInt(), (radius * 2).toInt(), true)),

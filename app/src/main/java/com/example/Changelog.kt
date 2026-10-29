@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.8-beta"
+    const val VERSION = "0.71.9-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🎯 Ventaglio Livelli: i tre pulsanti ora a 45° l'uno dall'altro; il pulsante ha gli stessi margini del microfono."
+        "🪶 Meno memoria usata: le foto profilo nel carosello e sui segnaposto ora vengono ridimensionate invece di tenerle enormi in RAM."
     )
 }

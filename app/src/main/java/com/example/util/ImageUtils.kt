@@ -239,6 +239,41 @@ object ImageUtils {
     }
 
     /**
+     * Come [base64ToBitmap] ma decodifica RIDIMENSIONANDO a ~[maxDimensionPx] sul
+     * lato maggiore (via inSampleSize), così non si tiene in RAM una foto enorme
+     * per disegnarla in un tondino piccolo. Pensata per avatar e marker.
+     */
+    fun base64ToBitmapScaled(base64Str: String?, maxDimensionPx: Int): Bitmap? {
+        if (base64Str.isNullOrBlank()) return null
+        return try {
+            var cleanStr = base64Str.trim()
+            if (cleanStr.contains(",")) cleanStr = cleanStr.substringAfter(",")
+            cleanStr = cleanStr.replace("\n", "").replace("\r", "").replace(" ", "").trim()
+            val bytes = Base64.decode(cleanStr, Base64.DEFAULT)
+
+            // 1) leggo solo le dimensioni, senza allocare i pixel
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            val larger = maxOf(bounds.outWidth, bounds.outHeight)
+
+            // 2) calcolo il fattore di dimezzamento (1,2,4,8…) che porta sotto il target
+            var sample = 1
+            if (larger > maxDimensionPx && maxDimensionPx > 0) {
+                while (larger / (sample * 2) >= maxDimensionPx) sample *= 2
+            }
+
+            val opts = BitmapFactory.Options().apply {
+                inSampleSize = sample
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    /**
      * Saves a Bitmap directly to the device's MediaStore Pictures gallery.
      */
     suspend fun saveBitmapToGallery(

@@ -1662,8 +1662,10 @@ private fun PerspectiveMemberCoverFlow(
     val photoSignature = remember(locations) {
         locations.joinToString(",") { "${it.userId}:${it.photoBase64?.length ?: 0}" }
     }
+    // Avatar rimpiccioliti (~160 px): vengono disegnati in un tondino ~56 dp, quindi
+    // non ha senso tenere in RAM la foto a piena risoluzione (anche 2000+ px).
     val avatarBitmaps: Map<String, ImageBitmap?> = remember(photoSignature) {
-        locations.associate { it.userId to ImageUtils.base64ToBitmap(it.photoBase64)?.asImageBitmap() }
+        locations.associate { it.userId to ImageUtils.base64ToBitmapScaled(it.photoBase64, 160)?.asImageBitmap() }
     }
 
     // Frazione 0..1 di distanza dell'item dal centro viewport (letta al draw dallo scroll).

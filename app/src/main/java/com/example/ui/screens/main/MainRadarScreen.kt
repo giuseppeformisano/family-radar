@@ -325,9 +325,12 @@ fun MainRadarScreen(
 
     val unreadChatCount by repository.unreadChatCount.collectAsState()
 
-    // Heatmap posizioni storiche del membro selezionato.
+    // Heatmap posizioni storiche del membro selezionato. Una sola per volta:
+    // caricarne una nuova sostituisce la precedente. Il nome serve all'etichetta
+    // del pulsante che compare sulla mappa per toglierla.
     var heatmapPoints by remember { mutableStateOf<List<Pair<Double, Double>>>(emptyList()) }
     var heatmapFitToken by remember { mutableIntStateOf(0) }
+    var heatmapMemberName by remember { mutableStateOf<String?>(null) }
 
     /** Centra la mappa su un punto e, di norma, chiude il pannello per lasciarla in vista. */
     fun focusMapOn(latitude: Double, longitude: Double, collapse: Boolean = true) {
@@ -784,6 +787,50 @@ fun MainRadarScreen(
             }
         }
 
+        // Pulsante per togliere la heatmap: compare solo quando ce n'è una attiva,
+        // sopra al dock in basso. Una sola heatmap per volta, quindi un solo pulsante.
+        if (heatmapPoints.isNotEmpty()) {
+            Surface(
+                onClick = {
+                    heatmapPoints = emptyList()
+                    heatmapMemberName = null
+                    heatmapFitToken++
+                },
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 96.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Thermostat,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(Spacing.xs))
+                    Text(
+                        text = "Percorsi di ${heatmapMemberName ?: ""}".trim(),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.width(Spacing.xs))
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Togli percorsi",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
         // Dock Fluttuante in Basso al Centro (BottomCenter)
         FloatingDock(
             selectedPanel = activeFullPanel,
@@ -1019,11 +1066,13 @@ fun MainRadarScreen(
             onShowHeatmap = {
                 val gid = currentGroup?.id ?: return@MemberDetailSheet
                 val targetUserId = loc.userId
+                val targetName = loc.nickname ?: loc.userName
                 selectedMemberForSheet = null
                 activeFullPanel = null   // mostra la mappa: altrimenti la heatmap resta coperta dal pannello
                 coroutineScope.launch {
                     val pts = repository.fetchLocationHistory(gid, targetUserId)
                     heatmapPoints = pts
+                    heatmapMemberName = if (pts.isNotEmpty()) targetName else null
                     heatmapFitToken++
                     collapseSheet()
                     if (pts.isEmpty()) {

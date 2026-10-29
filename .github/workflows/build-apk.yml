@@ -18,7 +18,7 @@ on:
         description: "Tipo di build"
         type: choice
         options: [debug, release]
-        default: debug
+        default: release
 
 jobs:
   build:
@@ -87,7 +87,7 @@ jobs:
 
       - name: Build APK
         env:
-          BUILD_TYPE: ${{ inputs.build_type || 'debug' }}
+          BUILD_TYPE: ${{ inputs.build_type || 'release' }}
         run: |
           if [ "$BUILD_TYPE" = "release" ]; then
             gradle :app:assembleRelease
@@ -108,10 +108,13 @@ jobs:
       - name: Pubblica APK
         env:
           GH_TOKEN: ${{ github.token }}
-          BUILD_TYPE: ${{ inputs.build_type || 'debug' }}
+          BUILD_TYPE: ${{ inputs.build_type || 'release' }}
         run: |
           set -e
-          TAG="latest-${BUILD_TYPE}"
+          # Canale fisso "latest-debug": e' quello che l'app gia' controlla per gli
+          # aggiornamenti. Pubblicando qui la release (firmata con la stessa chiave
+          # di debug) le installazioni esistenti si auto-aggiornano senza reinstallare.
+          TAG="latest-debug"
           gh release view "$TAG" >/dev/null 2>&1 || \
             gh release create "$TAG" --prerelease --title "Latest ${BUILD_TYPE} build" --notes "Commit: ${{ github.sha }}"
           APKS=$(find app/build/outputs/apk -name '*.apk')

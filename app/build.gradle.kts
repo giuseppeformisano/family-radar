@@ -16,8 +16,8 @@ android {
     applicationId = "com.formisano.familyradar"
     minSdk = 24
     targetSdk = 36
-    versionCode = 281
-    versionName = "0.71.10-beta"
+    versionCode = 282
+    versionName = "0.71.11-beta"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -50,7 +50,11 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      // Opzione A: la release e' firmata con la STESSA chiave di debug. Le
+      // installazioni esistenti sono firmate col debug.keystore; Android rifiuta
+      // un aggiornamento se la firma cambia, quindi firmando la release con la
+      // stessa chiave si auto-aggiornano senza reinstallare.
+      signingConfig = signingConfigs.getByName("debugConfig")
     }
     debug { signingConfig = signingConfigs.getByName("debugConfig") }
   }

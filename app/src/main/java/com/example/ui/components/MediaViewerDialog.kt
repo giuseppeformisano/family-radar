@@ -98,7 +98,7 @@ fun FullScreenMediaViewer(
     val decodedBitmap = remember(imageSource) {
         when (imageSource) {
             is Bitmap -> imageSource
-            is String -> ImageUtils.base64ToBitmap(imageSource)
+            is String -> ImageUtils.base64ToBitmapScaled(imageSource, 1440)
             else -> null
         }
     }
@@ -563,7 +563,7 @@ fun SnapshotClusterGalleryDialog(
                 ) { page ->
                     val item = snapshots[page]
                     val decoded = remember(item.photoBase64) {
-                        ImageUtils.base64ToBitmap(item.photoBase64)
+                        ImageUtils.base64ToBitmapScaled(item.photoBase64, 1440)
                     }
                     Box(
                         modifier = Modifier.fillMaxSize(),

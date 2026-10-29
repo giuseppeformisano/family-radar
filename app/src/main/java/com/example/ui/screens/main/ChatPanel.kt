@@ -745,7 +745,7 @@ private fun ChatBubble(
                     VoiceMessagePlayer(message = message, isMe = isMe, groupId = groupId, repository = repository)
                 }
                 val bitmap = remember(message.imageBase64) {
-                    ImageUtils.base64ToBitmap(message.imageBase64)
+                    ImageUtils.base64ToBitmapScaled(message.imageBase64, 512)
                 }
                 val imageSource = message.getImageSource()
 

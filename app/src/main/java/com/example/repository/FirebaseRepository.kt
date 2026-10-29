@@ -1979,7 +1979,11 @@ class FirebaseRepository private constructor(private val context: Context) {
                                 senderName = senderName,
                                 senderPhoto = doc.getString("senderPhoto"),
                                 text = text,
-                                imageBase64 = if (!imageBase64.isNullOrBlank()) imageBase64 else null,
+                                // Risparmio RAM: se c'e' gia' l'URL, non teniamo in memoria
+                                // anche il Base64 (Coil mostra dall'URL). Il vecchio Base64
+                                // resta solo per i messaggi senza URL.
+                                imageBase64 = if (!imageUrl.isNullOrBlank()) null
+                                    else if (!imageBase64.isNullOrBlank()) imageBase64 else null,
                                 imageUrl = if (!imageUrl.isNullOrBlank()) imageUrl else null,
                                 timestamp = timestamp,
                                 type = type,

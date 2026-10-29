@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.9-beta"
+    const val VERSION = "0.71.10-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🪶 Meno memoria usata: le foto profilo nel carosello e sui segnaposto ora vengono ridimensionate invece di tenerle enormi in RAM."
+        "🪶 Meno memoria: le foto di chat non vengono più tenute per intero in RAM quando è già disponibile il link, e le immagini si aprono ridimensionate."
     )
 }

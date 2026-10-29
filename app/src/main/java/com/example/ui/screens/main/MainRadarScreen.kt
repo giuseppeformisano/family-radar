@@ -787,9 +787,18 @@ fun MainRadarScreen(
             }
         }
 
-        // Pulsante per togliere la heatmap: compare solo quando ce n'è una attiva,
-        // sopra al dock in basso. Una sola heatmap per volta, quindi un solo pulsante.
+        // Pulsante per togliere la heatmap: compare solo quando ce n'è una attiva.
+        // Allineato verticalmente al centro del pulsante microfono (stesso livello,
+        // tra i due pulsanti laterali). Una sola heatmap per volta → un solo pulsante.
         if (heatmapPoints.isNotEmpty()) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 80.dp)
+                    .height(56.dp),
+                contentAlignment = Alignment.Center
+            ) {
             Surface(
                 onClick = {
                     heatmapPoints = emptyList()
@@ -798,11 +807,7 @@ fun MainRadarScreen(
                 },
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 96.dp)
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -828,6 +833,7 @@ fun MainRadarScreen(
                         modifier = Modifier.size(18.dp)
                     )
                 }
+            }
             }
         }
 
@@ -1066,7 +1072,9 @@ fun MainRadarScreen(
             onShowHeatmap = {
                 val gid = currentGroup?.id ?: return@MemberDetailSheet
                 val targetUserId = loc.userId
-                val targetName = loc.nickname ?: loc.userName
+                val targetName = loc.nickname?.takeIf { it.isNotBlank() }
+                    ?: loc.userName.takeIf { it.isNotBlank() }
+                    ?: "questa persona"
                 selectedMemberForSheet = null
                 activeFullPanel = null   // mostra la mappa: altrimenti la heatmap resta coperta dal pannello
                 coroutineScope.launch {

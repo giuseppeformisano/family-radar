@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.11-beta"
+    const val VERSION = "0.71.12-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "⚡ App ora distribuita come build ottimizzata (release): avvio e animazioni più reattivi.",
-        "🔄 Aggiornamento automatico mantenuto: ti aggiorni senza reinstallare."
+        "🎨 Finestra di aggiornamento ora centrata e con lo stesso tema scuro dell'app."
     )
 }

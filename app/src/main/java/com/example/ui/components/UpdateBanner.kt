@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -37,9 +38,9 @@ import androidx.compose.ui.res.stringResource
 import com.example.util.UpdateInfo
 
 /**
- * Banner di aggiornamento in-app (stile music-app): overlay in basso con
- * barra di avanzamento determinata durante il download. Non si può chiudere
- * mentre scarica.
+ * Finestra di aggiornamento in-app: overlay centrato nello schermo, stesso fondo
+ * scuro del resto dell'app, con barra di avanzamento durante il download. Non si
+ * può chiudere mentre scarica.
  */
 @Composable
 fun UpdateBanner(
@@ -64,13 +65,12 @@ fun UpdateBanner(
     ) {
         Surface(
             shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 3.dp,
+            color = MaterialTheme.colorScheme.background,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth(0.92f)
-                .navigationBarsPadding()
-                .padding(bottom = 20.dp)
+                .align(Alignment.Center)
+                .fillMaxWidth(0.9f)
+                .padding(horizontal = 24.dp)
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

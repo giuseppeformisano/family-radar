@@ -1052,6 +1052,19 @@ fun MainRadarScreen(
                 }
             }
         }
+
+        // Istantanea: stesso contenitore full-screen dei pannelli, DENTRO il Box
+        // principale cosi' copre tutta la mappa (sopra e sotto comprese).
+        selectedSnapshotClusterForGallery?.let { cluster ->
+            SnapshotClusterGalleryDialog(
+                snapshots = cluster.snapshots,
+                currentUserId = currentUserId,
+                onDelete = { snapshot ->
+                    coroutineScope.launch { repository.deletePlaceSnapshot(snapshot.id) }
+                },
+                onDismiss = { selectedSnapshotClusterForGallery = null }
+            )
+        }
     }
 
     // ======================= OVERLAY: FOGLI E DIALOG =======================
@@ -1342,17 +1355,6 @@ fun MainRadarScreen(
             authorName = req.sender,
             timestamp = req.timestamp,
             onDismiss = { fullScreenRequest = null }
-        )
-    }
-
-    selectedSnapshotClusterForGallery?.let { cluster ->
-        SnapshotClusterGalleryDialog(
-            snapshots = cluster.snapshots,
-            currentUserId = currentUserId,
-            onDelete = { snapshot ->
-                coroutineScope.launch { repository.deletePlaceSnapshot(snapshot.id) }
-            },
-            onDismiss = { selectedSnapshotClusterForGallery = null }
         )
     }
 

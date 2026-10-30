@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import android.graphics.Bitmap
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -408,28 +409,22 @@ fun SnapshotClusterGalleryDialog(
     val strDelete = stringResource(R.string.action_delete)
     val strCancel = stringResource(R.string.action_cancel)
 
-    // Stesso contenitore a schermo intero dei pannelli Membri/Luoghi/Chat: un Surface
-    // che riempie lo schermo, con intestazione (freccia indietro + titolo) e contenuto.
-    // E' avvolto in un Dialog a tutto schermo solo per sovrapporsi alla mappa e gestire
-    // il tasto Indietro; l'aspetto resta quello del pannello.
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = false
-        )
+    // Il tasto Indietro chiude, come per Membri/Luoghi/Chat.
+    BackHandler { onDismiss() }
+
+    // Stesso identico contenitore dei pannelli Membri/Luoghi/Chat: un Surface che riempie
+    // TUTTO lo schermo (coprendo anche la mappa dietro le barre di sistema), con
+    // intestazione (freccia indietro + titolo) e contenuto. NON e' un Dialog apposta.
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
-            ) {
             // Intestazione identica a quella dei pannelli: indietro + titolo + azioni.
             Row(
                 modifier = Modifier
@@ -590,7 +585,6 @@ fun SnapshotClusterGalleryDialog(
                 }
             }
         }
-    }
     }
 
     if (showDeleteConfirm) {

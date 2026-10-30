@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.35-beta"
+    const val VERSION = "0.71.36-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "📸 Ogni foto inviata in chat diventa anche un'istantanea: compare il pin sulla mappa nel punto in cui sei, con gli stessi dati delle istantanee."
+        "💬 Sotto ogni messaggio: luogo tutto a sinistra, orario tutto a destra. Rimossa la distanza (poco utile)."
     )
 }

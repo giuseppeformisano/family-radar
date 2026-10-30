@@ -700,24 +700,7 @@ private fun ChatBubble(
         else -> Unit
     }
 
-    // Luogo del mittente + distanza da me (calcolo locale, zero rete). La distanza
-    // ha senso solo sui messaggi ALTRUI: sui propri sarebbe ~0. Calcolate qui perche'
-    // ora vivono nel piede della bolla.
-    val distanceLabel = remember(message.latitude, message.longitude, myLatitude, myLongitude, isMe) {
-        val mLat = message.latitude; val mLon = message.longitude
-        if (!isMe && mLat != null && mLon != null && myLatitude != null && myLongitude != null &&
-            !(mLat == 0.0 && mLon == 0.0)
-        ) {
-            val res = FloatArray(1)
-            android.location.Location.distanceBetween(myLatitude, myLongitude, mLat, mLon, res)
-            val m = res[0]
-            when {
-                m < 100f -> "qui vicino"
-                m < 1000f -> "a ${m.toInt()} m da te"
-                else -> "a ${"%.1f".format(m / 1000f)} km da te"
-            }
-        } else null
-    }
+    // Luogo del mittente al momento dell'invio, mostrato nel piede della bolla.
     val placeLabel = message.placeName?.takeIf { it.isNotBlank() }
 
     Column(
@@ -849,52 +832,62 @@ private fun ChatBubble(
 
                 val footerColor = if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.72f)
                     else MaterialTheme.colorScheme.onSurfaceVariant
+                // Piede bolla: luogo del mittente (al momento dell'invio) tutto a sinistra,
+                // orario (+ spunta) tutto a destra.
                 Row(
                     modifier = Modifier
-                        .align(Alignment.End)
+                        .fillMaxWidth()
                         .padding(top = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.xxs)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Luogo + distanza da me, poi orario e spunta: tutto nel piede bolla.
-                    val geoLine = listOfNotNull(placeLabel, distanceLabel).joinToString(" · ")
-                    if (geoLine.isNotBlank()) {
-                        Icon(
-                            Icons.Default.Place,
-                            contentDescription = null,
-                            tint = footerColor,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Text(
-                            text = geoLine,
-                            fontSize = 11.sp,
-                            color = footerColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.widthIn(max = 180.dp)
-                        )
-                        Spacer(Modifier.width(Spacing.xs))
-                    }
-                    Text(
-                        text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = footerColor
-                    )
-                    // Stato di consegna: solo sull'ultimo mio messaggio per non
-                    // riempire ogni bolla di icone. Orologio = in invio,
-                    // spunta singola = inviato, doppia blu = letto da qualcuno.
-                    if (isMe && showReadReceipt) {
-                        val (icon, tint) = when {
-                            isPending -> Icons.Default.Schedule to MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
-                            readerNames.isNotEmpty() -> Icons.Default.DoneAll to RadarSemantic.Online
-                            else -> Icons.Default.Done to MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                    // Sinistra: luogo (se presente), altrimenti vuoto.
+                    if (placeLabel != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Spacing.xxs),
+                            modifier = Modifier.weight(1f, fill = false)
+                        ) {
+                            Icon(
+                                Icons.Default.Place,
+                                contentDescription = null,
+                                tint = footerColor,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Text(
+                                text = placeLabel,
+                                fontSize = 11.sp,
+                                color = footerColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
-                        Icon(
-                            icon,
-                            contentDescription = null,
-                            tint = tint,
-                            modifier = Modifier.size(14.dp)
+                    } else {
+                        Spacer(Modifier.width(1.dp))
+                    }
+                    // Destra: orario + stato di consegna (solo ultimo mio messaggio).
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Spacing.xxs)
+                    ) {
+                        Text(
+                            text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = footerColor
                         )
+                        if (isMe && showReadReceipt) {
+                            val (icon, tint) = when {
+                                isPending -> Icons.Default.Schedule to MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                                readerNames.isNotEmpty() -> Icons.Default.DoneAll to RadarSemantic.Online
+                                else -> Icons.Default.Done to MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+                            }
+                            Icon(
+                                icon,
+                                contentDescription = null,
+                                tint = tint,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                     }
                 }
             }

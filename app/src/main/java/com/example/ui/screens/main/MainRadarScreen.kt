@@ -952,7 +952,31 @@ fun MainRadarScreen(
                                 currentUserId = currentUserId,
                                 groupId = currentGroup?.id ?: "",
                                 repository = repository,
-                                onImageClick = { src, sender, ts -> fullScreenRequest = FullScreenRequest(src, sender, ts) }
+                                onImageClick = { msg ->
+                                    // Toccando una foto in chat si apre lo STESSO visore del
+                                    // dettaglio istantanea: la foto chat e' gia' un'istantanea.
+                                    val isPlaceholder = msg.text == "Immagine condivisa" ||
+                                        msg.text == "Foto condivisa" || msg.text == "Foto scattata in chat"
+                                    selectedSnapshotClusterForGallery = PlaceSnapshotCluster(
+                                        id = "chat_${msg.id}",
+                                        centerLatitude = msg.latitude ?: 0.0,
+                                        centerLongitude = msg.longitude ?: 0.0,
+                                        snapshots = listOf(
+                                            PlaceSnapshot(
+                                                id = msg.snapshotId.ifBlank { msg.id },
+                                                userId = msg.senderId,
+                                                userName = msg.senderName,
+                                                userPhotoBase64 = msg.senderPhoto,
+                                                photoBase64 = msg.imageBase64 ?: "",
+                                                photoUrl = msg.imageUrl,
+                                                latitude = msg.latitude ?: 0.0,
+                                                longitude = msg.longitude ?: 0.0,
+                                                timestamp = msg.timestamp,
+                                                caption = if (isPlaceholder) "" else msg.text
+                                            )
+                                        )
+                                    )
+                                }
                             )
 
                             RadarPanel.PLACES -> PlacesPanel(

@@ -134,7 +134,7 @@ internal fun ChatPanel(
     currentUserId: String,
     groupId: String,
     repository: FirebaseRepository,
-    onImageClick: (Any, String?, Long?) -> Unit
+    onImageClick: (ChatMessage) -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -188,6 +188,15 @@ internal fun ChatPanel(
                         .getOrNull() ?: base64
                 isUploading = false
                 val reply = replyingTo
+
+                // Ogni foto inviata in chat diventa anche un'istantanea: stessi metadati
+                // e pin sulla mappa nel punto in cui ti trovi. Si genera un id condiviso
+                // tra il messaggio e l'istantanea, cosi' toccando la foto in chat si apre
+                // lo stesso dettaglio del pin (e l'eliminazione combacia).
+                val loc = repository.currentGroupLocations.value.find { it.userId == currentUserId }
+                val hasLoc = loc != null && (loc.latitude != 0.0 || loc.longitude != 0.0)
+                val snapId = if (hasLoc) "snp_${java.util.UUID.randomUUID().toString().take(8)}" else ""
+
                 repository.sendMessage(
                     groupId,
                     ChatMessage(
@@ -195,6 +204,7 @@ internal fun ChatPanel(
                         imageBase64 = inlineBase64,
                         imageUrl = imageUrl,
                         type = MessageType.IMAGE,
+                        snapshotId = snapId,
                         replyToId = reply?.id ?: "",
                         replyToText = reply?.let { replyPreviewText(it) } ?: "",
                         replyToSender = reply?.senderName ?: ""
@@ -202,13 +212,10 @@ internal fun ChatPanel(
                 )
                 replyingTo = null
 
-                // Ogni foto inviata in chat diventa anche un'istantanea: stessi metadati
-                // e pin sulla mappa nel punto in cui ti trovi. Niente messaggio-notifica
-                // aggiuntivo (la foto e' gia' in chat) e si riusa l'URL gia' caricato.
-                val loc = repository.currentGroupLocations.value.find { it.userId == currentUserId }
-                if (loc != null && (loc.latitude != 0.0 || loc.longitude != 0.0)) {
+                if (hasLoc && loc != null) {
                     repository.addPlaceSnapshot(
                         PlaceSnapshot(
+                            id = snapId,
                             photoBase64 = base64,
                             latitude = loc.latitude,
                             longitude = loc.longitude,
@@ -579,7 +586,7 @@ private fun ChatBubble(
     message: ChatMessage,
     isMe: Boolean,
     senderPhoto: String? = null,
-    onImageClick: (Any, String?, Long?) -> Unit,
+    onImageClick: (ChatMessage) -> Unit,
     groupId: String,
     repository: FirebaseRepository,
     myLatitude: Double? = null,
@@ -799,7 +806,7 @@ private fun ChatBubble(
                             .fillMaxWidth()
                             .height(190.dp)
                             .clip(RoundedCornerShape(Radius.sm))
-                            .clickable { message.imageBase64?.let { onImageClick(it, message.senderName.takeIf { n -> n.isNotBlank() }, message.timestamp) } },
+                            .clickable { onImageClick(message) },
                         contentScale = ContentScale.Crop
                     )
                     Spacer(Modifier.height(Spacing.xs))
@@ -811,7 +818,7 @@ private fun ChatBubble(
                             .fillMaxWidth()
                             .height(190.dp)
                             .clip(RoundedCornerShape(Radius.sm))
-                            .clickable { onImageClick(imageSource, message.senderName.takeIf { it.isNotBlank() }, message.timestamp) },
+                            .clickable { onImageClick(message) },
                         contentScale = ContentScale.Crop
                     )
                     Spacer(Modifier.height(Spacing.xs))

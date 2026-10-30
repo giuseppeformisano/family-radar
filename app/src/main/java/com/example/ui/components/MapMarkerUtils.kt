@@ -144,7 +144,9 @@ internal fun createMemberMarkerDrawable(
 
     val d = ctx.resources.displayMetrics.density
     val (bitmap, canvas) = newPinBitmap(d)
-    val baseColor = if (isSelf) AndroidColor.rgb(79, 70, 229) else AndroidColor.rgb(16, 185, 129)
+    // Stesso colore per tutti i membri, me compreso: la mia identita' si capisce
+    // dall'avatar/iniziale, non da un colore diverso.
+    val baseColor = AndroidColor.rgb(16, 185, 129)
 
     drawGlassPin(canvas, d, baseColor) { c, fcx, fcy, fr ->
         val avatar = ImageUtils.base64ToBitmapScaled(photoBase64, 192)

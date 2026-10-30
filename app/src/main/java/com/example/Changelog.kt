@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.28-beta"
+    const val VERSION = "0.71.29-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🖼️ Finestra istantanee rinnovata nello stile dell'app (scheda di vetro, maniglia, avatar).",
-        "📍 Pallini mappa: immagine interna più grande e colore Casa allineato alle categorie."
+        "🖼️ Finestra istantanee ora è un foglio dal basso con lo stile dei pannelli (sfondo chiaro, schede come la lista membri).",
+        "📍 Il tuo segnaposto ora ha lo stesso colore degli altri membri."
     )
 }

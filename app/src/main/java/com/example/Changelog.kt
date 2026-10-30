@@ -10,11 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.29-beta"
+    const val VERSION = "0.71.30-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🖼️ Finestra istantanee ora è un foglio dal basso con lo stile dei pannelli (sfondo chiaro, schede come la lista membri).",
-        "📍 Il tuo segnaposto ora ha lo stesso colore degli altri membri."
+        "🖼️ Istantanee e foto della chat ora si aprono con lo stesso identico visore a schermo intero (zoom, scorri, salva, chiudi)."
     )
 }

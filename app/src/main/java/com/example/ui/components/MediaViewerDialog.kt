@@ -8,7 +8,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -52,9 +51,6 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.model.PlaceSnapshot
-import com.example.ui.theme.Radius
-import com.example.ui.theme.Sizes
-import com.example.ui.theme.Spacing
 import com.example.util.ImageUtils
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -372,11 +368,10 @@ fun ZoomableImage(
 }
 
 /**
- * Visore delle istantanee di un cluster, in stile pannello dell'app: un foglio dal
- * basso (ModalBottomSheet) con fondo chiaro del tema, maniglia, e schede come la lista
- * membri. Scorri tra piu' istantanee, salva o elimina.
+ * Visore delle istantanee a schermo intero: stessa identica gestione del visore foto
+ * della chat (sfondo scuro, zoom, swipe per chiudere, salva), con in piu' lo scorrimento
+ * tra le istantanee del cluster, l'eliminazione e le coordinate.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SnapshotClusterGalleryDialog(
     snapshots: List<PlaceSnapshot>,
@@ -388,18 +383,27 @@ fun SnapshotClusterGalleryDialog(
     if (snapshots.isEmpty()) return
 
     val context = LocalContext.current
+    val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val pagerState = rememberPagerState(
         initialPage = initialIndex.coerceIn(0, snapshots.size - 1),
         pageCount = { snapshots.size }
     )
     var isDownloading by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var chromeVisible by remember { mutableStateOf(true) }
+    var currentZoomScale by remember { mutableFloatStateOf(1f) }
+
+    // Stessa gestione del visore foto della chat: swipe verticale per chiudere.
+    val dragOffsetY = remember { Animatable(0f) }
+    val scrimAlpha = remember { Animatable(1f) }
+    val dismissThresholdPx = with(density) { 120.dp.toPx() }
+    var dragStartTime by remember { mutableStateOf(0L) }
+    var totalDrag by remember { mutableStateOf(0f) }
 
     val currentSnapshot = snapshots.getOrNull(pagerState.currentPage) ?: snapshots.first()
 
-    val strGeoTitle = stringResource(R.string.snapshot_geographic_title)
+    val strCloseViewer = stringResource(R.string.action_close_viewer)
     val strSnapshotSavedGallery = stringResource(R.string.toast_snapshot_saved_gallery)
     val strSaveError = stringResource(R.string.toast_save_error)
     val strSaveToGallery2 = stringResource(R.string.action_save_to_gallery)
@@ -409,67 +413,57 @@ fun SnapshotClusterGalleryDialog(
     val strDelete = stringResource(R.string.action_delete)
     val strCancel = stringResource(R.string.action_cancel)
 
-    ModalBottomSheet(
+    Dialog(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface,
-        dragHandle = {
-            Box(
-                modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm),
-                contentAlignment = Alignment.Center
-            ) { SheetHandle(expanded = true) }
-        }
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false
+        )
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Spacing.lg)
-                .padding(bottom = Spacing.xl),
-            verticalArrangement = Arrangement.spacedBy(Spacing.md)
+                .fillMaxSize()
+                .background(ViewerBackdrop.copy(alpha = scrimAlpha.value))
         ) {
-            // Intestazione: titolo + azioni (salva / elimina), come una SectionHeader.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = strGeoTitle,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(
-                    onClick = {
-                        if (isDownloading) return@IconButton
-                        coroutineScope.launch {
-                            isDownloading = true
-                            val ok = ImageUtils.saveBase64ToGallery(context, currentSnapshot.photoBase64)
-                            isDownloading = false
-                            Toast.makeText(context, if (ok) strSnapshotSavedGallery else strSaveError, Toast.LENGTH_SHORT).show()
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { translationY = dragOffsetY.value }
+                    .pointerInput(currentZoomScale) {
+                        if (currentZoomScale <= 1.05f) {
+                            detectVerticalDragGestures(
+                                onDragStart = { dragStartTime = System.currentTimeMillis(); totalDrag = 0f },
+                                onDragEnd = {
+                                    val elapsedMs = (System.currentTimeMillis() - dragStartTime).coerceAtLeast(1L)
+                                    val approxVelocity = totalDrag / elapsedMs * 1000f
+                                    coroutineScope.launch {
+                                        if (abs(dragOffsetY.value) > dismissThresholdPx || abs(approxVelocity) > 1200f) {
+                                            onDismiss()
+                                        } else {
+                                            launch { dragOffsetY.animateTo(0f, animationSpec = spring()) }
+                                            launch { scrimAlpha.animateTo(1f, animationSpec = spring()) }
+                                        }
+                                    }
+                                },
+                                onDragCancel = {
+                                    coroutineScope.launch {
+                                        launch { dragOffsetY.animateTo(0f, animationSpec = spring()) }
+                                        launch { scrimAlpha.animateTo(1f, animationSpec = spring()) }
+                                    }
+                                },
+                                onVerticalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    totalDrag += dragAmount
+                                    coroutineScope.launch {
+                                        dragOffsetY.snapTo(dragOffsetY.value + dragAmount)
+                                        val progress = (abs(dragOffsetY.value) / dismissThresholdPx).coerceIn(0f, 1f)
+                                        scrimAlpha.snapTo((1f - progress * 0.6f).coerceIn(0.35f, 1f))
+                                    }
+                                }
+                            )
                         }
                     }
-                ) {
-                    if (isDownloading) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
-                    } else {
-                        Icon(Icons.Default.Download, contentDescription = strSaveToGallery2, tint = MaterialTheme.colorScheme.onSurface)
-                    }
-                }
-                if (onDelete != null) {
-                    IconButton(onClick = { showDeleteConfirm = true }) {
-                        Icon(Icons.Default.Delete, contentDescription = strDeleteSnapshotTitle, tint = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-
-            // Foto in una scheda arrotondata (stessa forma delle righe membri).
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(320.dp)
             ) {
                 HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                     val item = snapshots[page]
@@ -478,110 +472,142 @@ fun SnapshotClusterGalleryDialog(
                     val decoded = remember(item.photoBase64) {
                         if (item.photoBase64.isNotBlank()) ImageUtils.base64ToBitmapScaled(item.photoBase64, 1440) else null
                     }
-                    if (decoded != null) {
-                        Image(
-                            bitmap = decoded.asImageBitmap(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context).data(item.getImageSource()).crossfade(true).build(),
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
+                    ZoomableImage(
+                        bitmap = decoded,
+                        imageSource = item.getImageSource() ?: "",
+                        contentDescription = null,
+                        onTap = { chromeVisible = !chromeVisible },
+                        onScaleChanged = { if (page == pagerState.currentPage) currentZoomScale = it }
+                    )
                 }
             }
 
-            // Indicatori di pagina quando ci sono piu' istantanee.
-            if (snapshots.size > 1) {
+            // Top bar: chiudi + salva + elimina (stessi pulsanti tondi del visore chat).
+            AnimatedVisibility(
+                visible = chromeVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.TopCenter)
+            ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    snapshots.forEachIndexed { idx, _ ->
-                        val isCurrent = idx == pagerState.currentPage
-                        val dotWidth by animateDpAsState(
-                            targetValue = if (isCurrent) 20.dp else 6.dp,
-                            label = "dot_width_$idx"
-                        )
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color(0x66000000))
+                            .clickable { onDismiss() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = strCloseViewer, tint = Color.White, modifier = Modifier.size(22.dp))
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(
                             modifier = Modifier
-                                .padding(horizontal = 3.dp)
-                                .height(6.dp)
-                                .width(dotWidth)
+                                .size(40.dp)
                                 .clip(CircleShape)
-                                .background(
-                                    if (isCurrent) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
-                                )
-                        )
-                    }
-                }
-            }
-
-            // Scheda info autore/luogo, identica per stile alle righe della lista membri.
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(Spacing.md),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.sm)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.md)
-                    ) {
-                        RadarAvatar(
-                            name = currentSnapshot.userName,
-                            photoBase64 = currentSnapshot.userPhotoBase64,
-                            size = Sizes.avatarMd
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = currentSnapshot.userName,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                .background(Color(0x66000000))
+                                .clickable {
+                                    if (isDownloading) return@clickable
+                                    coroutineScope.launch {
+                                        isDownloading = true
+                                        val ok = ImageUtils.saveBase64ToGallery(context, currentSnapshot.photoBase64)
+                                        isDownloading = false
+                                        Toast.makeText(context, if (ok) strSnapshotSavedGallery else strSaveError, Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isDownloading) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, trackColor = Color(0x33FFFFFF), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Default.Download, contentDescription = strSaveToGallery2, tint = Color.White, modifier = Modifier.size(22.dp))
+                            }
+                        }
+                        if (onDelete != null) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0x66000000))
+                                    .clickable { showDeleteConfirm = true },
+                                contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
-                                val timeStr = remember(currentSnapshot.timestamp) {
-                                    SimpleDateFormat("HH:mm · dd/MM/yy", Locale.getDefault()).format(Date(currentSnapshot.timestamp))
-                                }
-                                Text(text = timeStr, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+                                Icon(Icons.Default.Delete, contentDescription = strDeleteSnapshotTitle, tint = Color(0xFFFF6B6B), modifier = Modifier.size(22.dp))
                             }
                         }
                     }
+                }
+            }
 
-                    if (currentSnapshot.caption.isNotBlank()) {
-                        Text(
-                            text = currentSnapshot.caption,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+            // Bottom: autore + ora, didascalia, coordinate, indicatori di pagina.
+            AnimatedVisibility(
+                visible = chromeVisible,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.BottomStart)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xCC000000))
+                        .navigationBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (snapshots.size > 1) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 4.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            snapshots.forEachIndexed { idx, _ ->
+                                val isCurrent = idx == pagerState.currentPage
+                                val dotWidth by animateDpAsState(
+                                    targetValue = if (isCurrent) 20.dp else 6.dp,
+                                    label = "dot_width_$idx"
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .padding(horizontal = 3.dp)
+                                        .height(6.dp)
+                                        .width(dotWidth)
+                                        .clip(CircleShape)
+                                        .background(if (isCurrent) Color.White else Color.White.copy(alpha = 0.35f))
+                                )
+                            }
+                        }
                     }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = currentSnapshot.userName,
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        val timeStr = remember(currentSnapshot.timestamp) {
+                            SimpleDateFormat("HH:mm · dd/MM/yy", Locale.getDefault()).format(Date(currentSnapshot.timestamp))
+                        }
+                        Text(text = "· $timeStr", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall)
+                    }
+                    if (currentSnapshot.caption.isNotBlank()) {
+                        Text(text = currentSnapshot.caption, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFFEA580C), modifier = Modifier.size(14.dp))
                         Text(
                             text = String.format(Locale.US, strPositionFmt, currentSnapshot.latitude, currentSnapshot.longitude),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = Color.White.copy(alpha = 0.6f),
                             style = MaterialTheme.typography.labelSmall
                         )
                     }

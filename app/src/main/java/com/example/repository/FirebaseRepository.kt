@@ -3621,14 +3621,19 @@ class FirebaseRepository private constructor(private val context: Context) {
 
     // ================== PLACE SNAPSHOTS (GEOREFERENCED PHOTOS) ==================
 
-    suspend fun addPlaceSnapshot(snapshot: PlaceSnapshot): Result<PlaceSnapshot> {
+    suspend fun addPlaceSnapshot(
+        snapshot: PlaceSnapshot,
+        postChatMessage: Boolean = true,
+        precomputedPhotoUrl: String? = null
+    ): Result<PlaceSnapshot> {
         val user = _currentUserState.value ?: return Result.failure(Exception(str(R.string.err_not_authenticated)))
         val currentGroup = user.currentGroupId ?: _userGroupsState.value.firstOrNull()?.id
             ?: return Result.failure(Exception(str(R.string.err_no_group_selected)))
 
         val snapshotId = if (snapshot.id.isBlank()) "snp_${UUID.randomUUID().toString().take(8)}" else snapshot.id
-        // Carica foto snapshot su Cloudinary; fallback a Base64 se fallisce.
-        val photoUrl = uploadFileToCloudinary(snapshot.photoBase64, "image/jpeg", "$snapshotId.jpg")
+        // Carica foto snapshot su Cloudinary; fallback a Base64 se fallisce. Se l'URL e'
+        // gia' stato calcolato (es. foto appena caricata dalla chat) lo si riusa.
+        val photoUrl = precomputedPhotoUrl ?: uploadFileToCloudinary(snapshot.photoBase64, "image/jpeg", "$snapshotId.jpg")
         // Miniatura piccola SEMPRE inline nel documento (pochi KB): cosi' il pallino
         // sulla mappa e l'anteprima funzionano anche sugli altri dispositivi, dove la
         // foto piena sta su Cloudinary e photoBase64 resta vuota.
@@ -3666,23 +3671,27 @@ class FirebaseRepository private constructor(private val context: Context) {
                 firestore.collection("groups").document(currentGroup)
                     .collection("snapshots").document(newSnapshot.id).set(map).await()
 
-                // Also notify group members with a feed message in chat
-                val snapMsg = ChatMessage(
-                    id = "msg_${UUID.randomUUID().toString().take(8)}",
-                    senderId = user.uid,
-                    senderName = user.displayName,
-                    senderPhoto = user.photoBase64,
-                    text = if (newSnapshot.caption.isNotBlank()) str(R.string.msg_new_snapshot_caption, newSnapshot.caption)
-                        else str(R.string.msg_new_snapshot),
-                    imageBase64 = if (photoUrl != null) null else newSnapshot.photoBase64,
-                    imageUrl = photoUrl,
-                    timestamp = newSnapshot.timestamp,
-                    type = MessageType.IMAGE,
-                    latitude = newSnapshot.latitude,
-                    longitude = newSnapshot.longitude,
-                    snapshotId = newSnapshot.id
-                )
-                sendMessage(currentGroup, snapMsg)
+                // Messaggio-notifica in chat con la foto. Si salta quando l'istantanea
+                // nasce da una foto gia' inviata in chat (postChatMessage = false), per
+                // non duplicare l'immagine nel flusso.
+                if (postChatMessage) {
+                    val snapMsg = ChatMessage(
+                        id = "msg_${UUID.randomUUID().toString().take(8)}",
+                        senderId = user.uid,
+                        senderName = user.displayName,
+                        senderPhoto = user.photoBase64,
+                        text = if (newSnapshot.caption.isNotBlank()) str(R.string.msg_new_snapshot_caption, newSnapshot.caption)
+                            else str(R.string.msg_new_snapshot),
+                        imageBase64 = if (photoUrl != null) null else newSnapshot.photoBase64,
+                        imageUrl = photoUrl,
+                        timestamp = newSnapshot.timestamp,
+                        type = MessageType.IMAGE,
+                        latitude = newSnapshot.latitude,
+                        longitude = newSnapshot.longitude,
+                        snapshotId = newSnapshot.id
+                    )
+                    sendMessage(currentGroup, snapMsg)
+                }
             }
         } catch (e: Exception) {
             Log.w(TAG, "addPlaceSnapshot firestore failed: ${e.message}")

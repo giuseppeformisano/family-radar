@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.34-beta"
+    const val VERSION = "0.71.35-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🔍 Zoom foto: l'immagine ingrandita scorre sotto l'intestazione e i dati, che restano leggibili su sfondo pieno (niente più bordi neri)."
+        "📸 Ogni foto inviata in chat diventa anche un'istantanea: compare il pin sulla mappa nel punto in cui sei, con gli stessi dati delle istantanee."
     )
 }

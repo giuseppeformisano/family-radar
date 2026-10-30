@@ -201,6 +201,23 @@ internal fun ChatPanel(
                     )
                 )
                 replyingTo = null
+
+                // Ogni foto inviata in chat diventa anche un'istantanea: stessi metadati
+                // e pin sulla mappa nel punto in cui ti trovi. Niente messaggio-notifica
+                // aggiuntivo (la foto e' gia' in chat) e si riusa l'URL gia' caricato.
+                val loc = repository.currentGroupLocations.value.find { it.userId == currentUserId }
+                if (loc != null && (loc.latitude != 0.0 || loc.longitude != 0.0)) {
+                    repository.addPlaceSnapshot(
+                        PlaceSnapshot(
+                            photoBase64 = base64,
+                            latitude = loc.latitude,
+                            longitude = loc.longitude,
+                            caption = ""
+                        ),
+                        postChatMessage = false,
+                        precomputedPhotoUrl = imageUrl
+                    )
+                }
             } else {
                 isUploading = false
                 Toast.makeText(context, "Errore elaborazione immagine", Toast.LENGTH_SHORT).show()

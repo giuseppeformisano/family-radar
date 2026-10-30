@@ -368,9 +368,15 @@ internal fun ChatPanel(
                             .filter { it.userId != currentUserId && it.chatLastReadAt >= msg.timestamp }
                             .map { it.nickname?.takeIf { n -> n.isNotBlank() } ?: it.displayName }
                     } else emptyList()
+                    // Foto profilo del mittente per il cerchietto nella bolla: la foto
+                    // sul messaggio spesso e' vuota, quindi si ripiega su quella del
+                    // membro del gruppo (sempre aggiornata).
+                    val senderPhoto = msg.senderPhoto?.takeIf { it.isNotBlank() }
+                        ?: chatMembers.firstOrNull { it.userId == msg.senderId }?.photoBase64?.takeIf { it.isNotBlank() }
                     ChatBubble(
                         message = msg,
                         isMe = isMine,
+                        senderPhoto = senderPhoto,
                         onImageClick = onImageClick,
                         groupId = groupId,
                         repository = repository,
@@ -555,6 +561,7 @@ internal fun ChatPanel(
 private fun ChatBubble(
     message: ChatMessage,
     isMe: Boolean,
+    senderPhoto: String? = null,
     onImageClick: (Any, String?, Long?) -> Unit,
     groupId: String,
     repository: FirebaseRepository,
@@ -676,20 +683,30 @@ private fun ChatBubble(
         else -> Unit
     }
 
+    // Luogo del mittente + distanza da me (calcolo locale, zero rete). La distanza
+    // ha senso solo sui messaggi ALTRUI: sui propri sarebbe ~0. Calcolate qui perche'
+    // ora vivono nel piede della bolla.
+    val distanceLabel = remember(message.latitude, message.longitude, myLatitude, myLongitude, isMe) {
+        val mLat = message.latitude; val mLon = message.longitude
+        if (!isMe && mLat != null && mLon != null && myLatitude != null && myLongitude != null &&
+            !(mLat == 0.0 && mLon == 0.0)
+        ) {
+            val res = FloatArray(1)
+            android.location.Location.distanceBetween(myLatitude, myLongitude, mLat, mLon, res)
+            val m = res[0]
+            when {
+                m < 100f -> "qui vicino"
+                m < 1000f -> "a ${m.toInt()} m da te"
+                else -> "a ${"%.1f".format(m / 1000f)} km da te"
+            }
+        } else null
+    }
+    val placeLabel = message.placeName?.takeIf { it.isNotBlank() }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
     ) {
-        if (!isMe) {
-            Text(
-                text = message.senderName,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = Spacing.md, bottom = 3.dp)
-            )
-        }
-
         var menuOpen by remember { mutableStateOf(false) }
         Box {
           Surface(
@@ -708,6 +725,31 @@ private fun ChatBubble(
                 )
         ) {
             Column(modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp)) {
+                // Testata della bolla: cerchietto foto profilo + nome del mittente.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+                    modifier = Modifier.padding(bottom = 6.dp)
+                ) {
+                    RadarAvatar(
+                        name = message.senderName,
+                        photoBase64 = senderPhoto,
+                        size = 24.dp,
+                        containerColor = if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.22f)
+                        else MaterialTheme.colorScheme.primary,
+                        contentColor = if (isMe) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onPrimary
+                    )
+                    Text(
+                        text = if (isMe) "Tu" else message.senderName,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isMe) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 // Anteprima del messaggio citato (reply).
                 if (message.replyToId.isNotBlank()) {
                     Row(
@@ -788,18 +830,38 @@ private fun ChatBubble(
                     )
                 }
 
+                val footerColor = if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.72f)
+                    else MaterialTheme.colorScheme.onSurfaceVariant
                 Row(
                     modifier = Modifier
                         .align(Alignment.End)
-                        .padding(top = Spacing.xxs),
+                        .padding(top = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(Spacing.xxs)
                 ) {
+                    // Luogo + distanza da me, poi orario e spunta: tutto nel piede bolla.
+                    val geoLine = listOfNotNull(placeLabel, distanceLabel).joinToString(" · ")
+                    if (geoLine.isNotBlank()) {
+                        Icon(
+                            Icons.Default.Place,
+                            contentDescription = null,
+                            tint = footerColor,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = geoLine,
+                            fontSize = 11.sp,
+                            color = footerColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.widthIn(max = 180.dp)
+                        )
+                        Spacer(Modifier.width(Spacing.xs))
+                    }
                     Text(
                         text = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(message.timestamp)),
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (isMe) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
-                        else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = footerColor
                     )
                     // Stato di consegna: solo sull'ultimo mio messaggio per non
                     // riempire ogni bolla di icone. Orologio = in invio,
@@ -843,6 +905,25 @@ private fun ChatBubble(
                   }
               }
               HorizontalDivider()
+              // "Visto da…": solo sui propri messaggi letti da altri, come info non
+              // cliccabile in cima alle azioni.
+              if (isMe && readerNames.isNotEmpty()) {
+                  DropdownMenuItem(
+                      text = {
+                          Text(
+                              "Visto da ${readerNames.joinToString(", ")}",
+                              style = MaterialTheme.typography.bodySmall,
+                              color = RadarSemantic.Online
+                          )
+                      },
+                      leadingIcon = {
+                          Icon(Icons.Default.DoneAll, contentDescription = null, tint = RadarSemantic.Online)
+                      },
+                      enabled = false,
+                      onClick = {}
+                  )
+                  HorizontalDivider()
+              }
               DropdownMenuItem(
                   text = { Text(stringResource(R.string.action_reply)) },
                   leadingIcon = { Icon(Icons.Default.Reply, contentDescription = null) },
@@ -890,48 +971,6 @@ private fun ChatBubble(
           }
         }
 
-        // Etichetta luogo del mittente + distanza da me (calcolo locale, zero rete).
-        // La distanza ha senso solo sui messaggi ALTRUI: sui propri sarebbe la
-        // distanza da se stessi (~0), inutile.
-        val distanceLabel = remember(message.latitude, message.longitude, myLatitude, myLongitude, isMe) {
-            val mLat = message.latitude; val mLon = message.longitude
-            if (!isMe && mLat != null && mLon != null && myLatitude != null && myLongitude != null &&
-                !(mLat == 0.0 && mLon == 0.0)
-            ) {
-                val res = FloatArray(1)
-                android.location.Location.distanceBetween(myLatitude, myLongitude, mLat, mLon, res)
-                val m = res[0]
-                when {
-                    m < 100f -> "qui vicino"
-                    m < 1000f -> "a ${m.toInt()} m da te"
-                    else -> "a ${"%.1f".format(m / 1000f)} km da te"
-                }
-            } else null
-        }
-        val placeLabel = message.placeName?.takeIf { it.isNotBlank() }
-        val geoLine = listOfNotNull(placeLabel?.let { "📍 $it" }, distanceLabel).joinToString(" • ")
-        if (geoLine.isNotBlank()) {
-            Text(
-                text = geoLine,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(
-                    top = Spacing.xxs,
-                    start = if (isMe) 0.dp else Spacing.md,
-                    end = if (isMe) Spacing.md else 0.dp
-                )
-            )
-        }
-
-        // "Visto da…" solo sotto il proprio ultimo messaggio letto da altri.
-        if (isMe && showReadReceipt && readerNames.isNotEmpty()) {
-            Text(
-                text = "Visto da ${readerNames.joinToString(", ")}",
-                fontSize = 12.sp,
-                color = RadarSemantic.Online,
-                modifier = Modifier.padding(top = Spacing.xxs, end = Spacing.md)
-            )
-        }
     }
 }
 

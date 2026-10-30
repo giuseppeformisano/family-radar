@@ -10,10 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.25-beta"
+    const val VERSION = "0.71.26-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "⬆️ \"Controlla aggiornamenti\" ora usa la stessa finestra del download: confermi e parte subito lo scaricamento lì."
+        "💬 Nuove bolle chat: foto profilo, nome, luogo e distanza, orario tutto dentro la bolla (coda a sinistra se ricevuto, a destra se inviato).",
+        "👀 \"Visto da…\" ora si trova nel menu che si apre tenendo premuto il messaggio."
     )
 }

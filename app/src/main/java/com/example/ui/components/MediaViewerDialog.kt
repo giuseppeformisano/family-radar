@@ -115,15 +115,21 @@ fun FullScreenMediaViewer(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Foto a tutto schermo: sta SOTTO header e metadati; con lo zoom scorre dietro di essi.
+            ZoomableImage(
+                bitmap = decodedBitmap,
+                imageSource = imageSource,
+                contentDescription = strFullscreenImage
+            )
+
+            // Header in alto, con sfondo opaco del pannello (niente nero dietro).
             Row(
                 modifier = Modifier
+                    .align(Alignment.TopCenter)
                     .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .statusBarsPadding()
                     .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -161,20 +167,14 @@ fun FullScreenMediaViewer(
                 }
             }
 
-            // Foto senza cornice.
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                ZoomableImage(
-                    bitmap = decodedBitmap,
-                    imageSource = imageSource,
-                    contentDescription = strFullscreenImage
-                )
-            }
-
-            // Metadati liberi sotto (autore + ora, didascalia).
+            // Metadati in basso, con sfondo opaco del pannello.
             if (!metaText.isNullOrBlank() || !caption.isNullOrBlank()) {
                 Column(
                     modifier = Modifier
+                        .align(Alignment.BottomStart)
                         .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background)
+                        .navigationBarsPadding()
                         .padding(horizontal = Spacing.lg, vertical = Spacing.md),
                     verticalArrangement = Arrangement.spacedBy(Spacing.xs)
                 ) {
@@ -332,16 +332,29 @@ fun SnapshotClusterGalleryDialog(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-        ) {
-            // Intestazione identica a quella dei pannelli: indietro + titolo + azioni.
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Foto a tutto schermo: sta SOTTO header e metadati; con lo zoom scorre dietro di essi.
+            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                val item = snapshots[page]
+                // Foto piena: preferisce l'URL Cloudinary (presente anche sugli altri
+                // dispositivi); il Base64 inline e' solo un ripiego per le vecchie.
+                val decoded = remember(item.photoBase64) {
+                    if (item.photoBase64.isNotBlank()) ImageUtils.base64ToBitmapScaled(item.photoBase64, 1440) else null
+                }
+                ZoomableImage(
+                    bitmap = decoded,
+                    imageSource = item.getImageSource() ?: "",
+                    contentDescription = null
+                )
+            }
+
+            // Intestazione in alto con sfondo opaco del pannello (niente nero dietro).
             Row(
                 modifier = Modifier
+                    .align(Alignment.TopCenter)
                     .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .statusBarsPadding()
                     .padding(horizontal = Spacing.md, vertical = Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -378,64 +391,43 @@ fun SnapshotClusterGalleryDialog(
                 }
             }
 
-            // Foto senza cornice: occupa tutto lo spazio centrale, con zoom. Scorri tra piu' istantanee.
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) {
-                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-                    val item = snapshots[page]
-                    // Foto piena: preferisce l'URL Cloudinary (presente anche sugli altri
-                    // dispositivi); il Base64 inline e' solo un ripiego per le vecchie.
-                    val decoded = remember(item.photoBase64) {
-                        if (item.photoBase64.isNotBlank()) ImageUtils.base64ToBitmapScaled(item.photoBase64, 1440) else null
-                    }
-                    ZoomableImage(
-                        bitmap = decoded,
-                        imageSource = item.getImageSource() ?: "",
-                        contentDescription = null
-                    )
-                }
-            }
-
-            // Indicatori di pagina quando ci sono piu' istantanee.
-            if (snapshots.size > 1) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = Spacing.sm),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    snapshots.forEachIndexed { idx, _ ->
-                        val isCurrent = idx == pagerState.currentPage
-                        val dotWidth by animateDpAsState(
-                            targetValue = if (isCurrent) 20.dp else 6.dp,
-                            label = "dot_width_$idx"
-                        )
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 3.dp)
-                                .height(6.dp)
-                                .width(dotWidth)
-                                .clip(CircleShape)
-                                .background(
-                                    if (isCurrent) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
-                                )
-                        )
-                    }
-                }
-            }
-
-            // Metadati autore/luogo: testo libero sotto la foto, senza riquadro.
+            // In basso: indicatori di pagina + metadati, con sfondo opaco del pannello.
             Column(
                 modifier = Modifier
+                    .align(Alignment.BottomStart)
                     .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background)
+                    .navigationBarsPadding()
                     .padding(horizontal = Spacing.lg, vertical = Spacing.md),
                 verticalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
+                if (snapshots.size > 1) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        snapshots.forEachIndexed { idx, _ ->
+                            val isCurrent = idx == pagerState.currentPage
+                            val dotWidth by animateDpAsState(
+                                targetValue = if (isCurrent) 20.dp else 6.dp,
+                                label = "dot_width_$idx"
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 3.dp)
+                                    .height(6.dp)
+                                    .width(dotWidth)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isCurrent) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                                    )
+                            )
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,

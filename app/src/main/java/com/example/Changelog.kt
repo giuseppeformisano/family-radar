@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.33-beta"
+    const val VERSION = "0.71.34-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🖼️ Istantanee e foto della chat usano la stessa finestra a schermo intero: foto senza cornice e dati sotto come testo libero."
+        "🔍 Zoom foto: l'immagine ingrandita scorre sotto l'intestazione e i dati, che restano leggibili su sfondo pieno (niente più bordi neri)."
     )
 }

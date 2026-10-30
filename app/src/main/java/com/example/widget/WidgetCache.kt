@@ -66,8 +66,13 @@ object WidgetCache {
     fun save(context: Context, locations: List<UserLocation>): Boolean {
         val sig = locations.joinToString("|") {
             val bucket = it.timestamp / 300_000L // ~5 minuti
+            // Includiamo anche la posizione (arrotondata a ~11 m): durante un
+            // movimento fuori dai luoghi noti il widget mostra le coordinate, e
+            // senza questo non si aggiornava perché luogo/batteria restavano uguali.
+            val la = String.format(java.util.Locale.US, "%.4f", it.latitude)
+            val lo = String.format(java.util.Locale.US, "%.4f", it.longitude)
             "${it.userId}:${it.currentPlaceName}:${it.batteryLevel}:${it.activityType}:" +
-                "${it.photoBase64?.length ?: 0}:$bucket"
+                "${it.photoBase64?.length ?: 0}:$la,$lo:$bucket"
         }
         val p = prefs(context)
         if (p.getString(KEY_SIG, null) == sig && p.contains(KEY_MEMBERS)) return false

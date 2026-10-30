@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.23-beta"
+    const val VERSION = "0.71.24-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🔤 Rinominato \"Percorsi\" in \"Heatmap\": è la mappa di calore delle zone frequentate, non i tragitti."
+        "🧩 Widget: ora si aggiorna anche durante gli spostamenti (prima restava fermo se cambiava solo la posizione)."
     )
 }

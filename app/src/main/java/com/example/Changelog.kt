@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.24-beta"
+    const val VERSION = "0.71.25-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧩 Widget: ora si aggiorna anche durante gli spostamenti (prima restava fermo se cambiava solo la posizione)."
+        "⬆️ \"Controlla aggiornamenti\" ora usa la stessa finestra del download: confermi e parte subito lo scaricamento lì."
     )
 }

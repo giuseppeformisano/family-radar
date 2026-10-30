@@ -797,8 +797,13 @@ internal fun SettingsPanel(
                             checking = true
                             checkResult = null
                             checkScope.launch {
-                                checkResult = AppUpdater.checkDetailed()
+                                val r = AppUpdater.checkDetailed()
                                 checking = false
+                                // Se c'è un aggiornamento, usiamo la stessa finestra del
+                                // download (UpdateBanner in MainActivity): conferma e
+                                // scaricamento identici. Confermando parte il download lì.
+                                if (r is CheckResult.Available) AppUpdater.present(r.info)
+                                else checkResult = r
                             }
                         }
                     },
@@ -819,42 +824,7 @@ internal fun SettingsPanel(
                 }
 
                 when (val result = checkResult) {
-                    is CheckResult.Available -> Dialog(onDismissRequest = { checkResult = null }) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth().padding(Spacing.md),
-                            shape = RoundedCornerShape(Radius.xl),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth().padding(Spacing.xxl),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(Spacing.md)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(Sizes.avatarLg)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Icons.Default.SystemUpdate, contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(Sizes.iconLg))
-                                }
-                                Text(
-                                    text = stringResource(R.string.update_available_body, result.info.versionName),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
-                                )
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                                    OutlinedButton(onClick = { checkResult = null }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm), border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) { Text(stringResource(R.string.action_later)) }
-                                    Button(onClick = { checkResult = null; AppUpdater.downloadAndInstall(context, result.info.apkUrl) },
-                                        modifier = Modifier.weight(1f), shape = RoundedCornerShape(Radius.sm), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)) { Text(stringResource(R.string.action_update)) }
-                                }
-                            }
-                        }
-                    }
+                    is CheckResult.Available -> Unit // gestito dalla finestra di aggiornamento (UpdateBanner)
                     CheckResult.UpToDate -> Dialog(onDismissRequest = { checkResult = null }) {
                         Card(
                             modifier = Modifier.fillMaxWidth().padding(Spacing.md),

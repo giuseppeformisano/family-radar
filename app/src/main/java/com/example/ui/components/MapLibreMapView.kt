@@ -744,7 +744,11 @@ private fun addRadarLayers(style: org.maplibre.android.maps.Style) {
                 org.maplibre.android.style.expressions.Expression.get("icon-id")
             ),
             org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap(true),
-            org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement(true)
+            org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement(true),
+            // I pallini sono a goccia: la punta in fondo al bitmap indica il punto esatto.
+            org.maplibre.android.style.layers.PropertyFactory.iconAnchor(
+                org.maplibre.android.style.layers.Property.ICON_ANCHOR_BOTTOM
+            )
         )
 
     // Heatmap sotto tutto il resto.

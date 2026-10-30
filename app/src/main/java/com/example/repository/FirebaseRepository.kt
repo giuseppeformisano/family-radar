@@ -2372,6 +2372,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                                     userName = doc.getString("userName") ?: "Membro",
                                     userPhotoBase64 = doc.getString("userPhotoBase64"),
                                     photoBase64 = photoBase64,
+                                    thumbBase64 = doc.getString("thumbBase64")?.takeIf { it.isNotBlank() },
                                     photoUrl = photoUrl,
                                     latitude = lat,
                                     longitude = lon,
@@ -3628,12 +3629,20 @@ class FirebaseRepository private constructor(private val context: Context) {
         val snapshotId = if (snapshot.id.isBlank()) "snp_${UUID.randomUUID().toString().take(8)}" else snapshot.id
         // Carica foto snapshot su Cloudinary; fallback a Base64 se fallisce.
         val photoUrl = uploadFileToCloudinary(snapshot.photoBase64, "image/jpeg", "$snapshotId.jpg")
+        // Miniatura piccola SEMPRE inline nel documento (pochi KB): cosi' il pallino
+        // sulla mappa e l'anteprima funzionano anche sugli altri dispositivi, dove la
+        // foto piena sta su Cloudinary e photoBase64 resta vuota.
+        val thumbBase64 = runCatching {
+            val bmp = com.example.util.ImageUtils.base64ToBitmapScaled(snapshot.photoBase64, 200)
+            if (bmp != null) compressBitmapToBase64(bmp, maxDimension = 200, quality = 60).getOrNull() else null
+        }.getOrNull()
         val newSnapshot = snapshot.copy(
             id = snapshotId,
             groupId = currentGroup,
             userId = user.uid,
             userName = user.displayName,
             userPhotoBase64 = user.photoBase64,
+            thumbBase64 = thumbBase64,
             photoUrl = photoUrl,
             timestamp = System.currentTimeMillis()
         )
@@ -3647,6 +3656,7 @@ class FirebaseRepository private constructor(private val context: Context) {
                     "userName" to newSnapshot.userName,
                     "userPhotoBase64" to (newSnapshot.userPhotoBase64 ?: ""),
                     "photoBase64" to if (photoUrl != null) "" else newSnapshot.photoBase64,
+                    "thumbBase64" to (newSnapshot.thumbBase64 ?: ""),
                     "photoUrl" to (photoUrl ?: ""),
                     "latitude" to newSnapshot.latitude,
                     "longitude" to newSnapshot.longitude,

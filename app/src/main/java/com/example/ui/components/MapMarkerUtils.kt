@@ -4,8 +4,12 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
+import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RadialGradient
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.location.Location
@@ -43,6 +47,88 @@ fun clusterSnapshots(snapshots: List<PlaceSnapshot>, thresholdMeters: Double = 3
     }
 }
 
+// ─────────────────────────── GOCCIA DI VETRO (stile marker) ───────────────────────────
+// Tutti i pallini (persone, istantanee, luoghi) condividono questa forma a goccia con
+// sfumatura radiale, bordo bianco, riflesso in alto e ombra morbida colorata. La punta
+// e' esattamente in basso al centro del bitmap: i livelli mappa la ancorano li' (iconAnchor
+// "bottom"), cosi' indica il punto preciso.
+
+private const val MARKER_STYLE = "v2glass"
+
+// Misure comuni (in dp); il bitmap e' W=60 x H=56, testa centrata in alto, punta in fondo.
+private const val PIN_BODY_R = 20f
+private const val PIN_WHITE_R = 16f
+private const val PIN_FACE_R = 13.5f
+private const val PIN_CX = 30f
+private const val PIN_CY = 26f
+private const val PIN_TIP = 30f   // distanza testa→punta
+private const val PIN_W = 60f
+private const val PIN_H = 56f      // = PIN_CY + PIN_TIP, punta al bordo inferiore
+
+private fun blend(c: Int, with: Int, t: Float): Int = AndroidColor.rgb(
+    (AndroidColor.red(c) * (1 - t) + AndroidColor.red(with) * t).toInt(),
+    (AndroidColor.green(c) * (1 - t) + AndroidColor.green(with) * t).toInt(),
+    (AndroidColor.blue(c) * (1 - t) + AndroidColor.blue(with) * t).toInt()
+)
+
+/**
+ * Disegna la goccia di vetro (corpo + ombra + bordo bianco + faccia + riflesso) e lascia
+ * che [drawFace] riempia la faccia interna (foto/iniziale/emoji) tra la base e il riflesso.
+ */
+private fun drawGlassPin(canvas: Canvas, d: Float, baseColor: Int, drawFace: (Canvas, Float, Float, Float) -> Unit) {
+    val cx = PIN_CX * d; val cy = PIN_CY * d
+    val bodyR = PIN_BODY_R * d; val whiteR = PIN_WHITE_R * d; val faceR = PIN_FACE_R * d
+    val light = blend(baseColor, AndroidColor.WHITE, 0.38f)
+    val dark = blend(baseColor, AndroidColor.BLACK, 0.24f)
+
+    // Silhouette = testa (cerchio) + coda (triangolo), unite in un'unica forma.
+    val pin = Path().apply {
+        val head = Path().apply { addCircle(cx, cy, bodyR, Path.Direction.CW) }
+        val tail = Path().apply {
+            moveTo(cx, cy + PIN_TIP * d)
+            lineTo(cx - bodyR * 0.80f, cy + bodyR * 0.10f)
+            lineTo(cx + bodyR * 0.80f, cy + bodyR * 0.10f)
+            close()
+        }
+        op(head, tail, Path.Op.UNION)
+    }
+    canvas.drawPath(pin, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = RadialGradient(cx, cy - bodyR * 0.3f, bodyR * 1.25f,
+            intArrayOf(light, baseColor, dark), floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
+        setShadowLayer(6f * d, 0f, 3f * d, AndroidColor.argb(120, AndroidColor.red(dark), AndroidColor.green(dark), AndroidColor.blue(dark)))
+    })
+
+    // Bordo bianco + faccia con sfumatura.
+    canvas.drawCircle(cx, cy, whiteR, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE })
+    canvas.drawCircle(cx, cy, faceR, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = RadialGradient(cx, cy - faceR * 0.35f, faceR * 1.2f,
+            intArrayOf(light, baseColor, dark), floatArrayOf(0f, 0.65f, 1f), Shader.TileMode.CLAMP)
+    })
+
+    // Contenuto (foto/iniziale/emoji) ritagliato nella faccia.
+    canvas.save()
+    canvas.clipPath(Path().apply { addCircle(cx, cy, faceR, Path.Direction.CW) })
+    drawFace(canvas, cx, cy, faceR)
+    // Riflesso di vetro in alto, sopra al contenuto.
+    canvas.drawRect(cx - faceR, cy - faceR, cx + faceR, cy + faceR * 0.15f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = LinearGradient(cx, cy - faceR, cx, cy + faceR * 0.1f,
+            AndroidColor.argb(110, 255, 255, 255), AndroidColor.argb(0, 255, 255, 255), Shader.TileMode.CLAMP)
+    })
+    canvas.restore()
+}
+
+private fun newPinBitmap(d: Float): Pair<Bitmap, Canvas> {
+    val bmp = Bitmap.createBitmap((PIN_W * d).toInt(), (PIN_H * d).toInt(), Bitmap.Config.ARGB_8888)
+    return bmp to Canvas(bmp)
+}
+
+private fun drawCircleBadge(canvas: Canvas, cx: Float, cy: Float, r: Float, fill: Int, text: String, textSp: Float, d: Float) {
+    canvas.drawCircle(cx, cy, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fill })
+    canvas.drawCircle(cx, cy, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE; style = Paint.Style.STROKE; strokeWidth = 1.6f * d })
+    val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE; textSize = textSp * d; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
+    canvas.drawText(text, cx, cy - (tp.descent() + tp.ascent()) / 2, tp)
+}
+
 internal fun createMemberMarkerDrawable(
     ctx: Context,
     name: String,
@@ -53,76 +139,43 @@ internal fun createMemberMarkerDrawable(
     activityType: String,
     isFollowed: Boolean = false
 ): Drawable {
-    val cacheKey = "member_${name}_${battery}_${isSelf}_${speedKmH}_${photoBase64?.hashCode() ?: 0}_${activityType}_$isFollowed"
+    val cacheKey = "member_${MARKER_STYLE}_${name}_${battery}_${isSelf}_${speedKmH}_${photoBase64?.hashCode() ?: 0}_${activityType}_$isFollowed"
     markerDrawableCache.get(cacheKey)?.let { return it }
 
-    val density = ctx.resources.displayMetrics.density
-    val size = (52 * density).toInt()
-    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    val center = size / 2f
-    val radius = (18 * density)
+    val d = ctx.resources.displayMetrics.density
+    val (bitmap, canvas) = newPinBitmap(d)
+    val baseColor = if (isSelf) AndroidColor.rgb(79, 70, 229) else AndroidColor.rgb(16, 185, 129)
 
-    canvas.drawCircle(center, center, radius + (5 * density), Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = if (isSelf) AndroidColor.argb(70, 79, 70, 229) else AndroidColor.argb(70, 16, 185, 129)
-        style = Paint.Style.FILL
-    })
-
-    if (isFollowed) {
-        canvas.drawCircle(center, center, radius + (7 * density), Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AndroidColor.rgb(99, 102, 241); style = Paint.Style.STROKE; strokeWidth = 3.5f * density
-        })
-        canvas.drawCircle(center, center, radius + (7 * density), Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AndroidColor.WHITE; style = Paint.Style.STROKE; strokeWidth = 1f * density
-        })
-    }
-
-    canvas.drawCircle(center, center, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = if (isSelf) AndroidColor.rgb(79, 70, 229) else AndroidColor.rgb(16, 185, 129)
-        style = Paint.Style.STROKE; strokeWidth = 3 * density
-    })
-
-    val userAvatarBitmap = ImageUtils.base64ToBitmapScaled(photoBase64, 192)
-    if (userAvatarBitmap != null) {
-        val squared = centerCropSquare(userAvatarBitmap)
-        val side = (radius * 2).toInt().coerceAtLeast(1)
-        val circleCropBmp = getCircularBitmap(Bitmap.createScaledBitmap(squared, side, side, true))
-        canvas.drawBitmap(circleCropBmp, center - radius, center - radius, null)
-    } else {
-        canvas.drawCircle(center, center, radius - (1.5f * density), Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (isSelf) AndroidColor.rgb(99, 102, 241) else AndroidColor.rgb(52, 211, 153)
-            style = Paint.Style.FILL
-        })
-        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AndroidColor.WHITE; textSize = 14 * density; textAlign = Paint.Align.CENTER; isFakeBoldText = true
+    drawGlassPin(canvas, d, baseColor) { c, fcx, fcy, fr ->
+        val avatar = ImageUtils.base64ToBitmapScaled(photoBase64, 192)
+        if (avatar != null) {
+            val side = (fr * 2).toInt().coerceAtLeast(1)
+            val circ = getCircularBitmap(Bitmap.createScaledBitmap(centerCropSquare(avatar), side, side, true))
+            c.drawBitmap(circ, fcx - fr, fcy - fr, null)
+        } else {
+            val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE; textSize = 15 * d; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
+            c.drawText(name.firstOrNull()?.uppercaseChar()?.toString() ?: "U", fcx, fcy - (tp.descent() + tp.ascent()) / 2, tp)
         }
-        canvas.drawText(
-            name.firstOrNull()?.uppercaseChar()?.toString() ?: "U",
-            center, center - (textPaint.descent() + textPaint.ascent()) / 2, textPaint
-        )
     }
 
-    val badgeRadius = (7 * density)
-    val badgeX = center + (12 * density)
-    val badgeY = center + (12 * density)
-    canvas.drawCircle(badgeX, badgeY, badgeRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = when { battery > 50 -> AndroidColor.rgb(34, 197, 94); battery > 20 -> AndroidColor.rgb(234, 179, 8); else -> AndroidColor.rgb(239, 68, 68) }
-        style = Paint.Style.FILL
-    })
-    canvas.drawCircle(badgeX, badgeY, badgeRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.WHITE; style = Paint.Style.STROKE; strokeWidth = 1.5f * density
-    })
-    val batteryTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.WHITE; textSize = 7 * density; textAlign = Paint.Align.CENTER; isFakeBoldText = true
+    val cx = PIN_CX * d; val cy = PIN_CY * d
+    // Anello "seguito" attorno alla testa.
+    if (isFollowed) {
+        canvas.drawCircle(cx, cy, (PIN_BODY_R + 1.5f) * d, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.rgb(99, 102, 241); style = Paint.Style.STROKE; strokeWidth = 3f * d
+        })
     }
-    canvas.drawText("${min(battery, 99)}", badgeX, badgeY - (batteryTextPaint.descent() + batteryTextPaint.ascent()) / 2, batteryTextPaint)
+    // Badge batteria in basso a destra della testa.
+    val battFill = when { battery > 50 -> AndroidColor.rgb(34, 197, 94); battery > 20 -> AndroidColor.rgb(234, 179, 8); else -> AndroidColor.rgb(239, 68, 68) }
+    drawCircleBadge(canvas, cx + 13 * d, cy + 11 * d, 8.5f * d, battFill, "${min(battery, 99)}", 8f, d)
 
+    // Pallino attivita' in alto a sinistra.
     activityGlyphFor(activityType)?.let { glyph ->
-        val aRadius = (10 * density); val aX = center - (12 * density); val aY = center - (12 * density)
-        canvas.drawCircle(aX, aY, aRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE; style = Paint.Style.FILL })
-        canvas.drawCircle(aX, aY, aRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(30, 41, 59); style = Paint.Style.STROKE; strokeWidth = 1.5f * density })
-        val aTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 13 * density; textAlign = Paint.Align.CENTER }
-        canvas.drawText(glyph, aX, aY - (aTextPaint.descent() + aTextPaint.ascent()) / 2, aTextPaint)
+        val aX = cx - 13 * d; val aY = cy - 13 * d; val aR = 9.5f * d
+        canvas.drawCircle(aX, aY, aR, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE })
+        canvas.drawCircle(aX, aY, aR, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(30, 41, 59); style = Paint.Style.STROKE; strokeWidth = 1.4f * d })
+        val tp = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 12 * d; textAlign = Paint.Align.CENTER }
+        canvas.drawText(glyph, aX, aY - (tp.descent() + tp.ascent()) / 2, tp)
     }
 
     val result = BitmapDrawable(ctx.resources, bitmap)
@@ -139,43 +192,30 @@ private fun activityGlyphFor(activityType: String): String? = when (activityType
 }
 
 internal fun createSnapshotMarkerDrawable(ctx: Context, cluster: PlaceSnapshotCluster): Drawable {
-    val cacheKey = "snapshot_${cluster.id}_${cluster.count}_${cluster.latestSnapshot?.id}"
+    val latest = cluster.latestSnapshot
+    // Miniatura inline (viaggia tra dispositivi); ripiego sul Base64 pieno delle vecchie.
+    val thumbSource = latest?.thumbBase64?.takeIf { it.isNotBlank() } ?: latest?.photoBase64
+    val cacheKey = "snapshot_${MARKER_STYLE}_${cluster.id}_${cluster.count}_${latest?.id}_${thumbSource?.hashCode() ?: 0}"
     markerDrawableCache.get(cacheKey)?.let { return it }
 
-    val density = ctx.resources.displayMetrics.density
-    val size = (52 * density).toInt()
-    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    val center = size / 2f
-    val radius = (18 * density)
+    val d = ctx.resources.displayMetrics.density
+    val (bitmap, canvas) = newPinBitmap(d)
 
-    canvas.drawCircle(center, center, radius + (4 * density), Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.argb(80, 234, 88, 12); style = Paint.Style.FILL
-    })
-    canvas.drawCircle(center, center, radius, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.rgb(234, 88, 12); style = Paint.Style.STROKE; strokeWidth = 3 * density
-    })
-
-    val thumbBmp = ImageUtils.base64ToBitmapScaled(cluster.latestSnapshot?.photoBase64, 192)
-    if (thumbBmp != null) {
-        canvas.drawBitmap(
-            getCircularBitmap(Bitmap.createScaledBitmap(thumbBmp, (radius * 2).toInt(), (radius * 2).toInt(), true)),
-            center - radius, center - radius, null
-        )
-    } else {
-        canvas.drawCircle(center, center, radius - (1.5f * density), Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = AndroidColor.rgb(249, 115, 22); style = Paint.Style.FILL
-        })
-        val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE; textSize = 14 * density; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
-        canvas.drawText("📷", center, center - (iconPaint.descent() + iconPaint.ascent()) / 2, iconPaint)
+    drawGlassPin(canvas, d, AndroidColor.rgb(234, 88, 12)) { c, fcx, fcy, fr ->
+        val thumb = ImageUtils.base64ToBitmapScaled(thumbSource, 192)
+        if (thumb != null) {
+            val side = (fr * 2).toInt().coerceAtLeast(1)
+            val circ = getCircularBitmap(Bitmap.createScaledBitmap(centerCropSquare(thumb), side, side, true))
+            c.drawBitmap(circ, fcx - fr, fcy - fr, null)
+        } else {
+            val ip = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 15 * d; textAlign = Paint.Align.CENTER }
+            c.drawText("📷", fcx, fcy - (ip.descent() + ip.ascent()) / 2, ip)
+        }
     }
 
     if (cluster.count > 1) {
-        val bR = (8 * density); val bX = center + (12 * density); val bY = center - (12 * density)
-        canvas.drawCircle(bX, bY, bR, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.rgb(220, 38, 38); style = Paint.Style.FILL })
-        canvas.drawCircle(bX, bY, bR, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE; style = Paint.Style.STROKE; strokeWidth = 1.5f * density })
-        val cPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE; textSize = 8 * density; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
-        canvas.drawText("${cluster.count}", bX, bY - (cPaint.descent() + cPaint.ascent()) / 2, cPaint)
+        val cx = PIN_CX * d; val cy = PIN_CY * d
+        drawCircleBadge(canvas, cx + 13 * d, cy - 13 * d, 8.5f * d, AndroidColor.rgb(220, 38, 38), "${cluster.count}", 8f, d)
     }
 
     val result = BitmapDrawable(ctx.resources, bitmap)
@@ -184,14 +224,11 @@ internal fun createSnapshotMarkerDrawable(ctx: Context, cluster: PlaceSnapshotCl
 }
 
 internal fun createPlaceMarkerDrawable(ctx: Context, place: SavedPlace): Drawable {
-    val cacheKey = "place_${place.id}_${place.category.name}"
+    val cacheKey = "place_${MARKER_STYLE}_${place.id}_${place.category.name}"
     markerDrawableCache.get(cacheKey)?.let { return it }
 
-    val density = ctx.resources.displayMetrics.density
-    val width = (36 * density).toInt()
-    val height = (44 * density).toInt()
-    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
+    val d = ctx.resources.displayMetrics.density
+    val (bitmap, canvas) = newPinBitmap(d)
 
     val mainColor = when (place.category) {
         PlaceCategory.HOME -> AndroidColor.rgb(79, 70, 229)
@@ -200,20 +237,15 @@ internal fun createPlaceMarkerDrawable(ctx: Context, place: SavedPlace): Drawabl
         PlaceCategory.GYM -> AndroidColor.rgb(220, 38, 38)
         PlaceCategory.OTHER -> AndroidColor.rgb(100, 116, 139)
     }
-
-    val headRadius = (14 * density)
-    val headCenterX = width / 2f
-    val headCenterY = headRadius + (2 * density)
-
-    canvas.drawCircle(headCenterX, headCenterY, headRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = mainColor; style = Paint.Style.FILL })
-    canvas.drawCircle(headCenterX, headCenterY, headRadius, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE; style = Paint.Style.STROKE; strokeWidth = 2 * density })
-
-    val symbolPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = AndroidColor.WHITE; textSize = 12 * density; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
     val symbol = when (place.category) {
         PlaceCategory.HOME -> "🏠"; PlaceCategory.WORK -> "💼"; PlaceCategory.SCHOOL -> "🏫"
         PlaceCategory.GYM -> "🏋"; PlaceCategory.OTHER -> "📍"
     }
-    canvas.drawText(symbol, headCenterX, headCenterY - (symbolPaint.descent() + symbolPaint.ascent()) / 2, symbolPaint)
+
+    drawGlassPin(canvas, d, mainColor) { c, fcx, fcy, fr ->
+        val sp = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 15 * d; textAlign = Paint.Align.CENTER }
+        c.drawText(symbol, fcx, fcy - (sp.descent() + sp.ascent()) / 2, sp)
+    }
 
     val result = BitmapDrawable(ctx.resources, bitmap)
     markerDrawableCache.put(cacheKey, result)

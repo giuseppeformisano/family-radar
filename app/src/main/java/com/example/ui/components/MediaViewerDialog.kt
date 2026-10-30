@@ -562,8 +562,10 @@ fun SnapshotClusterGalleryDialog(
                         .fillMaxWidth()
                 ) { page ->
                     val item = snapshots[page]
+                    // Foto piena: preferisce l'URL Cloudinary (presente anche sugli altri
+                    // dispositivi); il Base64 inline e' solo un ripiego per le vecchie.
                     val decoded = remember(item.photoBase64) {
-                        ImageUtils.base64ToBitmapScaled(item.photoBase64, 1440)
+                        if (item.photoBase64.isNotBlank()) ImageUtils.base64ToBitmapScaled(item.photoBase64, 1440) else null
                     }
                     Box(
                         modifier = Modifier.fillMaxSize(),
@@ -571,7 +573,7 @@ fun SnapshotClusterGalleryDialog(
                     ) {
                         ZoomableImage(
                             bitmap = decoded,
-                            imageSource = "data:image/jpeg;base64,${item.photoBase64}",
+                            imageSource = item.getImageSource() ?: "",
                             contentDescription = null,
                             onTap = { chromeVisible = !chromeVisible },
                             onScaleChanged = { if (page == pagerState.currentPage) currentZoomScale = it }

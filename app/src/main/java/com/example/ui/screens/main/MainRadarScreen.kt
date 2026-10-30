@@ -1065,6 +1065,16 @@ fun MainRadarScreen(
                 onDismiss = { selectedSnapshotClusterForGallery = null }
             )
         }
+
+        // Foto della chat: stessa identica finestra a schermo intero, dentro il Box.
+        fullScreenRequest?.let { req ->
+            FullScreenMediaViewer(
+                imageSource = req.source,
+                authorName = req.sender,
+                timestamp = req.timestamp,
+                onDismiss = { fullScreenRequest = null }
+            )
+        }
     }
 
     // ======================= OVERLAY: FOGLI E DIALOG =======================
@@ -1346,15 +1356,6 @@ fun MainRadarScreen(
                 snapshotGalleryLauncher.launch("image/*")
             },
             onDismiss = { showSnapshotSourceDialog = false }
-        )
-    }
-
-    fullScreenRequest?.let { req ->
-        FullScreenMediaViewer(
-            imageSource = req.source,
-            authorName = req.sender,
-            timestamp = req.timestamp,
-            onDismiss = { fullScreenRequest = null }
         )
     }
 

@@ -83,19 +83,9 @@ fun FullScreenMediaViewer(
     if (imageSource == null) return
 
     val context = LocalContext.current
-    val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
     var isDownloading by remember { mutableStateOf(false) }
-    var chromeVisible by remember { mutableStateOf(true) }
-    var currentZoomScale by remember { mutableFloatStateOf(1f) }
 
-    val dragOffsetY = remember { Animatable(0f) }
-    val scrimAlpha = remember { Animatable(1f) }
-    val dismissThresholdPx = with(density) { 120.dp.toPx() }
-    var dragStartTime by remember { mutableStateOf(0L) }
-    var totalDrag by remember { mutableStateOf(0f) }
-
-    val strCloseViewer = stringResource(R.string.action_close_viewer)
     val strPhotoSavedGallery = stringResource(R.string.toast_photo_saved_gallery)
     val strPhotoSaveFailed = stringResource(R.string.toast_photo_save_failed)
     val strSaveToGallery = stringResource(R.string.action_save_to_gallery)
@@ -109,167 +99,90 @@ fun FullScreenMediaViewer(
         }
     }
 
-    // Metadati da mostrare in basso (autore + ora), se disponibili
     val metaText = remember(authorName, timestamp) {
-        val parts = listOfNotNull(
+        listOfNotNull(
             authorName?.takeIf { it.isNotBlank() },
             timestamp?.let { SimpleDateFormat("HH:mm · dd/MM/yyyy", Locale.getDefault()).format(Date(it)) }
-        )
-        parts.joinToString("  ·  ").takeIf { it.isNotBlank() }
+        ).joinToString("  ·  ").takeIf { it.isNotBlank() }
     }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnBackPress = true,
-            dismissOnClickOutside = false
-        )
+    // Il tasto Indietro chiude, come per Membri/Luoghi/Chat.
+    BackHandler { onDismiss() }
+
+    // Stesso identico contenitore dei pannelli e del visore istantanee: Surface a tutto
+    // schermo, intestazione con freccia indietro, foto senza cornice, metadati liberi.
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(ViewerBackdrop.copy(alpha = scrimAlpha.value))
+                .statusBarsPadding()
+                .navigationBarsPadding()
         ) {
-            Box(
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { translationY = dragOffsetY.value }
-                    .pointerInput(currentZoomScale) {
-                        if (currentZoomScale <= 1.05f) {
-                            detectVerticalDragGestures(
-                                onDragStart = {
-                                    dragStartTime = System.currentTimeMillis()
-                                    totalDrag = 0f
-                                },
-                                onDragEnd = {
-                                    val elapsedMs = (System.currentTimeMillis() - dragStartTime).coerceAtLeast(1L)
-                                    val approxVelocity = totalDrag / elapsedMs * 1000f
-                                    coroutineScope.launch {
-                                        if (abs(dragOffsetY.value) > dismissThresholdPx || abs(approxVelocity) > 1200f) {
-                                            onDismiss()
-                                        } else {
-                                            launch { dragOffsetY.animateTo(0f, animationSpec = spring()) }
-                                            launch { scrimAlpha.animateTo(1f, animationSpec = spring()) }
-                                        }
-                                    }
-                                },
-                                onDragCancel = {
-                                    coroutineScope.launch {
-                                        launch { dragOffsetY.animateTo(0f, animationSpec = spring()) }
-                                        launch { scrimAlpha.animateTo(1f, animationSpec = spring()) }
-                                    }
-                                },
-                                onVerticalDrag = { change, dragAmount ->
-                                    change.consume()
-                                    totalDrag += dragAmount
-                                    coroutineScope.launch {
-                                        dragOffsetY.snapTo(dragOffsetY.value + dragAmount)
-                                        val progress = (abs(dragOffsetY.value) / dismissThresholdPx).coerceIn(0f, 1f)
-                                        scrimAlpha.snapTo((1f - progress * 0.6f).coerceIn(0.35f, 1f))
-                                    }
-                                }
-                            )
-                        }
-                    }
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                ZoomableImage(
-                    bitmap = decodedBitmap,
-                    imageSource = imageSource,
-                    contentDescription = strFullscreenImage,
-                    onTap = { chromeVisible = !chromeVisible },
-                    onScaleChanged = { currentZoomScale = it }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.action_close), tint = MaterialTheme.colorScheme.onSurface)
+                }
+                Text(
+                    text = title ?: "Foto",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
-            }
-
-            // Top bar: chiudi + salva
-            AnimatedVisibility(
-                visible = chromeVisible,
-                enter = fadeIn(),
-                exit = fadeOut(),
-                modifier = Modifier.align(Alignment.TopCenter)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color(0x66000000))
-                            .clickable { onDismiss() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = strCloseViewer, tint = Color.White, modifier = Modifier.size(22.dp))
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color(0x66000000))
-                            .clickable {
-                                if (isDownloading) return@clickable
-                                coroutineScope.launch {
-                                    isDownloading = true
-                                    val success = when {
-                                        decodedBitmap != null -> ImageUtils.saveBitmapToGallery(context, decodedBitmap) != null
-                                        imageSource is String -> ImageUtils.saveBase64ToGallery(context, imageSource)
-                                        else -> false
-                                    }
-                                    isDownloading = false
-                                    Toast.makeText(
-                                        context,
-                                        if (success) strPhotoSavedGallery else strPhotoSaveFailed,
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isDownloading) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, trackColor = Color(0x33FFFFFF), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Default.Download, contentDescription = strSaveToGallery, tint = Color.White, modifier = Modifier.size(22.dp))
+                IconButton(
+                    onClick = {
+                        if (isDownloading) return@IconButton
+                        coroutineScope.launch {
+                            isDownloading = true
+                            val success = when {
+                                decodedBitmap != null -> ImageUtils.saveBitmapToGallery(context, decodedBitmap) != null
+                                imageSource is String -> ImageUtils.saveBase64ToGallery(context, imageSource)
+                                else -> false
+                            }
+                            isDownloading = false
+                            Toast.makeText(context, if (success) strPhotoSavedGallery else strPhotoSaveFailed, Toast.LENGTH_SHORT).show()
                         }
+                    }
+                ) {
+                    if (isDownloading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.Download, contentDescription = strSaveToGallery, tint = MaterialTheme.colorScheme.onSurface)
                     }
                 }
             }
 
-            // Bottom: metadati (autore + ora) e/o didascalia
-            val hasBottom = !metaText.isNullOrBlank() || !caption.isNullOrBlank()
-            AnimatedVisibility(
-                visible = chromeVisible && hasBottom,
-                enter = fadeIn(),
-                exit = fadeOut(),
-                modifier = Modifier.align(Alignment.BottomStart)
-            ) {
+            // Foto senza cornice.
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                ZoomableImage(
+                    bitmap = decodedBitmap,
+                    imageSource = imageSource,
+                    contentDescription = strFullscreenImage
+                )
+            }
+
+            // Metadati liberi sotto (autore + ora, didascalia).
+            if (!metaText.isNullOrBlank() || !caption.isNullOrBlank()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0xCC000000))
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                        .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.xs)
                 ) {
                     if (!metaText.isNullOrBlank()) {
-                        Text(
-                            text = metaText,
-                            color = Color.White.copy(alpha = 0.75f),
-                            style = MaterialTheme.typography.labelMedium
-                        )
+                        Text(text = metaText, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
                     }
                     if (!caption.isNullOrBlank()) {
-                        Text(
-                            text = caption,
-                            color = Color.White,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Text(text = caption, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
@@ -465,14 +378,11 @@ fun SnapshotClusterGalleryDialog(
                 }
             }
 
-            // Foto: occupa lo spazio centrale, con zoom. Scorri tra piu' istantanee.
+            // Foto senza cornice: occupa tutto lo spazio centrale, con zoom. Scorri tra piu' istantanee.
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = Spacing.lg)
-                    .clip(RoundedCornerShape(Radius.xl))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                     val item = snapshots[page]
@@ -519,69 +429,62 @@ fun SnapshotClusterGalleryDialog(
                 }
             }
 
-            // Scheda info autore/luogo, stesso stile delle righe della lista membri.
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            // Metadati autore/luogo: testo libero sotto la foto, senza riquadro.
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(Spacing.lg)
+                    .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+                verticalArrangement = Arrangement.spacedBy(Spacing.sm)
             ) {
-                Column(
-                    modifier = Modifier.padding(Spacing.md),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.sm)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.md)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Spacing.md)
-                    ) {
-                        RadarAvatar(
-                            name = currentSnapshot.userName,
-                            photoBase64 = currentSnapshot.userPhotoBase64,
-                            size = Sizes.avatarMd
+                    RadarAvatar(
+                        name = currentSnapshot.userName,
+                        photoBase64 = currentSnapshot.userPhotoBase64,
+                        size = Sizes.avatarMd
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = currentSnapshot.userName,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = currentSnapshot.userName,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
-                                val timeStr = remember(currentSnapshot.timestamp) {
-                                    SimpleDateFormat("HH:mm · dd/MM/yy", Locale.getDefault()).format(Date(currentSnapshot.timestamp))
-                                }
-                                Text(text = timeStr, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                            val timeStr = remember(currentSnapshot.timestamp) {
+                                SimpleDateFormat("HH:mm · dd/MM/yy", Locale.getDefault()).format(Date(currentSnapshot.timestamp))
                             }
+                            Text(text = timeStr, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
                         }
                     }
+                }
 
-                    if (currentSnapshot.caption.isNotBlank()) {
-                        Text(
-                            text = currentSnapshot.caption,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
+                if (currentSnapshot.caption.isNotBlank()) {
+                    Text(
+                        text = currentSnapshot.caption,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
-                        Text(
-                            text = String.format(Locale.US, strPositionFmt, currentSnapshot.latitude, currentSnapshot.longitude),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                    Text(
+                        text = String.format(Locale.US, strPositionFmt, currentSnapshot.latitude, currentSnapshot.longitude),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall
+                    )
                 }
             }
         }

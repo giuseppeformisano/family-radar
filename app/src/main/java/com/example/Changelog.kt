@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.22-beta"
+    const val VERSION = "0.71.23-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🧩 Widget: risolto il testo tagliato — ora le scritte hanno lo spazio giusto e vanno a capo (1x1 e 2x1)."
+        "🔤 Rinominato \"Percorsi\" in \"Heatmap\": è la mappa di calore delle zone frequentate, non i tragitti."
     )
 }

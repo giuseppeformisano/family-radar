@@ -447,7 +447,7 @@
     <string name="action_reply">Reply</string>
     <string name="action_delete_for_me">Delete for me</string>
     <string name="action_delete_for_everyone">Delete for everyone</string>
-    <string name="action_paths">Paths</string>
+    <string name="action_paths">Heatmap</string>
     <string name="toast_text_copied">Text copied</string>
     <string name="settings_approval_title">New member approval</string>
     <string name="settings_approval_on_desc">You approve every new member</string>

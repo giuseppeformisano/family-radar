@@ -821,14 +821,14 @@ fun MainRadarScreen(
                     )
                     Spacer(Modifier.width(Spacing.xs))
                     Text(
-                        text = "Percorsi di ${heatmapMemberName ?: ""}".trim(),
+                        text = "Heatmap di ${heatmapMemberName ?: ""}".trim(),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(Modifier.width(Spacing.xs))
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Togli percorsi",
+                        contentDescription = "Togli heatmap",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp)
                     )

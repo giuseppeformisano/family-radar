@@ -10,11 +10,11 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.27-beta"
+    const val VERSION = "0.71.28-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "📍 Pallini mappa rinnovati: forma a goccia con riflesso e ombra, la punta indica il punto esatto.",
-        "📸 Risolto: le istantanee ora si vedono anche dagli altri dispositivi (foto e anteprima sulla mappa)."
+        "🖼️ Finestra istantanee rinnovata nello stile dell'app (scheda di vetro, maniglia, avatar).",
+        "📍 Pallini mappa: immagine interna più grande e colore Casa allineato alle categorie."
     )
 }

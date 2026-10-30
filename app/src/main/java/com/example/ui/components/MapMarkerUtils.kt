@@ -57,8 +57,8 @@ private const val MARKER_STYLE = "v2glass"
 
 // Misure comuni (in dp); il bitmap e' W=60 x H=56, testa centrata in alto, punta in fondo.
 private const val PIN_BODY_R = 20f
-private const val PIN_WHITE_R = 16f
-private const val PIN_FACE_R = 13.5f
+private const val PIN_WHITE_R = 17f
+private const val PIN_FACE_R = 15.5f
 private const val PIN_CX = 30f
 private const val PIN_CY = 26f
 private const val PIN_TIP = 30f   // distanza testa→punta
@@ -231,7 +231,7 @@ internal fun createPlaceMarkerDrawable(ctx: Context, place: SavedPlace): Drawabl
     val (bitmap, canvas) = newPinBitmap(d)
 
     val mainColor = when (place.category) {
-        PlaceCategory.HOME -> AndroidColor.rgb(79, 70, 229)
+        PlaceCategory.HOME -> AndroidColor.rgb(99, 102, 241)
         PlaceCategory.WORK -> AndroidColor.rgb(13, 148, 136)
         PlaceCategory.SCHOOL -> AndroidColor.rgb(217, 119, 6)
         PlaceCategory.GYM -> AndroidColor.rgb(220, 38, 38)

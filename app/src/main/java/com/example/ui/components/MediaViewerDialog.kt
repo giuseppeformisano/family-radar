@@ -51,6 +51,9 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.model.PlaceSnapshot
+import com.example.ui.theme.Radius
+import com.example.ui.theme.Sizes
+import com.example.ui.theme.Spacing
 import com.example.util.ImageUtils
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -468,35 +471,35 @@ fun SnapshotClusterGalleryDialog(
                         }
                     }
             ) {
-                // Top bar con chrome auto-hide
+                // Top bar in stile pannello: scheda di vetro con maniglia, titolo e azioni.
                 AnimatedVisibility(visible = chromeVisible, enter = fadeIn(), exit = fadeOut()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xCC000000))
                             .statusBarsPadding()
+                            .padding(horizontal = Spacing.md, vertical = Spacing.sm)
                     ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 4.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                IconButton(onClick = onDismiss) {
-                                    Icon(Icons.Default.Close, contentDescription = strClose, tint = Color.White)
-                                }
-
-                                Text(
-                                    text = strGeoTitle,
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.weight(1f),
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
-
-                                Row {
+                        GlassSurface(
+                            shape = RoundedCornerShape(Radius.lg),
+                            contentPadding = Spacing.xs
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                SheetHandle(expanded = true, modifier = Modifier.padding(top = 2.dp, bottom = 2.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(onClick = onDismiss) {
+                                        Icon(Icons.Default.Close, contentDescription = strClose, tint = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                    Text(
+                                        text = strGeoTitle,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.weight(1f),
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
                                     IconButton(
                                         onClick = {
                                             if (isDownloading) return@IconButton
@@ -509,44 +512,44 @@ fun SnapshotClusterGalleryDialog(
                                         }
                                     ) {
                                         if (isDownloading) {
-                                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, trackColor = Color(0x33FFFFFF), strokeWidth = 2.dp)
+                                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
                                         } else {
-                                            Icon(Icons.Default.Download, contentDescription = strSaveToGallery2, tint = Color.White)
+                                            Icon(Icons.Default.Download, contentDescription = strSaveToGallery2, tint = MaterialTheme.colorScheme.onSurface)
                                         }
                                     }
                                     if (onDelete != null) {
                                         IconButton(onClick = { showDeleteConfirm = true }) {
-                                            Icon(Icons.Default.Delete, contentDescription = strDeleteSnapshotTitle, tint = Color(0xFFFF6B6B))
+                                            Icon(Icons.Default.Delete, contentDescription = strDeleteSnapshotTitle, tint = MaterialTheme.colorScheme.error)
                                         }
                                     }
                                 }
-                            }
-
-                            // Indicatori di pagina: pillola per la corrente, punto per le altre
-                            if (snapshots.size > 1) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 10.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    snapshots.forEachIndexed { idx, _ ->
-                                        val isCurrent = idx == pagerState.currentPage
-                                        val dotWidth by animateDpAsState(
-                                            targetValue = if (isCurrent) 20.dp else 6.dp,
-                                            label = "dot_width_$idx"
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .padding(horizontal = 3.dp)
-                                                .height(6.dp)
-                                                .width(dotWidth)
-                                                .clip(CircleShape)
-                                                .background(
-                                                    if (isCurrent) Color.White else Color.White.copy(alpha = 0.35f)
-                                                )
-                                        )
+                                // Indicatori di pagina: pillola per la corrente, punto per le altre.
+                                if (snapshots.size > 1) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(bottom = Spacing.xs),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        snapshots.forEachIndexed { idx, _ ->
+                                            val isCurrent = idx == pagerState.currentPage
+                                            val dotWidth by animateDpAsState(
+                                                targetValue = if (isCurrent) 20.dp else 6.dp,
+                                                label = "dot_width_$idx"
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .padding(horizontal = 3.dp)
+                                                    .height(6.dp)
+                                                    .width(dotWidth)
+                                                    .clip(CircleShape)
+                                                    .background(
+                                                        if (isCurrent) MaterialTheme.colorScheme.primary
+                                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                                                    )
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -581,89 +584,77 @@ fun SnapshotClusterGalleryDialog(
                     }
                 }
 
-                // Bottom info card — metadati snapshot
+                // Scheda info in basso in stile pannello: scheda di vetro con avatar e metadati.
                 AnimatedVisibility(visible = chromeVisible, enter = fadeIn(), exit = fadeOut()) {
-                    Column(
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xCC000000))
                             .navigationBarsPadding()
-                            .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 20.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(horizontal = Spacing.md, vertical = Spacing.sm)
                     ) {
-                        // Riga autore + ora
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.weight(1f, fill = false)
+                        GlassSurface(shape = RoundedCornerShape(Radius.lg)) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(Spacing.sm)
                             ) {
-                                val authorAvatar = remember(currentSnapshot.userPhotoBase64) {
-                                    ImageUtils.base64ToBitmap(currentSnapshot.userPhotoBase64)
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary),
-                                    contentAlignment = Alignment.Center
+                                // Riga autore + ora
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    if (authorAvatar != null) {
-                                        Image(
-                                            bitmap = authorAvatar.asImageBitmap(),
-                                            contentDescription = null,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    ) {
+                                        RadarAvatar(
+                                            name = currentSnapshot.userName,
+                                            photoBase64 = currentSnapshot.userPhotoBase64,
+                                            size = Sizes.avatarSm
                                         )
-                                    } else {
-                                        Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                        Text(
+                                            text = currentSnapshot.userName,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                                        val timeStr = remember(currentSnapshot.timestamp) {
+                                            SimpleDateFormat("HH:mm · dd/MM/yy", Locale.getDefault()).format(Date(currentSnapshot.timestamp))
+                                        }
+                                        Text(text = timeStr, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
                                     }
                                 }
-                                Text(
-                                    text = currentSnapshot.userName,
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(Icons.Default.Schedule, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
-                                val timeStr = remember(currentSnapshot.timestamp) {
-                                    SimpleDateFormat("HH:mm · dd/MM/yy", Locale.getDefault()).format(Date(currentSnapshot.timestamp))
+                                // Didascalia (se presente)
+                                if (currentSnapshot.caption.isNotBlank()) {
+                                    Text(
+                                        text = currentSnapshot.caption,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
                                 }
-                                Text(text = timeStr, color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.labelSmall)
+
+                                // Coordinate GPS
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                                    Text(
+                                        text = String.format(Locale.US, strPositionFmt, currentSnapshot.latitude, currentSnapshot.longitude),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
                             }
-                        }
-
-                        // Didascalia (se presente)
-                        if (currentSnapshot.caption.isNotBlank()) {
-                            Text(
-                                text = currentSnapshot.caption,
-                                color = Color.White.copy(alpha = 0.9f),
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-
-                        // Coordinate GPS
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFFEA580C), modifier = Modifier.size(14.dp))
-                            Text(
-                                text = String.format(Locale.US, strPositionFmt, currentSnapshot.latitude, currentSnapshot.longitude),
-                                color = Color.White.copy(alpha = 0.5f),
-                                style = MaterialTheme.typography.labelSmall
-                            )
                         }
                     }
                 }

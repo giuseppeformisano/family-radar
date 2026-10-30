@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.30-beta"
+    const val VERSION = "0.71.31-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🖼️ Istantanee e foto della chat ora si aprono con lo stesso identico visore a schermo intero (zoom, scorri, salva, chiudi)."
+        "🖼️ La finestra delle istantanee ora è una schermata a tutto schermo con la stessa intestazione dei pannelli Membri/Luoghi/Chat."
     )
 }

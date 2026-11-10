@@ -446,8 +446,10 @@ fun MapLibreMapView(
     LaunchedEffect(heatmapPoints, heatmapFitToken, styleReady) {
         if (!styleReady) return@LaunchedEffect
         val style = mapRef?.style ?: return@LaunchedEffect
-        val features = heatmapPoints.map { (lat, lon) ->
-            org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.Point.fromLngLat(lon, lat))
+        val features = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            heatmapPoints.map { (lat, lon) ->
+                org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.Point.fromLngLat(lon, lat))
+            }
         }
         style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>("heatmap-src")
             ?.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(features))
@@ -755,17 +757,38 @@ private fun addRadarLayers(style: org.maplibre.android.maps.Style) {
     style.addSource(org.maplibre.android.style.sources.GeoJsonSource("heatmap-src"))
     style.addLayer(
         org.maplibre.android.style.layers.HeatmapLayer("heatmap-layer", "heatmap-src").withProperties(
-            org.maplibre.android.style.layers.PropertyFactory.heatmapRadius(18f),
-            org.maplibre.android.style.layers.PropertyFactory.heatmapOpacity(.72f),
+            // Raggio che cresce con lo zoom: piccolo quando vedi una città (pochi
+            // px → i punti non si sovrappongono → si vede il gradiente); grande
+            // quando sei zoomed in su una strada.
+            org.maplibre.android.style.layers.PropertyFactory.heatmapRadius(
+                org.maplibre.android.style.expressions.Expression.interpolate(
+                    org.maplibre.android.style.expressions.Expression.linear(),
+                    org.maplibre.android.style.expressions.Expression.zoom(),
+                    org.maplibre.android.style.expressions.Expression.literal(10), org.maplibre.android.style.expressions.Expression.literal(6f),
+                    org.maplibre.android.style.expressions.Expression.literal(14), org.maplibre.android.style.expressions.Expression.literal(16f),
+                    org.maplibre.android.style.expressions.Expression.literal(18), org.maplibre.android.style.expressions.Expression.literal(36f)
+                )
+            ),
+            // Intensità bassa a zoom lontano (spread migliore), alta da vicino.
+            org.maplibre.android.style.layers.PropertyFactory.heatmapIntensity(
+                org.maplibre.android.style.expressions.Expression.interpolate(
+                    org.maplibre.android.style.expressions.Expression.linear(),
+                    org.maplibre.android.style.expressions.Expression.zoom(),
+                    org.maplibre.android.style.expressions.Expression.literal(10), org.maplibre.android.style.expressions.Expression.literal(0.4f),
+                    org.maplibre.android.style.expressions.Expression.literal(16), org.maplibre.android.style.expressions.Expression.literal(1.2f)
+                )
+            ),
+            org.maplibre.android.style.layers.PropertyFactory.heatmapOpacity(0.78f),
             org.maplibre.android.style.layers.PropertyFactory.heatmapColor(
                 org.maplibre.android.style.expressions.Expression.interpolate(
                     org.maplibre.android.style.expressions.Expression.linear(),
                     org.maplibre.android.style.expressions.Expression.heatmapDensity(),
-                    org.maplibre.android.style.expressions.Expression.literal(0),   org.maplibre.android.style.expressions.Expression.rgba(0,0,255,0),
-                    org.maplibre.android.style.expressions.Expression.literal(0.2), org.maplibre.android.style.expressions.Expression.rgb(0,255,255),
-                    org.maplibre.android.style.expressions.Expression.literal(0.5), org.maplibre.android.style.expressions.Expression.rgb(0,255,0),
-                    org.maplibre.android.style.expressions.Expression.literal(0.8), org.maplibre.android.style.expressions.Expression.rgb(255,255,0),
-                    org.maplibre.android.style.expressions.Expression.literal(1),   org.maplibre.android.style.expressions.Expression.rgb(255,0,0)
+                    org.maplibre.android.style.expressions.Expression.literal(0),    org.maplibre.android.style.expressions.Expression.rgba(0, 0, 255, 0),
+                    org.maplibre.android.style.expressions.Expression.literal(0.15), org.maplibre.android.style.expressions.Expression.rgba(65, 105, 225, 0.6),
+                    org.maplibre.android.style.expressions.Expression.literal(0.35), org.maplibre.android.style.expressions.Expression.rgb(0, 220, 180),
+                    org.maplibre.android.style.expressions.Expression.literal(0.55), org.maplibre.android.style.expressions.Expression.rgb(80, 220, 60),
+                    org.maplibre.android.style.expressions.Expression.literal(0.75), org.maplibre.android.style.expressions.Expression.rgb(255, 210, 0),
+                    org.maplibre.android.style.expressions.Expression.literal(1),    org.maplibre.android.style.expressions.Expression.rgb(255, 50, 0)
                 )
             ),
             org.maplibre.android.style.layers.PropertyFactory.visibility(org.maplibre.android.style.layers.Property.NONE)

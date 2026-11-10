@@ -3031,6 +3031,13 @@ class FirebaseRepository private constructor(private val context: Context) {
                         val lon = (p["lo"] as? Number)?.toDouble() ?: return@mapNotNull null
                         Pair(lat, lon)
                     }
+                }
+                ?.let { all ->
+                    // Subsample uniforme: oltre 1500 punti il rendering diventa lento
+                    // e la heatmap non migliora visivamente. Mantiene la distribuzione
+                    // temporale (1 su N uniformemente, non solo gli ultimi).
+                    val step = if (all.size > 1500) all.size / 1500 else 1
+                    if (step <= 1) all else all.filterIndexed { i, _ -> i % step == 0 }
                 } ?: emptyList()
         } catch (e: Exception) {
             Log.w(TAG, "fetchLocationHistory error: ${e.message}")

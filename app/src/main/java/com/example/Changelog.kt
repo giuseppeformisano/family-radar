@@ -10,10 +10,10 @@ package com.example
 object Changelog {
 
     /** Deve combaciare con versionName di questo build. */
-    const val VERSION = "0.71.37-beta"
+    const val VERSION = "0.71.38-beta"
 
     /** Poche righe, corte. Una per novita'/fix. */
     val LINES = listOf(
-        "🖼️ Toccando una foto in chat o il suo pin sulla mappa si apre lo stesso identico dettaglio istantanea."
+        "🗺️ Heatmap più veloce e con i colori giusti: blu dove sei stato poco, verde/giallo dove sei passato spesso, rosso solo dove ci sei stato di più."
     )
 }
